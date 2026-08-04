@@ -414,6 +414,7 @@ pub fn init_sub_services(
         })
         .transpose()?;
 
+    let ready_signal_for_graphql = block_production_ready_signal.clone();
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
             let reconciliation_port = redis_reconciliation_adapter
@@ -532,6 +533,8 @@ pub fn init_sub_services(
         Box::new(tx_status_manager_adapter.clone()),
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
+        poa_adapter.clone(),
+        ready_signal_for_graphql,
         Box::new(p2p_adapter),
         Box::new(universal_gas_price_provider),
         Box::new(chain_state_info_provider),

@@ -28,6 +28,7 @@ use fuel_core_poa::{
         Mode,
         SharedState,
     },
+    sync::SyncState,
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
@@ -1492,6 +1493,12 @@ enum WriteBlockResult {
 impl PoAAdapter {
     pub fn new(shared_state: Option<SharedState>) -> Self {
         Self { shared_state }
+    }
+
+    /// `None` when block production (PoA) is disabled on this node — nothing to be
+    /// out of sync with, so callers should treat that as trivially synced.
+    pub fn sync_state(&self) -> Option<SyncState> {
+        self.shared_state.as_ref().map(|s| s.sync_state())
     }
 
     pub async fn manually_produce_blocks(

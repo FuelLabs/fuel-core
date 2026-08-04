@@ -74,6 +74,7 @@ pub type Service<B, I, S, PB, C, RS, RP> =
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
+    sync_state: tokio::sync::watch::Receiver<SyncState>,
 }
 
 impl SharedState {
@@ -91,6 +92,10 @@ impl SharedState {
             )))
             .await?;
         receiver.await?
+    }
+
+    pub fn sync_state(&self) -> SyncState {
+        self.sync_state.borrow().clone()
     }
 }
 
@@ -208,7 +213,10 @@ where
             block_importer,
             new_txs_watcher,
             request_receiver,
-            shared_state: SharedState { request_sender },
+            shared_state: SharedState {
+                request_sender,
+                sync_state: sync_task_handle.shared.clone(),
+            },
             last_height,
             last_timestamp,
             last_block_created,

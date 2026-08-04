@@ -47,6 +47,7 @@ use axum::{
     },
     http::{
         HeaderValue,
+        StatusCode,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
@@ -118,6 +119,12 @@ pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 pub type ChainInfoProvider = Box<dyn ChainStateProviderTrait>;
 
 pub type DaCompressionProvider = Box<dyn DatabaseDaCompressedBlocks>;
+
+#[derive(Clone)]
+struct Readiness {
+    block_production_ready_signal: crate::service::adapters::ready_signal::ReadySignal,
+    poa: crate::service::adapters::PoAAdapter,
+}
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -331,6 +338,8 @@ pub fn new_service<OnChain, OffChain>(
     tx_status_manager: DynTxStatusManager,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
+    poa_adapter: crate::service::adapters::PoAAdapter,
+    block_production_ready_signal: crate::service::adapters::ready_signal::ReadySignal,
     p2p_service: P2pService,
     gas_price_provider: GasPriceProvider,
     chain_state_info_provider: ChainInfoProvider,
@@ -414,6 +423,11 @@ where
     let graphql_playground =
         || render_graphql_playground(graphql_endpoint, graphql_subscription_endpoint);
 
+    let readiness = Readiness {
+        block_production_ready_signal,
+        poa: poa_adapter,
+    };
+
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
         .route(
@@ -429,6 +443,8 @@ where
         .route("/v1/metrics", get(metrics))
         .route("/v1/health", get(health))
         .route("/health", get(health))
+        .route("/v1/ready", get(ready))
+        .layer(Extension(readiness))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(request_timeout))
@@ -502,6 +518,33 @@ async fn render_graphql_playground(
 
 async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
+}
+
+/// `/v1/ready` — distinct from `/v1/health` (liveness, always dumb-up). Reports whether
+/// this node is DB-open (all sub-services finished startup) and, when PoA is enabled,
+/// p2p-synced. Leader-lock status is deliberately excluded: readiness is not leadership,
+/// and gating on it would knock healthy followers out of Service Endpoints.
+async fn ready(Extension(r): Extension<Readiness>) -> (StatusCode, Json<serde_json::Value>) {
+    use fuel_core_poa::sync::SyncState;
+
+    let services_started = r.block_production_ready_signal.is_ready();
+    let sync_state = r.poa.sync_state();
+    let synced = matches!(sync_state, None | Some(SyncState::Synced(_)));
+    let ready = services_started && synced;
+    let code = if ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (
+        code,
+        Json(json!({
+            "ready": ready,
+            "services_started": services_started,
+            "poa_enabled": sync_state.is_some(),
+            "synced": synced,
+        })),
+    )
 }
 
 async fn graphql_handler(

@@ -5,7 +5,7 @@
 #![deny(warnings)]
 #![allow(clippy::blocks_in_conditions)] // False positives with tracing macros
 
-mod sync;
+pub mod sync;
 
 #[cfg(test)]
 mod service_test;
