@@ -1845,6 +1845,18 @@ impl BlockImporter for BlockImporterAdapter {
     }
 }
 
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+
+    #[test]
+    fn sync_state_is_none_when_poa_is_disabled() {
+        let adapter = PoAAdapter::new(None);
+
+        assert_eq!(adapter.sync_state(), None);
+    }
+}
+
 #[cfg(all(test, feature = "leader_lock", not(feature = "not_leader_lock")))]
 #[allow(non_snake_case)]
 mod tests {

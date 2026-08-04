@@ -42,3 +42,19 @@ impl Default for ReadySignal {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_ready_is_false_before_send_ready_signal_and_true_after() {
+        let signal = ReadySignal::new();
+
+        assert!(!signal.is_ready());
+
+        signal.send_ready_signal();
+
+        assert!(signal.is_ready());
+    }
+}
