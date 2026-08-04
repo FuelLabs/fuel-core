@@ -86,6 +86,10 @@ use std::{
     sync::{
         Arc,
         OnceLock,
+        atomic::{
+            AtomicBool,
+            Ordering,
+        },
     },
     time::Duration,
 };
@@ -124,6 +128,12 @@ pub type DaCompressionProvider = Box<dyn DatabaseDaCompressedBlocks>;
 struct Readiness {
     block_production_ready_signal: crate::service::adapters::ready_signal::ReadySignal,
     poa: crate::service::adapters::PoAAdapter,
+    /// Latches once PoA's `SyncState` is first observed `Synced`. PoA's sync state is a
+    /// block-production gate, not a health signal: it flips back to `NotSynced` on every
+    /// network-sourced block until a quiet `time_until_synced` window passes, so a healthy
+    /// follower on an actively-progressing chain may rarely or never observe it live. Once
+    /// caught up once, treat sync as satisfied rather than flapping readiness with it.
+    has_synced_once: Arc<AtomicBool>,
 }
 
 #[derive(Clone)]
@@ -426,6 +436,7 @@ where
     let readiness = Readiness {
         block_production_ready_signal,
         poa: poa_adapter,
+        has_synced_once: Arc::new(AtomicBool::new(false)),
     };
 
     let router = Router::new()
@@ -520,16 +531,36 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
 }
 
+/// Computes the latched `synced` bit for `/v1/ready`. `None` (PoA disabled) is trivially
+/// synced. `Synced` latches `has_synced_once` permanently true. `NotSynced` reports the
+/// latch as-is, so a transient network-block-triggered flap doesn't flip readiness back
+/// off once the node has genuinely caught up at least once.
+fn latch_synced(
+    sync_state: Option<&fuel_core_poa::sync::SyncState>,
+    has_synced_once: &AtomicBool,
+) -> bool {
+    use fuel_core_poa::sync::SyncState;
+
+    match sync_state {
+        None => true,
+        Some(SyncState::Synced(_)) => {
+            has_synced_once.store(true, Ordering::Release);
+            true
+        }
+        Some(SyncState::NotSynced) => has_synced_once.load(Ordering::Acquire),
+    }
+}
+
 /// `/v1/ready` — distinct from `/v1/health` (liveness, always dumb-up). Reports whether
 /// this node is DB-open (all sub-services finished startup) and, when PoA is enabled,
 /// p2p-synced. Leader-lock status is deliberately excluded: readiness is not leadership,
 /// and gating on it would knock healthy followers out of Service Endpoints.
-async fn ready(Extension(r): Extension<Readiness>) -> (StatusCode, Json<serde_json::Value>) {
-    use fuel_core_poa::sync::SyncState;
-
+async fn ready(
+    Extension(r): Extension<Readiness>,
+) -> (StatusCode, Json<serde_json::Value>) {
     let services_started = r.block_production_ready_signal.is_ready();
     let sync_state = r.poa.sync_state();
-    let synced = matches!(sync_state, None | Some(SyncState::Synced(_)));
+    let synced = latch_synced(sync_state.as_ref(), &r.has_synced_once);
     let ready = services_started && synced;
     let code = if ready {
         StatusCode::OK
@@ -571,4 +602,47 @@ async fn graphql_subscription_handler(
 
 async fn ok() -> anyhow::Result<(), ()> {
     Ok(())
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod readiness_tests {
+    use super::*;
+    use fuel_core_poa::sync::SyncState;
+    use fuel_core_types::{
+        blockchain::header::BlockHeader,
+        fuel_types::BlockHeight,
+        tai64::Tai64,
+    };
+
+    #[test]
+    fn latch_synced__none_is_trivially_synced() {
+        let latch = AtomicBool::new(false);
+
+        assert!(latch_synced(None, &latch));
+    }
+
+    #[test]
+    fn latch_synced__synced_sets_the_latch() {
+        let latch = AtomicBool::new(false);
+        let header = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
+        let state = SyncState::Synced(Arc::new(header));
+
+        assert!(latch_synced(Some(&state), &latch));
+        assert!(latch.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn latch_synced__not_synced_before_latch_reports_not_synced() {
+        let latch = AtomicBool::new(false);
+
+        assert!(!latch_synced(Some(&SyncState::NotSynced), &latch));
+    }
+
+    #[test]
+    fn latch_synced__not_synced_after_latch_stays_synced() {
+        let latch = AtomicBool::new(true);
+
+        assert!(latch_synced(Some(&SyncState::NotSynced), &latch));
+    }
 }
