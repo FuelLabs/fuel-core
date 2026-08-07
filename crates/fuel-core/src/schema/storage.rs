@@ -51,7 +51,7 @@ impl StorageQuery {
             read_view.latest_height()?
         };
 
-        let read_database: &ReadDatabase = ctx.data_unchecked();
+        let read_database: &std::sync::Arc<ReadDatabase> = ctx.data_unchecked();
         let view_at = read_database.view_at(view_block_height)?;
         let storage_slots = storage_slots
             .into_iter()
@@ -86,7 +86,7 @@ impl StorageQuery {
             read_view.latest_height()?
         };
 
-        let read_database: &ReadDatabase = ctx.data_unchecked();
+        let read_database: &std::sync::Arc<ReadDatabase> = ctx.data_unchecked();
         let view_at = read_database.view_at(view_block_height)?;
         let assets = assets.into_iter().map(|x| x.into()).collect::<Vec<_>>();
 

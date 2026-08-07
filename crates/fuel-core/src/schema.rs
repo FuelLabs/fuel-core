@@ -233,7 +233,7 @@ impl<'a> ReadViewProvider for Context<'a> {
         // Sometimes, during mutable queries or subscription the resolvers
         // need access to an updated view of the database.
         if operation_type != OperationType::Query {
-            let database: &ReadDatabase = self.data_unchecked();
+            let database: &std::sync::Arc<ReadDatabase> = self.data_unchecked();
             database.view().map(Cow::Owned)
         } else {
             let read_view: &ReadView = self.data_unchecked();
