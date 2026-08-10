@@ -27,7 +27,24 @@ is_kms_healthy() {
   [ "$state" = "running" ] || [ "$state" = "available" ]
 }
 
-if ! is_kms_healthy; then
+is_reachable() {
+  curl -fsS -o /dev/null "$LOCALSTACK_ENDPOINT/_localstack/health" 2>/dev/null
+}
+
+# Distinguish "nothing listening" (start our own container, for local dev)
+# from "something's listening but not ready yet" (e.g. a CI services:
+# container still booting) - the latter must be waited on, not port-conflicted
+# with our own `docker run`, like the sibling rpc-s3-integration-tests job does.
+reachable=false
+for _ in $(seq 1 5); do
+  if is_reachable; then
+    reachable=true
+    break
+  fi
+  sleep 2
+done
+
+if [ "$reachable" != true ]; then
   echo "Starting LocalStack ($LOCALSTACK_IMAGE) for KMS..." >&2
   docker run -d --rm \
     --name "$CONTAINER_NAME" \
@@ -35,19 +52,20 @@ if ! is_kms_healthy; then
     -e SERVICES=kms \
     -e DEBUG=1 \
     "$LOCALSTACK_IMAGE" >/dev/null
+fi
 
-  healthy=false
-  for _ in $(seq 1 30); do
-    if is_kms_healthy; then
-      healthy=true
-      break
-    fi
-    sleep 2
-  done
-  if [ "$healthy" != true ]; then
-    echo "LocalStack failed to become healthy" >&2
-    exit 1
+echo "Waiting for LocalStack KMS to report healthy..." >&2
+healthy=false
+for _ in $(seq 1 30); do
+  if is_kms_healthy; then
+    healthy=true
+    break
   fi
+  sleep 2
+done
+if [ "$healthy" != true ]; then
+  echo "LocalStack failed to become healthy" >&2
+  exit 1
 fi
 
 echo "Creating KMS signing key (ECC_SECG_P256K1)..." >&2
