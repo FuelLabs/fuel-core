@@ -194,24 +194,23 @@ jobs:
           ignore-unpublished-changes: true
 
   cargo-test-kms:
-    if: github.event.repository.fork == false
+    name: KMS Integration Tests (w/LocalStack)
     needs:
       - rustfmt
       - check-changelog
     runs-on: warp-ubuntu-2404-x64-4x
+    timeout-minutes: 45
+    services:
+      localstack:
+        image: localstack/localstack:4.14 # last version that does not require license
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: kms
+          DEBUG: 1
     env:
       RUSTFLAGS: -D warnings
-      FUEL_CORE_TEST_AWS_KMS_ARN: "arn:aws:kms:us-east-1:249945542445:key/mrk-e13c7118ce544f7da66294f6e87c8790"
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      id-token: write
     steps:
-      - name: Configure AWS credentials for integration testing
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
-          aws-region: us-east-1
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -221,6 +220,8 @@ jobs:
         with:
           key: cargo-test-kms
           cache-on-failure: true
+      - name: Provision LocalStack KMS key
+        run: ./scripts/kms-localstack-setup.sh
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
