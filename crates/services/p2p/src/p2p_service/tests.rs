@@ -4,6 +4,7 @@
 use super::{
     FuelP2PService,
     PublishError,
+    is_peer_at_fault,
 };
 use crate::{
     self as fuel_core_p2p,
@@ -70,6 +71,7 @@ use libp2p::{
         Topic,
     },
     identity::Keypair,
+    request_response::OutboundFailure,
     swarm::{
         ListenError,
         SwarmEvent,
@@ -1366,6 +1368,16 @@ async fn req_res_outbound_timeout_works() {
                 // 4. there should be ZERO pending outbound requests in the table
                 // after the Outbound Request Failed with Timeout
                 assert_eq!(node_a.outbound_requests_table.len(), 0);
+
+                // 5. and the peer that timed out paid for it with its reputation
+                let score = node_a
+                    .peer_manager
+                    .get_peer_info(&node_b.local_peer_id)
+                    .map(|peer_info| peer_info.score);
+                assert!(
+                    matches!(score, Some(score) if score < 0.),
+                    "The timed out peer should have a negative score, got {score:?}"
+                );
                 break;
             },
             // will not receive the request at all
@@ -1374,6 +1386,21 @@ async fn req_res_outbound_timeout_works() {
             }
         };
     }
+}
+
+#[test]
+fn only_the_peer_at_fault_is_penalized_for_an_outbound_failure() {
+    // the peer accepted the request and then failed us
+    assert!(is_peer_at_fault(&OutboundFailure::Timeout));
+    assert!(is_peer_at_fault(&OutboundFailure::ConnectionClosed));
+    assert!(is_peer_at_fault(&OutboundFailure::Io(
+        std::io::Error::other("Hit the end of buffer, expected more data")
+    )));
+
+    // the peer is not to blame for these, and we already disconnect from the
+    // peers that don't support our protocol
+    assert!(!is_peer_at_fault(&OutboundFailure::UnsupportedProtocols));
+    assert!(!is_peer_at_fault(&OutboundFailure::DialFailure));
 }
 
 #[tokio::test]
