@@ -145,6 +145,13 @@ impl PeerManager {
         }
     }
 
+    /// Applies the reported `score` to the peer's reputation, banning the peer
+    /// when its reputation falls below the minimum allowed score.
+    ///
+    /// Reserved peers are intentionally out of reach of this function: only
+    /// `non_reserved_connected_peers` is looked up, so a report against a
+    /// reserved peer is a no-op. Reserved peers are picked by the operator, and
+    /// must never be banned because of their reputation.
     pub fn update_app_score<T: Punisher>(
         &mut self,
         peer_id: PeerId,
@@ -226,19 +233,23 @@ impl PeerManager {
     }
 
     /// Find a peer that is holding the given block height.
+    ///
+    /// Reserved peers are preferred over the non-reserved ones: they are picked
+    /// by the operator and are the only peers we can rely on, while a failed
+    /// request to a broken non-reserved peer stalls the block import for a full
+    /// request timeout. A non-reserved peer is only used when no reserved peer
+    /// reports holding the requested height.
     pub fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
         let mut range = rand::thread_rng();
         // TODO: Optimize the selection of the peer.
         //  We can store pair `(peer id, height)` for all nodes(reserved and not) in the
         //  https://docs.rs/sorted-vec/latest/sorted_vec/struct.SortedVec.html
-        self.non_reserved_connected_peers
-            .iter()
-            .chain(self.reserved_connected_peers.iter())
-            .filter(|(_, peer_info)| {
-                peer_info.heartbeat_data.block_height >= Some(*height)
-            })
-            .map(|(peer_id, _)| *peer_id)
+        peers_with_height(&self.reserved_connected_peers, height)
             .choose(&mut range)
+            .or_else(|| {
+                peers_with_height(&self.non_reserved_connected_peers, height)
+                    .choose(&mut range)
+            })
     }
 
     /// Handles the first connection established with a Peer
@@ -306,6 +317,19 @@ fn insert_peer_addresses(
     } else {
         log_missing_peer(peer_id);
     }
+}
+
+/// Returns the peers that reported holding at least the given block height.
+fn peers_with_height<'a>(
+    peers: &'a HashMap<PeerId, PeerInfo>,
+    height: &'a BlockHeight,
+) -> impl Iterator<Item = PeerId> + 'a {
+    peers
+        .iter()
+        .filter(move |(_, peer_info)| {
+            peer_info.heartbeat_data.block_height >= Some(*height)
+        })
+        .map(|(peer_id, _)| *peer_id)
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -397,6 +421,23 @@ pub trait Punisher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::p2p_service::REQUEST_FAILURE_PENALTY;
+
+    /// The default `--request-timeout`, and so the shortest interval at which a
+    /// peer that keeps timing out can be reported.
+    const REQUEST_TIMEOUT_IN_SECONDS: usize = 20;
+
+    /// A `Punisher` that only records the peers it was asked to ban.
+    #[derive(Default)]
+    struct BanTracker {
+        banned_peers: Vec<PeerId>,
+    }
+
+    impl Punisher for BanTracker {
+        fn ban_peer(&mut self, peer_id: PeerId) {
+            self.banned_peers.push(peer_id);
+        }
+    }
 
     fn get_random_peers(size: usize) -> Vec<PeerId> {
         (0..size).map(|_| PeerId::random()).collect()
@@ -492,5 +533,134 @@ mod tests {
             peer_manager.total_peers_connected(),
             reserved_peers.len() + max_non_reserved_peers
         );
+    }
+
+    #[test]
+    fn reserved_peer_is_preferred_when_it_holds_the_requested_height() {
+        let reserved_peers = get_random_peers(2);
+        let mut peer_manager = initialize_peer_manager(reserved_peers.clone(), 5);
+
+        // all the peers, reserved and not, can serve the requested height
+        let non_reserved_peers = get_random_peers(5);
+        for peer_id in reserved_peers.iter().chain(non_reserved_peers.iter()) {
+            peer_manager.handle_initial_connection(peer_id);
+            peer_manager.handle_peer_info_updated(peer_id, 10u32.into());
+        }
+
+        // only the reserved ones are ever picked
+        for _ in 0..100 {
+            let peer_id = peer_manager
+                .get_peer_id_with_height(&5u32.into())
+                .expect("A peer with the requested height is connected");
+
+            assert!(reserved_peers.contains(&peer_id));
+        }
+    }
+
+    #[test]
+    fn non_reserved_peer_is_used_when_no_reserved_peer_holds_the_requested_height() {
+        let reserved_peers = get_random_peers(2);
+        let mut peer_manager = initialize_peer_manager(reserved_peers.clone(), 5);
+
+        // the reserved peers lag behind the requested height
+        for peer_id in &reserved_peers {
+            peer_manager.handle_initial_connection(peer_id);
+            peer_manager.handle_peer_info_updated(peer_id, 4u32.into());
+        }
+
+        let non_reserved_peers = get_random_peers(3);
+        for peer_id in &non_reserved_peers {
+            peer_manager.handle_initial_connection(peer_id);
+            peer_manager.handle_peer_info_updated(peer_id, 10u32.into());
+        }
+
+        for _ in 0..100 {
+            let peer_id = peer_manager
+                .get_peer_id_with_height(&5u32.into())
+                .expect("A non-reserved peer with the requested height is connected");
+
+            assert!(non_reserved_peers.contains(&peer_id));
+        }
+
+        // and nobody is picked for a height that no peer holds
+        assert_eq!(peer_manager.get_peer_id_with_height(&11u32.into()), None);
+    }
+
+    #[test]
+    fn reputation_reports_never_affect_reserved_peers() {
+        let reserved_peer = PeerId::random();
+        let non_reserved_peer = PeerId::random();
+        let mut peer_manager = initialize_peer_manager(vec![reserved_peer], 5);
+
+        peer_manager.handle_initial_connection(&reserved_peer);
+        peer_manager.handle_initial_connection(&non_reserved_peer);
+
+        // a penalty large enough to ban a peer on its own
+        let penalty = MIN_APP_SCORE - 1.;
+        let mut punisher = BanTracker::default();
+        peer_manager.update_app_score(reserved_peer, penalty, "test", &mut punisher);
+        peer_manager.update_app_score(non_reserved_peer, penalty, "test", &mut punisher);
+
+        // the reserved peer is untouched, while the non-reserved one is banned
+        assert_eq!(
+            peer_manager.get_peer_info(&reserved_peer).unwrap().score,
+            DEFAULT_APP_SCORE
+        );
+        assert_eq!(
+            peer_manager
+                .get_peer_info(&non_reserved_peer)
+                .unwrap()
+                .score,
+            penalty
+        );
+        assert_eq!(punisher.banned_peers, vec![non_reserved_peer]);
+    }
+
+    #[test]
+    fn single_request_failure_does_not_ban_the_peer() {
+        let peer_id = PeerId::random();
+        let mut peer_manager = initialize_peer_manager(vec![], 5);
+        peer_manager.handle_initial_connection(&peer_id);
+
+        let mut punisher = BanTracker::default();
+        peer_manager.update_app_score(
+            peer_id,
+            REQUEST_FAILURE_PENALTY,
+            "test",
+            &mut punisher,
+        );
+
+        assert!(punisher.banned_peers.is_empty());
+
+        // and the failure is almost forgotten after 44 seconds of decay
+        for _ in 0..44 {
+            peer_manager.batch_update_score_with_decay();
+        }
+
+        assert!(peer_manager.get_peer_info(&peer_id).unwrap().score > -0.5);
+    }
+
+    #[test]
+    fn repeated_request_failures_ban_the_peer_despite_the_decay() {
+        let peer_id = PeerId::random();
+        let mut peer_manager = initialize_peer_manager(vec![], 5);
+        peer_manager.handle_initial_connection(&peer_id);
+
+        // the peer fails a request every time the request times out
+        let mut punisher = BanTracker::default();
+        for _ in 0..2 {
+            peer_manager.update_app_score(
+                peer_id,
+                REQUEST_FAILURE_PENALTY,
+                "test",
+                &mut punisher,
+            );
+
+            for _ in 0..REQUEST_TIMEOUT_IN_SECONDS {
+                peer_manager.batch_update_score_with_decay();
+            }
+        }
+
+        assert_eq!(punisher.banned_peers, vec![peer_id]);
     }
 }

@@ -93,9 +93,56 @@ mod tests;
 /// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
 
+/// The name reported along the request/response reputation penalties, so that
+/// they can be told apart from the heartbeat ones in the logs.
+const REQUEST_RESPONSE_REPORTING_SERVICE: &str = "p2p_request_response";
+
+/// Reputation penalty applied to a non-reserved peer every time an outbound
+/// request to it fails at the transport level.
+///
+/// The magnitude is dictated by the reputation decay: the score of every
+/// non-reserved peer is multiplied by `DECAY_APP_SCORE`(0.9) once per second,
+/// and the peer is banned as soon as its score drops below
+/// `MIN_APP_SCORE`(-50). A failing peer can only be reported once per
+/// `set_request_timeout`(20 seconds by default), and 20 seconds of decay keep
+/// only `0.9^20 = 12.2%` of the previous score, so the score of a peer failing
+/// at that rate converges to `penalty / (1 - 0.9^20) = 1.14 * penalty`. Any
+/// penalty weaker than `-50 / 1.14 = -43.9` can therefore never ban a peer, no
+/// matter for how long it keeps failing; it would be a no-op. At the same time,
+/// the penalty must stay above `MIN_APP_SCORE`, otherwise a single transient
+/// failure permanently bans an otherwise healthy peer.
+///
+/// `-48` sits inside that narrow window. One failure leaves the peer at `-48`,
+/// which is not a ban and decays back above `-0.5` in 44 seconds, while two
+/// failures less than 30 seconds apart - `48 * (1 + 0.9^30) = 50.04` - do ban
+/// it. That covers the 20 seconds timeout cadence with margin, while tolerating
+/// isolated blips.
+pub(crate) const REQUEST_FAILURE_PENALTY: AppScore = -48.;
+
 impl Punisher for Swarm<FuelBehaviour> {
     fn ban_peer(&mut self, peer_id: PeerId) {
         self.behaviour_mut().block_peer(peer_id)
+    }
+}
+
+/// Whether the remote peer is at fault for the outbound `error`, and so should
+/// pay `REQUEST_FAILURE_PENALTY` for it.
+///
+/// Only the failures the remote peer is responsible for are penalized: it
+/// accepted the request and never answered it(`Timeout`), it went away in the
+/// middle of the exchange(`ConnectionClosed`), or it wrote a response we can't
+/// read(`Io`). Those are the failures that stall the block import.
+fn is_peer_at_fault(error: &OutboundFailure) -> bool {
+    match error {
+        OutboundFailure::Timeout
+        | OutboundFailure::ConnectionClosed
+        | OutboundFailure::Io(_) => true,
+        // A protocol mismatch is not a misbehaviour, and we already disconnect
+        // from those peers to look for another one that supports the protocol.
+        OutboundFailure::UnsupportedProtocols => false,
+        // The dial may have failed because of our own connectivity, and the
+        // remote peer never even received the request.
+        OutboundFailure::DialFailure => false,
     }
 }
 
@@ -779,6 +826,18 @@ impl FuelP2PService {
                     request_id,
                     error
                 );
+
+                // A peer that doesn't answer our requests stalls the block import
+                // for a full request timeout, so it has to pay for it with its
+                // reputation. Reserved peers are never affected by this, since
+                // `PeerManager::update_app_score` only touches non-reserved peers.
+                if is_peer_at_fault(&error) {
+                    self.report_peer(
+                        peer,
+                        REQUEST_FAILURE_PENALTY,
+                        REQUEST_RESPONSE_REPORTING_SERVICE,
+                    );
+                }
 
                 if let Some(channel) = self.outbound_requests_table.remove(&request_id) {
                     match channel {
