@@ -3,7 +3,7 @@
 -- KEYS[2]: epoch token key (e.g., poa:leader:lock:epoch:token)
 -- KEYS[3]: leader lock key (e.g., poa:leader:lock)
 -- ARGV[1]: my_epoch (max token observed during promotion quorum)
--- ARGV[2]: lease owner token (UUID)
+-- ARGV[2]: lease owner id (UUID)
 -- ARGV[3]: block_height
 -- ARGV[4]: block_data
 -- ARGV[5]: lease_ttl_ms

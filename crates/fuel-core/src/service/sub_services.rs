@@ -239,6 +239,7 @@ pub fn init_sub_services(
             RedisLeaderLeaseAdapter::new(
                 leader_lock.redis_urls.clone(),
                 leader_lock.lease_key.clone(),
+                leader_lock.quorum_disruption_budget,
                 leader_lock.lease_ttl,
                 leader_lock.node_timeout,
                 leader_lock.retry_delay,
@@ -246,10 +247,6 @@ pub fn init_sub_services(
                 leader_lock.max_attempts,
                 leader_lock.stream_max_len,
             )
-            .map(|adapter| {
-                adapter
-                    .with_quorum_disruption_budget(leader_lock.quorum_disruption_budget)
-            })
         })
         .transpose()?;
 
