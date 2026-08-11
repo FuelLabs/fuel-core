@@ -128,15 +128,28 @@ impl Punisher for Swarm<FuelBehaviour> {
 /// Whether the remote peer is at fault for the outbound `error`, and so should
 /// pay `REQUEST_FAILURE_PENALTY` for it.
 ///
-/// Only the failures the remote peer is responsible for are penalized: it
-/// accepted the request and never answered it(`Timeout`), it went away in the
-/// middle of the exchange(`ConnectionClosed`), or it wrote a response we can't
-/// read(`Io`). Those are the failures that stall the block import.
+/// Only the failures the remote peer is responsible for *and* that we can
+/// actually charge for are penalized: it accepted the request and never
+/// answered it(`Timeout`), or it wrote a response we can't read(`Io`). Those
+/// are the failures that stall the block import while the peer stays connected
+/// and eligible for re-selection.
 fn is_peer_at_fault(error: &OutboundFailure) -> bool {
     match error {
-        OutboundFailure::Timeout
-        | OutboundFailure::ConnectionClosed
-        | OutboundFailure::Io(_) => true,
+        OutboundFailure::Timeout | OutboundFailure::Io(_) => true,
+        // Hanging up mid-exchange *is* the peer's fault, but the penalty cannot
+        // be applied, so we don't pretend to: `peer_report` is polled before
+        // `request_response`(see the field order on `FuelBehaviour`), so by the
+        // time this failure surfaces the swarm has already emitted
+        // `PeerDisconnected` and `PeerManager::handle_peer_disconnect` has
+        // removed the peer from `non_reserved_connected_peers` - the only map
+        // `update_app_score` looks at. Reporting here is a silent no-op.
+        //
+        // That holds whenever the closed connection was the peer's last
+        // one(`remaining_established == 0`), which is exactly the case that
+        // matters. Such a peer is also out of the block-fetch selection pool
+        // until it reconnects, and its `PeerInfo`(so its score) is dropped with
+        // it, so there is nothing left to charge.
+        OutboundFailure::ConnectionClosed => false,
         // A protocol mismatch is not a misbehaviour, and we already disconnect
         // from those peers to look for another one that supports the protocol.
         OutboundFailure::UnsupportedProtocols => false,

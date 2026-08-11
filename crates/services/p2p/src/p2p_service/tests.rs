@@ -1390,12 +1390,17 @@ async fn req_res_outbound_timeout_works() {
 
 #[test]
 fn only_the_peer_at_fault_is_penalized_for_an_outbound_failure() {
-    // the peer accepted the request and then failed us
+    // the peer accepted the request, stayed connected, and then failed us
     assert!(is_peer_at_fault(&OutboundFailure::Timeout));
-    assert!(is_peer_at_fault(&OutboundFailure::ConnectionClosed));
     assert!(is_peer_at_fault(&OutboundFailure::Io(
         std::io::Error::other("Hit the end of buffer, expected more data")
     )));
+
+    // Hanging up is the peer's fault, but `peer_report` is polled before
+    // `request_response`, so `handle_peer_disconnect` has already dropped the
+    // peer(and its score) from `non_reserved_connected_peers` by the time this
+    // surfaces. Reporting it would be a silent no-op, so we don't claim to.
+    assert!(!is_peer_at_fault(&OutboundFailure::ConnectionClosed));
 
     // the peer is not to blame for these, and we already disconnect from the
     // peers that don't support our protocol
