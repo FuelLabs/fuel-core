@@ -1723,11 +1723,11 @@ impl P2pPort for P2PAdapter {
         }
     }
 
-    fn peer_height_stream(&self) -> BoxStream<BlockHeight> {
+    fn peer_height_stream(&self) -> BoxStream<fuel_core_types::services::p2p::BlockHeightHeartbeatData> {
         if let Some(service) = &self.service {
             Box::pin(
                 BroadcastStream::new(service.subscribe_block_height())
-                    .filter_map(|result| result.ok().map(|data| data.block_height)),
+                    .filter_map(|result| result.ok()),
             )
         } else {
             Box::pin(tokio_stream::pending())
@@ -1741,7 +1741,7 @@ impl P2pPort for P2PAdapter {
         Box::pin(tokio_stream::pending())
     }
 
-    fn peer_height_stream(&self) -> BoxStream<BlockHeight> {
+    fn peer_height_stream(&self) -> BoxStream<fuel_core_types::services::p2p::BlockHeightHeartbeatData> {
         Box::pin(tokio_stream::pending())
     }
 }

@@ -22,6 +22,7 @@ use fuel_core_types::{
             UncommittedResult as UncommittedImportResult,
         },
         executor::UncommittedResult as UncommittedExecutionResult,
+        p2p::BlockHeightHeartbeatData,
     },
     tai64::Tai64,
 };
@@ -108,8 +109,8 @@ pub trait P2pPort: Send + Sync + 'static {
     /// Subscribe to reserved peers connection updates.
     fn reserved_peers_count(&self) -> BoxStream<usize>;
 
-    /// Subscribe to peer heartbeat block heights.
-    fn peer_height_stream(&self) -> BoxStream<BlockHeight>;
+    /// Subscribe to peer heartbeat block heights (with peer id for TTL tracking).
+    fn peer_height_stream(&self) -> BoxStream<BlockHeightHeartbeatData>;
 }
 
 #[async_trait::async_trait]

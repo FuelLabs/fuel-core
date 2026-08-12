@@ -1,20 +1,31 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::Duration,
+};
 
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
     StateWatcher,
     TaskNextAction,
-    stream::{
-        BoxStream,
-    },
+    stream::BoxStream,
 };
 use fuel_core_types::{
     blockchain::header::BlockHeader,
     fuel_types::BlockHeight,
-    services::block_importer::BlockImportInfo,
+    services::{
+        block_importer::BlockImportInfo,
+        p2p::{
+            BlockHeightHeartbeatData,
+            PeerId,
+        },
+    },
 };
-use tokio::sync::watch;
+use tokio::{
+    sync::watch,
+    time::Instant,
+};
 use tokio_stream::StreamExt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,23 +43,30 @@ pub(crate) fn height_caught_up_to_peers(
     u32::from(local_height) >= u32::from(max_peer_height).saturating_sub(1)
 }
 
+/// Drop peer heartbeats older than this when computing the network tip.
+/// ~2× default p2p `heartbeat_max_avg_interval` (20s) so a departed peer's
+/// height cannot pin us `NotSynced` forever.
+const PEER_HEIGHT_TTL: Duration = Duration::from_secs(40);
+
 pub struct SyncTask {
     min_connected_reserved_peers: usize,
     peer_connections_stream: BoxStream<usize>,
-    peer_height_stream: BoxStream<BlockHeight>,
+    peer_height_stream: BoxStream<BlockHeightHeartbeatData>,
     block_stream: BoxStream<BlockImportInfo>,
     state_sender: watch::Sender<SyncState>,
     // shared with `MainTask` via SyncTask::SharedState
     state_receiver: watch::Receiver<SyncState>,
     local_header: BlockHeader,
-    max_peer_height: Option<BlockHeight>,
+    /// Per-peer latest heartbeat height + when it was observed.
+    peer_heights: HashMap<PeerId, (BlockHeight, Instant)>,
     peer_count: usize,
+    peer_height_ttl: Duration,
 }
 
 impl SyncTask {
     pub fn new(
         peer_connections_stream: BoxStream<usize>,
-        peer_height_stream: BoxStream<BlockHeight>,
+        peer_height_stream: BoxStream<BlockHeightHeartbeatData>,
         min_connected_reserved_peers: usize,
         block_stream: BoxStream<BlockImportInfo>,
         block_header: &BlockHeader,
@@ -68,8 +86,9 @@ impl SyncTask {
             state_sender,
             state_receiver,
             local_header: block_header.clone(),
-            max_peer_height: None,
+            peer_heights: HashMap::new(),
             peer_count: 0,
+            peer_height_ttl: PEER_HEIGHT_TTL,
         }
     }
 
@@ -89,26 +108,50 @@ impl SyncTask {
         self.peer_count >= self.min_connected_reserved_peers
     }
 
-    /// Synced when we have enough reserved peers and our height gap with the
-    /// network is ≤ 1. `min_connected_reserved_peers == 0` means isolated/dev
-    /// mode: there is no network tip to compare against, so we are ready.
-    fn should_be_synced(&self) -> bool {
-        if !self.has_sufficient_peers() {
-            return false;
-        }
+    fn already_synced(&self) -> bool {
+        matches!(&*self.state_receiver.borrow(), SyncState::Synced(_))
+    }
+
+    /// Max height among peers with a fresh heartbeat. Expired entries are pruned.
+    fn prune_and_max_peer_height(&mut self) -> Option<BlockHeight> {
+        let now = Instant::now();
+        let ttl = self.peer_height_ttl;
+        self.peer_heights
+            .retain(|_, (_, seen)| now.saturating_duration_since(*seen) < ttl);
+        self.peer_heights.values().map(|(height, _)| *height).max()
+    }
+
+    /// `min_connected_reserved_peers` is a *startup* gate to enter Synced —
+    /// once Synced, a reserved-peer blip must not flip us back (matches the
+    /// pre-height-gap SyncTask behavior and avoids k8s probe restart cascades).
+    /// Height gap against *live* peer heartbeats can still unsync us.
+    fn should_be_synced(&self, max_peer_height: Option<BlockHeight>) -> bool {
         if self.min_connected_reserved_peers == 0 {
             return true;
         }
-        match self.max_peer_height {
-            Some(max_peer) => {
-                height_caught_up_to_peers(*self.local_header.height(), max_peer)
+
+        if self.already_synced() {
+            match max_peer_height {
+                Some(max_peer) => {
+                    height_caught_up_to_peers(*self.local_header.height(), max_peer)
+                }
+                // No live tip (peer blip / all heartbeats expired) → stay Synced.
+                None => true,
             }
-            None => false,
+        } else {
+            self.has_sufficient_peers()
+                && match max_peer_height {
+                    Some(max_peer) => {
+                        height_caught_up_to_peers(*self.local_header.height(), max_peer)
+                    }
+                    None => false,
+                }
         }
     }
 
     fn recompute_sync_state(&mut self) {
-        if self.should_be_synced() {
+        let max_peer_height = self.prune_and_max_peer_height();
+        if self.should_be_synced(max_peer_height) {
             self.update_sync_state(SyncState::Synced(Arc::new(
                 self.local_header.clone(),
             )));
@@ -152,10 +195,10 @@ impl RunnableTask for SyncTask {
                 self.recompute_sync_state();
                 TaskNextAction::Continue
             }
-            Some(peer_height) = self.peer_height_stream.next() => {
-                self.max_peer_height = Some(
-                    self.max_peer_height
-                        .map_or(peer_height, |max| max.max(peer_height)),
+            Some(heartbeat) = self.peer_height_stream.next() => {
+                self.peer_heights.insert(
+                    heartbeat.peer_id,
+                    (heartbeat.block_height, Instant::now()),
                 );
                 self.recompute_sync_state();
                 TaskNextAction::Continue
@@ -226,10 +269,17 @@ mod tests {
         }
     }
 
+    fn peer(id: u8, height: u32) -> BlockHeightHeartbeatData {
+        BlockHeightHeartbeatData {
+            peer_id: PeerId::from(vec![id]),
+            block_height: BlockHeight::from(height),
+        }
+    }
+
     fn configure_sync_task(
         min_connected_reserved_peers: usize,
         connections_stream: impl IntoIterator<Item = usize>,
-        peer_heights: impl IntoIterator<Item = BlockHeight>,
+        peer_heights: impl IntoIterator<Item = BlockHeightHeartbeatData>,
         local_blocks: impl IntoIterator<Item = u32>,
         starting_height: u32,
     ) -> (
@@ -294,13 +344,8 @@ mod tests {
 
     #[tokio::test]
     async fn sync_task__becomes_synced_when_height_gap_is_at_most_one() {
-        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
-            1,
-            vec![1],
-            vec![BlockHeight::from(10u32)],
-            vec![10],
-            9,
-        );
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(1, vec![1], vec![peer(1, 10)], vec![10], 9);
 
         assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
 
@@ -325,13 +370,8 @@ mod tests {
 
     #[tokio::test]
     async fn sync_task__stays_not_synced_when_height_gap_exceeds_one() {
-        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
-            1,
-            vec![1],
-            vec![BlockHeight::from(12u32)],
-            vec![],
-            10,
-        );
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(1, vec![1], vec![peer(1, 12)], vec![], 10);
 
         let _ = sync_task.run(&mut watcher).await; // peers
         let _ = sync_task.run(&mut watcher).await; // peer height
@@ -344,7 +384,7 @@ mod tests {
         let (mut sync_task, mut watcher, _tx) = configure_sync_task(
             1,
             vec![1],
-            vec![BlockHeight::from(10u32), BlockHeight::from(13u32)],
+            vec![peer(1, 10), peer(1, 13)],
             vec![],
             10,
         );
@@ -362,18 +402,62 @@ mod tests {
 
     #[tokio::test]
     async fn sync_task__insufficient_peers_keeps_not_synced() {
-        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
-            2,
-            vec![1],
-            vec![BlockHeight::from(10u32)],
-            vec![],
-            10,
-        );
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(2, vec![1], vec![peer(1, 10)], vec![], 10);
 
         let _ = sync_task.run(&mut watcher).await;
         let _ = sync_task.run(&mut watcher).await;
 
         assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+    }
+
+    #[tokio::test]
+    async fn sync_task__peer_count_drop_while_synced_stays_synced() {
+        // Bugbot: reserved-peer blip must not unsync / halt production / flap probes.
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(1, vec![1], vec![peer(1, 10)], vec![], 10);
+
+        let _ = sync_task.run(&mut watcher).await; // peers=1
+        let _ = sync_task.run(&mut watcher).await; // height → Synced
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+
+        sync_task.peer_connections_stream = MockStream::new(vec![0]).into_boxed();
+        let _ = sync_task.run(&mut watcher).await; // peers=0
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "peer-count drop after Synced must not flip to NotSynced"
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_task__expired_peer_height_does_not_block_sync_forever() {
+        // Bugbot: monotonic forever-max of departed peers must not pin NotSynced.
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(1, vec![1], vec![peer(2, 10)], vec![], 10);
+
+        // Seed a stale, unreachable height from a departed peer.
+        sync_task.peer_height_ttl = Duration::from_millis(1);
+        sync_task.peer_heights.insert(
+            PeerId::from(vec![1]),
+            (
+                BlockHeight::from(100u32),
+                Instant::now()
+                    .checked_sub(Duration::from_secs(60))
+                    .expect("clock"),
+            ),
+        );
+
+        let _ = sync_task.run(&mut watcher).await; // peers
+        // Live peer at 10; stale 100 must be pruned → Synced
+        let _ = sync_task.run(&mut watcher).await;
+
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "expired peer heights must not pin NotSynced"
+        );
     }
 
     #[tokio::test]
