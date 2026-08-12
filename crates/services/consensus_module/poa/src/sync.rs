@@ -301,8 +301,7 @@ mod tests {
     ) {
         let connections_stream = MockStream::new(connections_stream).into_boxed();
         let peer_height_stream = MockStream::new(peer_heights).into_boxed();
-        let peer_disconnected_stream =
-            MockStream::<PeerId>::new(vec![]).into_boxed();
+        let peer_disconnected_stream = MockStream::<PeerId>::new(vec![]).into_boxed();
         let block_stream = MockStream::new(
             local_blocks
                 .into_iter()
@@ -396,13 +395,8 @@ mod tests {
 
     #[tokio::test]
     async fn sync_task__falls_out_of_sync_when_peers_pull_ahead() {
-        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
-            1,
-            vec![1],
-            vec![peer(1, 10), peer(1, 13)],
-            vec![],
-            10,
-        );
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(1, vec![1], vec![peer(1, 10), peer(1, 13)], vec![], 10);
 
         let _ = sync_task.run(&mut watcher).await; // peers
         let _ = sync_task.run(&mut watcher).await; // peer height 10 → Synced
@@ -450,13 +444,8 @@ mod tests {
     #[tokio::test]
     async fn sync_task__disconnect_drops_stale_peer_height_immediately() {
         // Bugbot: departed peer's tip must not pin NotSynced (live all_peer_info semantics).
-        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
-            1,
-            vec![1],
-            vec![peer(1, 100), peer(2, 10)],
-            vec![],
-            10,
-        );
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(1, vec![1], vec![peer(1, 100), peer(2, 10)], vec![], 10);
 
         let _ = sync_task.run(&mut watcher).await; // peers=1
         let _ = sync_task.run(&mut watcher).await; // peer1@100 → NotSynced (gap)
