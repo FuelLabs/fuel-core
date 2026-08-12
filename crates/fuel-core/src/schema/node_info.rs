@@ -80,9 +80,8 @@ impl NodeInfo {
     async fn peers(&self, _ctx: &Context<'_>) -> async_graphql::Result<Vec<PeerInfo>> {
         #[cfg(feature = "p2p")]
         {
-            let p2p: &std::sync::Arc<
-                crate::fuel_core_graphql_api::api_service::P2pService,
-            > = _ctx.data_unchecked();
+            let p2p: &crate::fuel_core_graphql_api::api_service::P2pService =
+                _ctx.data_unchecked();
             let peer_info = p2p.all_peer_info().await?;
             let peers = peer_info.into_iter().map(PeerInfo).collect();
             Ok(peers)
@@ -107,7 +106,7 @@ impl NodeQuery {
 
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-        let db = ctx.data_unchecked::<std::sync::Arc<ReadDatabase>>();
+        let db = ctx.data_unchecked::<ReadDatabase>();
         let read_view = db.view()?;
         Ok(NodeInfo {
             utxo_validation: config.utxo_validation,

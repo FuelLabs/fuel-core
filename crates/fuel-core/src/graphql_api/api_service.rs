@@ -73,10 +73,7 @@ use fuel_core_services::{
     TaskNextAction,
 };
 use fuel_core_storage::transactional::HistoricalView;
-use fuel_core_types::{
-    fuel_types::BlockHeight,
-    services::p2p::PeerInfo,
-};
+use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
 use hyper::rt::Executor;
 use serde_json::json;
@@ -89,10 +86,6 @@ use std::{
     sync::{
         Arc,
         OnceLock,
-        atomic::{
-            AtomicBool,
-            Ordering,
-        },
     },
     time::Duration,
 };
@@ -126,19 +119,6 @@ pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 pub type ChainInfoProvider = Box<dyn ChainStateProviderTrait>;
 
 pub type DaCompressionProvider = Box<dyn DatabaseDaCompressedBlocks>;
-
-#[derive(Clone)]
-struct Readiness {
-    block_production_ready_signal: crate::service::adapters::ready_signal::ReadySignal,
-    poa: crate::service::adapters::PoAAdapter,
-    p2p_service: Arc<P2pService>,
-    read_database: Arc<ReadDatabase>,
-    /// Latches once either sync signal (PoA's own quiet-window `SyncState`, or this node's
-    /// height catching up to its peers') is first observed satisfied. See `ready()` for why
-    /// two independent signals feed the same latch. Once caught up once, treat sync as
-    /// satisfied rather than flapping readiness with it.
-    has_synced_once: Arc<AtomicBool>,
-}
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -352,8 +332,7 @@ pub fn new_service<OnChain, OffChain>(
     tx_status_manager: DynTxStatusManager,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
-    poa_adapter: crate::service::adapters::PoAAdapter,
-    block_production_ready_signal: crate::service::adapters::ready_signal::ReadySignal,
+    readiness: crate::service::adapters::ready_signal::Readiness,
     p2p_service: P2pService,
     gas_price_provider: GasPriceProvider,
     chain_state_info_provider: ChainInfoProvider,
@@ -380,16 +359,12 @@ where
     graphql_api::initialize_query_costs(cost_config, balances_indexation_enabled)?;
 
     let network_addr = config.config.addr;
-    let combined_read_database = Arc::new(ReadDatabase::new(
+    let combined_read_database = ReadDatabase::new(
         config.config.database_batch_size,
         genesis_block_height,
         on_database,
         off_database,
-    )?);
-    let p2p_service: Arc<P2pService> = Arc::new(p2p_service);
-    // Split off before `.data(...)` moves the originals into the GraphQL schema context.
-    let readiness_read_database = combined_read_database.clone();
-    let readiness_p2p_service = p2p_service.clone();
+    )?;
     let request_timeout = config.config.api_request_timeout;
     let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;
@@ -440,14 +415,6 @@ where
 
     let graphql_playground =
         || render_graphql_playground(graphql_endpoint, graphql_subscription_endpoint);
-
-    let readiness = Readiness {
-        block_production_ready_signal,
-        poa: poa_adapter,
-        p2p_service: readiness_p2p_service,
-        read_database: readiness_read_database,
-        has_synced_once: Arc::new(AtomicBool::new(false)),
-    };
 
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
@@ -541,82 +508,16 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
 }
 
-/// Computes the latched `synced` bit for `/v1/ready`. `None` (PoA disabled) is trivially
-/// synced. `Synced` latches `has_synced_once` permanently true. `NotSynced` reports the
-/// latch as-is, so a transient network-block-triggered flap doesn't flip readiness back
-/// off once the node has genuinely caught up at least once.
-fn latch_synced(
-    sync_state: Option<&fuel_core_poa::sync::SyncState>,
-    has_synced_once: &AtomicBool,
-) -> bool {
-    use fuel_core_poa::sync::SyncState;
-
-    match sync_state {
-        None => true,
-        Some(SyncState::Synced(_)) => {
-            has_synced_once.store(true, Ordering::Release);
-            true
-        }
-        Some(SyncState::NotSynced) => has_synced_once.load(Ordering::Acquire),
-    }
-}
-
-/// Pure comparison: is `local_height` at or above the highest height any peer has
-/// reported via heartbeat? `None` means no peer has reported a height yet, so this signal
-/// can't confirm anything either way (caller should not treat that as "not synced").
-fn is_height_caught_up_to_peers(
-    local_height: BlockHeight,
-    peer_heights: &[BlockHeight],
-) -> Option<bool> {
-    peer_heights
-        .iter()
-        .max()
-        .map(|&max_peer_height| local_height >= max_peer_height)
-}
-
-/// Independent alternative to PoA's quiet-window `SyncState`: this node's own imported
-/// height compared against the highest height its connected peers have reported via
-/// heartbeat. Exists because `SyncState`'s `NotSynced -> Synced` transition requires a
-/// quiet window (`--time-until-synced`) with no new blocks, including locally-produced
-/// ones — on any chain producing blocks faster than that window (e.g. `--poa-open-period`
-/// shorter than `--time-until-synced`), that transition can structurally never fire, so a
-/// genuinely caught-up node would otherwise never pass `/v1/ready` (DEVOPS-1518).
-async fn height_caught_up_to_peers(
-    p2p_service: &P2pService,
-    read_database: &ReadDatabase,
-) -> bool {
-    let Ok(local_height) = read_database.view().and_then(|view| view.latest_height())
-    else {
-        return false;
-    };
-    let Ok(peers) = p2p_service.all_peer_info().await else {
-        return false;
-    };
-    let peer_heights: Vec<BlockHeight> = peers
-        .iter()
-        .filter_map(|peer: &PeerInfo| peer.heartbeat_data.block_height)
-        .collect();
-    is_height_caught_up_to_peers(local_height, &peer_heights).unwrap_or(false)
-}
-
-/// `/v1/ready` — distinct from `/v1/health` (liveness, always dumb-up). Reports whether
-/// this node is DB-open (all sub-services finished startup) and, when PoA is enabled,
-/// p2p-synced. Leader-lock status is deliberately excluded: readiness is not leadership,
-/// and gating on it would knock healthy followers out of Service Endpoints.
+/// `/v1/ready` — distinct from `/v1/health` (liveness, always dumb-up).
+/// `ready = services_started && (poa disabled || poa.is_ready())`.
+/// Leader-lock status is deliberately excluded: readiness is not leadership.
 async fn ready(
-    Extension(r): Extension<Readiness>,
+    Extension(r): Extension<crate::service::adapters::ready_signal::Readiness>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let services_started = r.block_production_ready_signal.is_ready();
-    let sync_state = r.poa.sync_state();
-    let mut synced = latch_synced(sync_state.as_ref(), &r.has_synced_once);
-    if !synced
-        && sync_state.is_some()
-        && height_caught_up_to_peers(&r.p2p_service, &r.read_database).await
-    {
-        r.has_synced_once.store(true, Ordering::Release);
-        synced = true;
-    }
-    let ready = services_started && synced;
+    let services_started = r.services_started();
+    let poa_enabled = r.poa_enabled();
+    let synced = r.poa_ready();
+    let ready = r.is_ready();
     let code = if ready {
         StatusCode::OK
     } else {
@@ -627,7 +528,7 @@ async fn ready(
         Json(json!({
             "ready": ready,
             "services_started": services_started,
-            "poa_enabled": sync_state.is_some(),
+            "poa_enabled": poa_enabled,
             "synced": synced,
         })),
     )
@@ -657,76 +558,4 @@ async fn graphql_subscription_handler(
 
 async fn ok() -> anyhow::Result<(), ()> {
     Ok(())
-}
-
-#[cfg(test)]
-#[allow(non_snake_case)]
-mod readiness_tests {
-    use super::*;
-    use fuel_core_poa::sync::SyncState;
-    use fuel_core_types::{
-        blockchain::header::BlockHeader,
-        fuel_types::BlockHeight,
-        tai64::Tai64,
-    };
-
-    #[test]
-    fn latch_synced__none_is_trivially_synced() {
-        let latch = AtomicBool::new(false);
-
-        assert!(latch_synced(None, &latch));
-    }
-
-    #[test]
-    fn latch_synced__synced_sets_the_latch() {
-        let latch = AtomicBool::new(false);
-        let header = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
-        let state = SyncState::Synced(Arc::new(header));
-
-        assert!(latch_synced(Some(&state), &latch));
-        assert!(latch.load(Ordering::Acquire));
-    }
-
-    #[test]
-    fn latch_synced__not_synced_before_latch_reports_not_synced() {
-        let latch = AtomicBool::new(false);
-
-        assert!(!latch_synced(Some(&SyncState::NotSynced), &latch));
-    }
-
-    #[test]
-    fn latch_synced__not_synced_after_latch_stays_synced() {
-        let latch = AtomicBool::new(true);
-
-        assert!(latch_synced(Some(&SyncState::NotSynced), &latch));
-    }
-
-    #[test]
-    fn is_height_caught_up_to_peers__no_peers_is_unknown() {
-        let local_height = BlockHeight::from(10u32);
-
-        assert_eq!(is_height_caught_up_to_peers(local_height, &[]), None);
-    }
-
-    #[test]
-    fn is_height_caught_up_to_peers__local_at_or_above_max_peer_is_caught_up() {
-        let local_height = BlockHeight::from(10u32);
-        let peer_heights = [BlockHeight::from(8u32), BlockHeight::from(10u32)];
-
-        assert_eq!(
-            is_height_caught_up_to_peers(local_height, &peer_heights),
-            Some(true)
-        );
-    }
-
-    #[test]
-    fn is_height_caught_up_to_peers__local_below_max_peer_is_not_caught_up() {
-        let local_height = BlockHeight::from(10u32);
-        let peer_heights = [BlockHeight::from(8u32), BlockHeight::from(11u32)];
-
-        assert_eq!(
-            is_height_caught_up_to_peers(local_height, &peer_heights),
-            Some(false)
-        );
-    }
 }

@@ -28,7 +28,6 @@ use fuel_core_poa::{
         Mode,
         SharedState,
     },
-    sync::SyncState,
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
@@ -1495,12 +1494,6 @@ impl PoAAdapter {
         Self { shared_state }
     }
 
-    /// `None` when block production (PoA) is disabled on this node — nothing to be
-    /// out of sync with, so callers should treat that as trivially synced.
-    pub fn sync_state(&self) -> Option<SyncState> {
-        self.shared_state.as_ref().map(|s| s.sync_state())
-    }
-
     pub async fn manually_produce_blocks(
         &self,
         start_time: Option<Tai64>,
@@ -1729,11 +1722,26 @@ impl P2pPort for P2PAdapter {
             Box::pin(tokio_stream::pending())
         }
     }
+
+    fn peer_height_stream(&self) -> BoxStream<BlockHeight> {
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_block_height())
+                    .filter_map(|result| result.ok().map(|data| data.block_height)),
+            )
+        } else {
+            Box::pin(tokio_stream::pending())
+        }
+    }
 }
 
 #[cfg(not(feature = "p2p"))]
 impl P2pPort for P2PAdapter {
     fn reserved_peers_count(&self) -> BoxStream<usize> {
+        Box::pin(tokio_stream::pending())
+    }
+
+    fn peer_height_stream(&self) -> BoxStream<BlockHeight> {
         Box::pin(tokio_stream::pending())
     }
 }
@@ -1842,18 +1850,6 @@ impl BlockImporter for BlockImporterAdapter {
 
     fn latest_block_height(&self) -> anyhow::Result<Option<BlockHeight>> {
         self.database.latest_block_height().map_err(Into::into)
-    }
-}
-
-#[cfg(test)]
-mod readiness_tests {
-    use super::*;
-
-    #[test]
-    fn sync_state_is_none_when_poa_is_disabled() {
-        let adapter = PoAAdapter::new(None);
-
-        assert_eq!(adapter.sync_state(), None);
     }
 }
 

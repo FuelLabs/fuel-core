@@ -178,7 +178,7 @@ impl Extension for RequiredFuelBlockHeightInner {
             }
         };
 
-        let database: &Arc<ReadDatabase> = ctx.data_unchecked();
+        let database: &ReadDatabase = ctx.data_unchecked();
         let view = match database.view() {
             Ok(view) => view,
             Err(e) => {

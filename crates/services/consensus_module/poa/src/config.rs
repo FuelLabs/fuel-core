@@ -10,6 +10,8 @@ pub struct Config {
     pub signer: SignMode,
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
+    /// Deprecated: ignored. Sync readiness is height-gap based
+    /// (`local >= max peer heartbeat height - 1`), not a quiet window.
     pub time_until_synced: Duration,
     pub production_timeout: Duration,
     pub chain_id: ChainId,

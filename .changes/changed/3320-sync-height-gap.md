@@ -1,0 +1,1 @@
+PoA sync readiness no longer waits for `--time-until-synced` quiet window. Synced means height gap with the network tip is at most 1 (`local height >= max peer heartbeat height - 1`). `--time-until-synced` is ignored (kept for CLI compatibility).

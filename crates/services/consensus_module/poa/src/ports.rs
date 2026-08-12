@@ -107,6 +107,9 @@ pub trait RelayerPort {
 pub trait P2pPort: Send + Sync + 'static {
     /// Subscribe to reserved peers connection updates.
     fn reserved_peers_count(&self) -> BoxStream<usize>;
+
+    /// Subscribe to peer heartbeat block heights.
+    fn peer_height_stream(&self) -> BoxStream<BlockHeight>;
 }
 
 #[async_trait::async_trait]

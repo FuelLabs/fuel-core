@@ -1,13 +1,4 @@
-use std::{
-    sync::{
-        Arc,
-        atomic::{
-            AtomicU32,
-            Ordering,
-        },
-    },
-    time::Duration,
-};
+use std::sync::Arc;
 
 use fuel_core_services::{
     RunnableService,
@@ -15,18 +6,15 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
     stream::{
-        BoxFuture,
         BoxStream,
     },
 };
 use fuel_core_types::{
     blockchain::header::BlockHeader,
+    fuel_types::BlockHeight,
     services::block_importer::BlockImportInfo,
 };
-use tokio::{
-    sync::watch,
-    time::MissedTickBehavior,
-};
+use tokio::sync::watch;
 use tokio_stream::StreamExt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,75 +23,53 @@ pub enum SyncState {
     Synced(Arc<BlockHeader>),
 }
 
-impl SyncState {
-    pub fn from_config(
-        min_connected_reserved_peers: usize,
-        time_until_synced: Duration,
-        header: &BlockHeader,
-    ) -> SyncState {
-        if min_connected_reserved_peers == 0 && time_until_synced == Duration::ZERO {
-            SyncState::Synced(Arc::new(header.clone()))
-        } else {
-            SyncState::NotSynced
-        }
-    }
+/// True when our height gap with the network tip is 1 or less:
+/// `local_height >= max_peer_heartbeat_height - 1`.
+pub(crate) fn height_caught_up_to_peers(
+    local_height: BlockHeight,
+    max_peer_height: BlockHeight,
+) -> bool {
+    u32::from(local_height) >= u32::from(max_peer_height).saturating_sub(1)
 }
 
 pub struct SyncTask {
     min_connected_reserved_peers: usize,
     peer_connections_stream: BoxStream<usize>,
+    peer_height_stream: BoxStream<BlockHeight>,
     block_stream: BoxStream<BlockImportInfo>,
     state_sender: watch::Sender<SyncState>,
     // shared with `MainTask` via SyncTask::SharedState
     state_receiver: watch::Receiver<SyncState>,
-    inner_state: InnerSyncState,
-    timer: Option<tokio::time::Interval>,
-    /// Blocks at heights <= this watermark were imported via reconciliation
-    /// by the leader and should not trigger Synced → NotSynced transitions.
-    /// Set by MainTask via `fetch_max`, monotonically increasing, never cleared.
-    reconciliation_watermark: Arc<AtomicU32>,
+    local_header: BlockHeader,
+    max_peer_height: Option<BlockHeight>,
+    peer_count: usize,
 }
 
 impl SyncTask {
     pub fn new(
         peer_connections_stream: BoxStream<usize>,
+        peer_height_stream: BoxStream<BlockHeight>,
         min_connected_reserved_peers: usize,
-        time_until_synced: Duration,
         block_stream: BoxStream<BlockImportInfo>,
         block_header: &BlockHeader,
-        reconciliation_watermark: Arc<AtomicU32>,
     ) -> Self {
-        let inner_state = InnerSyncState::from_config(
-            min_connected_reserved_peers,
-            time_until_synced,
-            block_header.clone(),
-        );
-        let timer = if time_until_synced == Duration::ZERO {
-            None
+        let initial = if min_connected_reserved_peers == 0 {
+            SyncState::Synced(Arc::new(block_header.clone()))
         } else {
-            let mut timer = tokio::time::interval(time_until_synced);
-            timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-            Some(timer)
+            SyncState::NotSynced
         };
-
-        let initial_sync_state = SyncState::from_config(
-            min_connected_reserved_peers,
-            time_until_synced,
-            block_header,
-        );
-
-        let (state_sender, state_receiver) =
-            tokio::sync::watch::channel(initial_sync_state);
+        let (state_sender, state_receiver) = tokio::sync::watch::channel(initial);
 
         Self {
             peer_connections_stream,
+            peer_height_stream,
             min_connected_reserved_peers,
             block_stream,
             state_sender,
             state_receiver,
-            inner_state,
-            timer,
-            reconciliation_watermark,
+            local_header: block_header.clone(),
+            max_peer_height: None,
+            peer_count: 0,
         }
     }
 
@@ -119,9 +85,35 @@ impl SyncTask {
             });
     }
 
-    fn restart_timer(&mut self) {
-        if let Some(timer) = &mut self.timer {
-            timer.reset();
+    fn has_sufficient_peers(&self) -> bool {
+        self.peer_count >= self.min_connected_reserved_peers
+    }
+
+    /// Synced when we have enough reserved peers and our height gap with the
+    /// network is ≤ 1. `min_connected_reserved_peers == 0` means isolated/dev
+    /// mode: there is no network tip to compare against, so we are ready.
+    fn should_be_synced(&self) -> bool {
+        if !self.has_sufficient_peers() {
+            return false;
+        }
+        if self.min_connected_reserved_peers == 0 {
+            return true;
+        }
+        match self.max_peer_height {
+            Some(max_peer) => {
+                height_caught_up_to_peers(*self.local_header.height(), max_peer)
+            }
+            None => false,
+        }
+    }
+
+    fn recompute_sync_state(&mut self) {
+        if self.should_be_synced() {
+            self.update_sync_state(SyncState::Synced(Arc::new(
+                self.local_header.clone(),
+            )));
+        } else {
+            self.update_sync_state(SyncState::NotSynced);
         }
     }
 }
@@ -150,86 +142,28 @@ impl RunnableService for SyncTask {
 
 impl RunnableTask for SyncTask {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        let tick: BoxFuture<tokio::time::Instant> = match &mut self.timer {
-            Some(timer) => Box::pin(timer.tick()),
-            _ => {
-                let future = core::future::pending();
-                Box::pin(future)
-            }
-        };
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
                 TaskNextAction::Stop
             }
             Some(latest_peer_count) = self.peer_connections_stream.next() => {
-                let sufficient_peers = latest_peer_count >= self.min_connected_reserved_peers;
-
-                match &self.inner_state {
-                    InnerSyncState::InsufficientPeers(block_header) if sufficient_peers => {
-                        self.inner_state = InnerSyncState::SufficientPeers(block_header.clone());
-                        self.restart_timer();
-                    }
-                    InnerSyncState::SufficientPeers(block_header) if !sufficient_peers => {
-                        self.inner_state = InnerSyncState::InsufficientPeers(block_header.clone());
-                        self.restart_timer();
-                    }
-                    InnerSyncState::Synced { block_header, .. } => {
-                        self.inner_state = InnerSyncState::Synced {
-                            block_header: block_header.clone(),
-                            has_sufficient_peers: sufficient_peers
-                        };
-                    }
-                    _ => {},
-                }
+                self.peer_count = latest_peer_count;
+                self.recompute_sync_state();
+                TaskNextAction::Continue
+            }
+            Some(peer_height) = self.peer_height_stream.next() => {
+                self.max_peer_height = Some(
+                    self.max_peer_height
+                        .map_or(peer_height, |max| max.max(peer_height)),
+                );
+                self.recompute_sync_state();
                 TaskNextAction::Continue
             }
             Some(block_info) = self.block_stream.next() => {
-                let new_block_height = block_info.block_header.height();
-
-                match &self.inner_state {
-                    InnerSyncState::InsufficientPeers(block_header) if new_block_height > block_header.height() => {
-                        self.inner_state = InnerSyncState::InsufficientPeers(block_info.block_header);
-                    }
-                    InnerSyncState::SufficientPeers(block_header) if new_block_height > block_header.height() => {
-                        self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
-                        self.restart_timer();
-                    }
-                    InnerSyncState::Synced { block_header, has_sufficient_peers } if new_block_height > block_header.height() => {
-                        let watermark = self.reconciliation_watermark.load(Ordering::Acquire);
-                        let is_reconciliation = watermark > 0
-                            && u32::from(*new_block_height) <= watermark;
-
-                        if block_info.is_locally_produced() || is_reconciliation {
-                            self.inner_state = InnerSyncState::Synced {
-                                block_header: block_info.block_header.clone(),
-                                has_sufficient_peers: *has_sufficient_peers
-                            };
-                            self.update_sync_state(SyncState::Synced(Arc::new(block_info.block_header)));
-                        } else {
-                            // we considered to be synced but we're obviously not!
-                            if *has_sufficient_peers {
-                                self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
-                                self.restart_timer();
-                            } else {
-                                self.inner_state = InnerSyncState::InsufficientPeers(block_info.block_header);
-                            }
-
-                            self.update_sync_state(SyncState::NotSynced);
-                        }
-                    }
-                    _ => {}
-                }
-                TaskNextAction::Continue
-            }
-            _ = tick => {
-                if let InnerSyncState::SufficientPeers(block_header) = &self.inner_state {
-                    let block_header = block_header.clone();
-                    self.inner_state = InnerSyncState::Synced {
-                        block_header: block_header.clone(),
-                        has_sufficient_peers: true
-                    };
-                    self.update_sync_state(SyncState::Synced(Arc::new(block_header)));
+                if block_info.block_header.height() > self.local_header.height() {
+                    self.local_header = block_info.block_header;
+                    self.recompute_sync_state();
                 }
                 TaskNextAction::Continue
             }
@@ -240,56 +174,6 @@ impl RunnableTask for SyncTask {
         // Nothing to shut down because we don't have any temporary state that should be dumped,
         // and we don't spawn any sub-tasks that we need to finish or await.
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-enum InnerSyncState {
-    /// We are not connected to at least `min_connected_reserved_peers` peers.
-    ///
-    /// InsufficientPeers -> SufficientPeers
-    InsufficientPeers(BlockHeader),
-    /// We are connected to at least `min_connected_reserved_peers` peers.
-    ///
-    /// SufficientPeers -> Synced(...)
-    /// SufficientPeers -> InsufficientPeers(...)
-    SufficientPeers(BlockHeader),
-    /// We can go into this state if we didn't receive any notification
-    /// about new block height from the network for `time_until_synced` timeout.
-    ///
-    /// We can leave this state only in the case, if we received a valid block
-    /// from the network with higher block height.
-    ///
-    /// Synced -> either InsufficientPeers(...) or SufficientPeers(...)
-    Synced {
-        block_header: BlockHeader,
-        has_sufficient_peers: bool,
-    },
-}
-
-impl InnerSyncState {
-    fn from_config(
-        min_connected_reserved_peers: usize,
-        time_until_synced: Duration,
-        block_header: BlockHeader,
-    ) -> Self {
-        match (min_connected_reserved_peers, time_until_synced) {
-            (0, Duration::ZERO) => InnerSyncState::Synced {
-                block_header,
-                has_sufficient_peers: true,
-            },
-            (0, _) => InnerSyncState::SufficientPeers(block_header),
-            _ => InnerSyncState::InsufficientPeers(block_header),
-        }
-    }
-
-    #[cfg(test)]
-    fn block_height(&self) -> &fuel_core_types::fuel_types::BlockHeight {
-        match self {
-            InnerSyncState::InsufficientPeers(block_header) => block_header.height(),
-            InnerSyncState::SufficientPeers(block_header) => block_header.height(),
-            InnerSyncState::Synced { block_header, .. } => block_header.height(),
-        }
     }
 }
 
@@ -305,14 +189,10 @@ mod tests {
             Context,
             Poll,
         },
-        time::Duration,
     };
 
     use fuel_core_services::stream::IntoBoxStream;
-    use fuel_core_types::{
-        fuel_types::BlockHeight,
-        tai64::Tai64,
-    };
+    use fuel_core_types::tai64::Tai64;
 
     struct MockStream<T> {
         items: VecDeque<T>,
@@ -346,21 +226,22 @@ mod tests {
         }
     }
 
-    /// Helper function that creates a `SyncTask` with a given configuration
     fn configure_sync_task(
         min_connected_reserved_peers: usize,
         connections_stream: impl IntoIterator<Item = usize>,
-        time_until_synced: Duration,
-        biggest_block: u32,
+        peer_heights: impl IntoIterator<Item = BlockHeight>,
+        local_blocks: impl IntoIterator<Item = u32>,
+        starting_height: u32,
     ) -> (
         SyncTask,
         StateWatcher,
         tokio::sync::watch::Sender<fuel_core_services::State>,
     ) {
         let connections_stream = MockStream::new(connections_stream).into_boxed();
-
+        let peer_height_stream = MockStream::new(peer_heights).into_boxed();
         let block_stream = MockStream::new(
-            (1..biggest_block + 1)
+            local_blocks
+                .into_iter()
                 .map(|height| BlockHeader::new_block(height.into(), Tai64::now())),
         )
         .map(BlockImportInfo::from)
@@ -372,368 +253,154 @@ mod tests {
 
         let sync_task = SyncTask::new(
             connections_stream,
+            peer_height_stream,
             min_connected_reserved_peers,
-            time_until_synced,
             block_stream,
-            &Default::default(),
-            Arc::new(AtomicU32::new(0)),
+            &BlockHeader::new_block(starting_height.into(), Tai64::now()),
         );
 
         (sync_task, watcher, tx)
     }
 
-    #[tokio::test]
-    async fn test_sync_task() {
-        // given the following config
-        let connected_peers_report = 5;
-        let amount_of_updates_from_stream = 1;
-        let min_connected_reserved_peers = 5;
-        let biggest_block = 5;
-        let time_until_synced = Duration::from_secs(3);
-
-        // and the SyncTask
-        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
-            min_connected_reserved_peers,
-            vec![connected_peers_report; amount_of_updates_from_stream],
-            time_until_synced,
-            biggest_block,
-        );
-
-        // sync state should be NotSynced at the beginning
-        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
-        // we should have insufficient peers
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::InsufficientPeers(_)
-        ));
-
-        // given that we've performed a `run()` `amount_of_updates_from_stream + biggest_block` times
-        let run_times = amount_of_updates_from_stream + biggest_block as usize;
-        for _ in 0..run_times {
-            let _ = sync_task.run(&mut watcher).await;
-        }
-
-        // the state should still be NotSynced
-        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
-
-        // but we should have sufficient peers
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::SufficientPeers(_)
-        ));
-
-        // and the block should be the latest one
-        assert_eq!(
-            sync_task.inner_state.block_height(),
-            &BlockHeight::from(biggest_block)
-        );
-
-        // given that we now run the task again
-        // both block stream and p2p connected peers updates stream would be empty
-        // hence the timeout should activate and expire
-        let _ = sync_task.run(&mut watcher).await;
-
-        // at that point we should be in Synced state
-        matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_));
-
-        // synced should reflect here as well
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::Synced { .. }
-        ));
-
-        // and the block should be still the latest one
-        assert_eq!(
-            sync_task.inner_state.block_height(),
-            &BlockHeight::from(biggest_block)
-        );
-    }
-
-    // SyncTask starts with SufficientPeers and transitions back to InsufficientPeers when the peer count drops.
-    #[tokio::test]
-    async fn sync_task_sufficient_to_insufficient() {
-        // given the following config
-        let min_connected_reserved_peers = 5;
-        let biggest_block = 0;
-        let time_until_synced = Duration::from_secs(2);
-        let connections_stream = vec![10, 4];
-
-        // and the SyncTask
-        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
-            min_connected_reserved_peers,
-            connections_stream,
-            time_until_synced,
-            biggest_block,
-        );
-
-        // sync state should be NotSynced at the beginning
-        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
-        // we should have insufficient peers
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::InsufficientPeers(_)
-        ));
-
-        // given that we've performed a `run()` once the state should be SufficientPeers
-        // since the peer count was 10
-        let _ = sync_task.run(&mut watcher).await;
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::SufficientPeers(_)
-        ));
-
-        // given that we've performed a `run()` again the state should be InsufficientPeers
-        // since the peer count was 4
-        let _ = sync_task.run(&mut watcher).await;
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::InsufficientPeers(_)
+    #[test]
+    fn height_caught_up_to_peers__gap_of_zero_or_one_is_caught_up() {
+        let local = BlockHeight::from(10u32);
+        assert!(height_caught_up_to_peers(local, BlockHeight::from(10u32)));
+        assert!(height_caught_up_to_peers(local, BlockHeight::from(11u32)));
+        assert!(height_caught_up_to_peers(
+            BlockHeight::from(12u32),
+            BlockHeight::from(10u32)
         ));
     }
 
-    // SyncTask is in Synced state and receives a block with a height greater than its current block height from the network.
-    #[tokio::test]
-    async fn sync_task_synced_to_greater_block_height_from_network() {
-        // given the following config
-        let min_connected_reserved_peers = 5;
-        let biggest_block = 5;
-        let time_until_synced = Duration::from_secs(2);
-        let connections_stream = vec![10];
-
-        // and the SyncTask
-        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
-            min_connected_reserved_peers,
-            connections_stream.clone(),
-            time_until_synced,
-            biggest_block,
-        );
-
-        // given that we received all the blocks initially and peer connection updates
-        for _ in 0..biggest_block as usize + connections_stream.len() {
-            let _ = sync_task.run(&mut watcher).await;
-        }
-
-        // after running one more time
-        let _ = sync_task.run(&mut watcher).await;
-
-        // the state should be Synced and should also hold sufficient number of peers
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::Synced {
-                has_sufficient_peers: true,
-                ..
-            }
+    #[test]
+    fn height_caught_up_to_peers__gap_of_two_is_not_caught_up() {
+        assert!(!height_caught_up_to_peers(
+            BlockHeight::from(10u32),
+            BlockHeight::from(12u32)
         ));
-
-        // given that we now added a new stream with a block height greater than the current block height
-        // and the source of the new block is produced by us
-        let latest_block_height = biggest_block + 1;
-        let new_block_stream = MockStream::new(vec![BlockHeader::new_block(
-            latest_block_height.into(),
-            Tai64::now(),
-        )])
-        .map(BlockImportInfo::from)
-        .into_boxed();
-        sync_task.block_stream = new_block_stream;
-
-        // when we run the task again
-        let _ = sync_task.run(&mut watcher).await;
-
-        // then the state should be still be Synced
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::Synced {
-                has_sufficient_peers: true,
-                ..
-            }
-        ));
-        // with latest block height
-        assert_eq!(
-            sync_task.inner_state.block_height(),
-            &BlockHeight::from(latest_block_height)
-        );
-        matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_));
-
-        // given that we now added a new stream with a block height greater than the current block height
-        // and the source of the new block height is from the network
-        let latest_block_height = latest_block_height + 1;
-        let new_block_stream = MockStream::new(vec![BlockHeader::new_block(
-            latest_block_height.into(),
-            Tai64::now(),
-        )])
-        .map(BlockImportInfo::new_from_network)
-        .into_boxed();
-        sync_task.block_stream = new_block_stream;
-
-        // when we run the task again
-        let _ = sync_task.run(&mut watcher).await;
-
-        // then the state should be SufficientPeers
-        // since we have sufficient peers and the block height is greater than the current one
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::SufficientPeers(_)
-        ));
-        // with latest block height
-        assert_eq!(
-            sync_task.inner_state.block_height(),
-            &BlockHeight::from(latest_block_height)
-        );
-        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
-
-        // given now that we run the task again
-        let _ = sync_task.run(&mut watcher).await;
-
-        // we should be in Synced state again
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::Synced {
-                has_sufficient_peers: true,
-                ..
-            }
-        ));
-        // with latest block height
-        assert_eq!(
-            sync_task.inner_state.block_height(),
-            &BlockHeight::from(latest_block_height)
-        );
-        matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_));
-
-        // given new stream of peer connection updates
-        let new_connections_stream = MockStream::new(vec![1]).into_boxed();
-        sync_task.peer_connections_stream = new_connections_stream;
-
-        // when we run the task again
-        let _ = sync_task.run(&mut watcher).await;
-
-        // then the state should be still Synced but it should hold insufficient number of peers
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::Synced {
-                has_sufficient_peers: false,
-                ..
-            }
-        ));
-        matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_));
     }
 
-    /// Reproduces the deadlock root cause: a network-sourced block (from
-    /// reconciliation via `execute_and_commit`) arrives while the SyncTask
-    /// is in Synced state. Without the watermark fix, this transitions
-    /// the SyncTask to NotSynced, which deadlocks the leader's
-    /// `ensure_synced()` call.
     #[tokio::test]
-    async fn sync_task__network_block_at_reconciliation_height_causes_not_synced_without_watermark()
-     {
-        // given: a SyncTask that starts in Synced state (min_peers=0, time=ZERO)
-        let connections_stream = MockStream::<usize>::new(vec![]).into_boxed();
-        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+    async fn sync_task__min_peers_zero_starts_synced() {
+        let (sync_task, _watcher, _tx) =
+            configure_sync_task(0, vec![], vec![], vec![], 5);
 
-        let (tx, shutdown) =
-            tokio::sync::watch::channel(fuel_core_services::State::Started);
-        let mut watcher: StateWatcher = shutdown.into();
-
-        // Watermark is 0 (not set) — simulates the pre-fix state
-        let watermark = Arc::new(AtomicU32::new(0));
-
-        let mut sync_task = SyncTask::new(
-            connections_stream,
-            0, // min_connected_reserved_peers
-            Duration::ZERO,
-            block_stream,
-            &BlockHeader::new_block(5u32.into(), Tai64::now()),
-            watermark,
-        );
-
-        // Verify we start in Synced state
-        assert!(
-            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
-            "SyncTask should start Synced with min_peers=0 and time_until_synced=ZERO"
-        );
-
-        // when: a Source::Network block arrives at height 6 (> current height 5)
-        // This is what happens when reconciliation imports a block via
-        // execute_and_commit, which always uses ImportResult::new_from_network
-        let network_block_stream =
-            MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
-                .map(BlockImportInfo::new_from_network)
-                .into_boxed();
-        sync_task.block_stream = network_block_stream;
-
-        let _ = sync_task.run(&mut watcher).await;
-
-        // then: SyncTask transitions to NotSynced — THIS IS THE BUG
-        // The leader's ensure_synced() will now block forever because
-        // it can't produce locally-produced blocks while blocked.
-        assert_eq!(
-            SyncState::NotSynced,
+        assert!(matches!(
             *sync_task.state_receiver.borrow(),
-            "Without watermark fix, a network-sourced reconciliation block \
-             causes NotSynced — this deadlocks the leader"
-        );
-
-        drop(tx);
+            SyncState::Synced(_)
+        ));
     }
 
-    /// Verifies the watermark fix: when the reconciliation watermark covers
-    /// the block height, a network-sourced block should NOT trigger NotSynced.
     #[tokio::test]
-    async fn sync_task__network_block_within_watermark_stays_synced() {
-        // given: a SyncTask in Synced state with watermark set to height 6
-        let connections_stream = MockStream::<usize>::new(vec![]).into_boxed();
-        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
-
-        let (tx, shutdown) =
-            tokio::sync::watch::channel(fuel_core_services::State::Started);
-        let mut watcher: StateWatcher = shutdown.into();
-
-        let watermark = Arc::new(AtomicU32::new(6));
-
-        let mut sync_task = SyncTask::new(
-            connections_stream,
-            0,
-            Duration::ZERO,
-            block_stream,
-            &BlockHeader::new_block(5u32.into(), Tai64::now()),
-            watermark,
+    async fn sync_task__becomes_synced_when_height_gap_is_at_most_one() {
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            1,
+            vec![1],
+            vec![BlockHeight::from(10u32)],
+            vec![10],
+            9,
         );
+
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        // peer count → sufficient peers, but no peer height yet
+        let _ = sync_task.run(&mut watcher).await;
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        // peer height 10, local still 9 → gap of 1 → Synced
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+
+        // local advances to 10 (optional; still Synced)
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn sync_task__stays_not_synced_when_height_gap_exceeds_one() {
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            1,
+            vec![1],
+            vec![BlockHeight::from(12u32)],
+            vec![],
+            10,
+        );
+
+        let _ = sync_task.run(&mut watcher).await; // peers
+        let _ = sync_task.run(&mut watcher).await; // peer height
+
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+    }
+
+    #[tokio::test]
+    async fn sync_task__falls_out_of_sync_when_peers_pull_ahead() {
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            1,
+            vec![1],
+            vec![BlockHeight::from(10u32), BlockHeight::from(13u32)],
+            vec![],
+            10,
+        );
+
+        let _ = sync_task.run(&mut watcher).await; // peers
+        let _ = sync_task.run(&mut watcher).await; // peer height 10 → Synced
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+
+        let _ = sync_task.run(&mut watcher).await; // peer height 13 → gap 3 → NotSynced
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+    }
+
+    #[tokio::test]
+    async fn sync_task__insufficient_peers_keeps_not_synced() {
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            2,
+            vec![1],
+            vec![BlockHeight::from(10u32)],
+            vec![],
+            10,
+        );
+
+        let _ = sync_task.run(&mut watcher).await;
+        let _ = sync_task.run(&mut watcher).await;
+
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+    }
+
+    #[tokio::test]
+    async fn sync_task__network_block_while_synced_with_min_peers_zero_stays_synced() {
+        // Regression for the old quiet-window + Source::Network flap that
+        // deadlocked ensure_synced during reconciliation. With height-gap
+        // sync and min_peers=0, importing a network block just advances
+        // local height and stays Synced.
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(0, vec![], vec![], vec![], 5);
 
         assert!(matches!(
             *sync_task.state_receiver.borrow(),
             SyncState::Synced(_)
         ));
 
-        // when: a Source::Network block at height 6 (within watermark)
-        let network_block_stream =
+        sync_task.block_stream =
             MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
                 .map(BlockImportInfo::new_from_network)
                 .into_boxed();
-        sync_task.block_stream = network_block_stream;
 
         let _ = sync_task.run(&mut watcher).await;
 
-        // then: should stay Synced because watermark covers height 6
-        assert!(
-            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
-            "With watermark=6, a network block at height 6 should NOT trigger NotSynced"
-        );
-
-        // when: a Source::Network block at height 7 (ABOVE watermark)
-        let network_block_stream =
-            MockStream::new(vec![BlockHeader::new_block(7u32.into(), Tai64::now())])
-                .map(BlockImportInfo::new_from_network)
-                .into_boxed();
-        sync_task.block_stream = network_block_stream;
-
-        let _ = sync_task.run(&mut watcher).await;
-
-        // then: should transition to NotSynced (watermark doesn't protect above its value)
-        assert_eq!(
-            SyncState::NotSynced,
+        assert!(matches!(
             *sync_task.state_receiver.borrow(),
-            "A network block above the watermark should still trigger NotSynced"
-        );
-
-        drop(tx);
+            SyncState::Synced(_)
+        ));
+        assert_eq!(sync_task.local_header.height(), &BlockHeight::from(6u32));
     }
 }

@@ -326,7 +326,8 @@ pub struct Command {
     #[clap(long = "min-connected-reserved-peers", default_value = "0", env)]
     pub min_connected_reserved_peers: usize,
 
-    /// Time to wait after receiving the latest block before considered to be Synced.
+    /// Deprecated and ignored. Sync readiness uses height gap with peer
+    /// heartbeats (`local >= max peer height - 1`), not a quiet window.
     #[clap(long = "time-until-synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
 

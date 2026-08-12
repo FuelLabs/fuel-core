@@ -1,4 +1,7 @@
-use fuel_core_poa::ports::WaitForReadySignal;
+use fuel_core_poa::{
+    ports::WaitForReadySignal,
+    service::SharedState as PoASharedState,
+};
 use std::sync::{
     Arc,
     atomic::{
@@ -43,6 +46,40 @@ impl Default for ReadySignal {
     }
 }
 
+/// Bundle for `/v1/ready`: services-started flag plus optional PoA readiness.
+/// PoA owns sync/readiness in its `SharedState`; this handle only reads it.
+#[derive(Clone)]
+pub struct Readiness {
+    services_started: ReadySignal,
+    poa: Option<PoASharedState>,
+}
+
+impl Readiness {
+    pub fn new(services_started: ReadySignal, poa: Option<PoASharedState>) -> Self {
+        Self {
+            services_started,
+            poa,
+        }
+    }
+
+    pub fn services_started(&self) -> bool {
+        self.services_started.is_ready()
+    }
+
+    pub fn poa_enabled(&self) -> bool {
+        self.poa.is_some()
+    }
+
+    /// `true` when PoA is disabled, or when PoA reports synced/ready.
+    pub fn poa_ready(&self) -> bool {
+        self.poa.as_ref().map(|poa| poa.is_ready()).unwrap_or(true)
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.services_started() && self.poa_ready()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -56,5 +93,17 @@ mod tests {
         signal.send_ready_signal();
 
         assert!(signal.is_ready());
+    }
+
+    #[test]
+    fn readiness_poa_disabled_is_ready_once_services_started() {
+        let signal = ReadySignal::new();
+        let readiness = Readiness::new(signal.clone(), None);
+
+        assert!(!readiness.is_ready());
+        signal.send_ready_signal();
+        assert!(readiness.is_ready());
+        assert!(!readiness.poa_enabled());
+        assert!(readiness.poa_ready());
     }
 }

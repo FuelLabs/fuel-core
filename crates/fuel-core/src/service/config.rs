@@ -122,7 +122,7 @@ pub struct Config {
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
     /// The number of reserved peers to connect to before starting to sync.
     pub min_connected_reserved_peers: usize,
-    /// Time to wait after receiving the latest block before considered to be Synced.
+    /// Deprecated: ignored by PoA sync (height-gap based). Kept for CLI compat.
     pub time_until_synced: Duration,
     /// The timeout after which block production is considered failed.
     pub production_timeout: Duration,
