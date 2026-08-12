@@ -52,12 +52,14 @@ pub struct SyncTask {
     min_connected_reserved_peers: usize,
     peer_connections_stream: BoxStream<usize>,
     peer_height_stream: BoxStream<BlockHeightHeartbeatData>,
+    peer_disconnected_stream: BoxStream<PeerId>,
     block_stream: BoxStream<BlockImportInfo>,
     state_sender: watch::Sender<SyncState>,
     // shared with `MainTask` via SyncTask::SharedState
     state_receiver: watch::Receiver<SyncState>,
     local_header: BlockHeader,
     /// Per-peer latest heartbeat height + when it was observed.
+    /// Removed on disconnect (live tip) and pruned by TTL as a fallback.
     peer_heights: HashMap<PeerId, (BlockHeight, Instant)>,
     peer_count: usize,
     peer_height_ttl: Duration,
@@ -67,6 +69,7 @@ impl SyncTask {
     pub fn new(
         peer_connections_stream: BoxStream<usize>,
         peer_height_stream: BoxStream<BlockHeightHeartbeatData>,
+        peer_disconnected_stream: BoxStream<PeerId>,
         min_connected_reserved_peers: usize,
         block_stream: BoxStream<BlockImportInfo>,
         block_header: &BlockHeader,
@@ -81,6 +84,7 @@ impl SyncTask {
         Self {
             peer_connections_stream,
             peer_height_stream,
+            peer_disconnected_stream,
             min_connected_reserved_peers,
             block_stream,
             state_sender,
@@ -203,6 +207,14 @@ impl RunnableTask for SyncTask {
                 self.recompute_sync_state();
                 TaskNextAction::Continue
             }
+            Some(peer_id) = self.peer_disconnected_stream.next() => {
+                // Drop the departed peer's tip immediately — same semantics as
+                // comparing against live `all_peer_info()`, so a stale/bogus
+                // height cannot pin NotSynced after disconnect.
+                self.peer_heights.remove(&peer_id);
+                self.recompute_sync_state();
+                TaskNextAction::Continue
+            }
             Some(block_info) = self.block_stream.next() => {
                 if block_info.block_header.height() > self.local_header.height() {
                     self.local_header = block_info.block_header;
@@ -289,6 +301,8 @@ mod tests {
     ) {
         let connections_stream = MockStream::new(connections_stream).into_boxed();
         let peer_height_stream = MockStream::new(peer_heights).into_boxed();
+        let peer_disconnected_stream =
+            MockStream::<PeerId>::new(vec![]).into_boxed();
         let block_stream = MockStream::new(
             local_blocks
                 .into_iter()
@@ -304,6 +318,7 @@ mod tests {
         let sync_task = SyncTask::new(
             connections_stream,
             peer_height_stream,
+            peer_disconnected_stream,
             min_connected_reserved_peers,
             block_stream,
             &BlockHeader::new_block(starting_height.into(), Tai64::now()),
@@ -429,6 +444,34 @@ mod tests {
         assert!(
             matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
             "peer-count drop after Synced must not flip to NotSynced"
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_task__disconnect_drops_stale_peer_height_immediately() {
+        // Bugbot: departed peer's tip must not pin NotSynced (live all_peer_info semantics).
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            1,
+            vec![1],
+            vec![peer(1, 100), peer(2, 10)],
+            vec![],
+            10,
+        );
+
+        let _ = sync_task.run(&mut watcher).await; // peers=1
+        let _ = sync_task.run(&mut watcher).await; // peer1@100 → NotSynced (gap)
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        let _ = sync_task.run(&mut watcher).await; // peer2@10 (still NotSynced; max=100)
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        sync_task.peer_disconnected_stream =
+            MockStream::new(vec![PeerId::from(vec![1])]).into_boxed();
+        let _ = sync_task.run(&mut watcher).await; // disconnect peer1 → max=10 → Synced
+
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "disconnect must drop the departed peer tip immediately"
         );
     }
 

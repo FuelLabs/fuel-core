@@ -382,6 +382,8 @@ pub trait Broadcast: Send {
         block_height_data: BlockHeightHeartbeatData,
     ) -> anyhow::Result<()>;
 
+    fn peer_disconnected_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
+
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
 
     fn pre_confirmation_broadcast(
@@ -407,6 +409,11 @@ impl Broadcast for SharedState {
         block_height_data: BlockHeightHeartbeatData,
     ) -> anyhow::Result<()> {
         self.block_height_broadcast.send(block_height_data)?;
+        Ok(())
+    }
+
+    fn peer_disconnected_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()> {
+        self.peer_disconnected_broadcast.send(peer_id)?;
         Ok(())
     }
 
@@ -1069,6 +1076,11 @@ where
                             let _ = self.broadcast.new_tx_subscription_broadcast(FuelPeerId::from(peer_id.to_bytes()));
                         }
                     },
+                    Some(FuelP2PEvent::PeerDisconnected(peer_id)) => {
+                        let _ = self
+                            .broadcast
+                            .peer_disconnected_broadcast(FuelPeerId::from(peer_id.to_bytes()));
+                    },
                     _ => (),
                 }
                 TaskNextAction::Continue
@@ -1119,6 +1131,8 @@ pub struct SharedState {
     request_sender: mpsc::Sender<TaskRequest>,
     /// Sender of p2p block height data
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
+    /// Sender of peer-disconnect notifications (so consumers can drop cached tips).
+    peer_disconnected_broadcast: broadcast::Sender<FuelPeerId>,
     /// Max txs per request
     max_txs_per_request: usize,
 }
@@ -1365,6 +1379,10 @@ impl SharedState {
         self.block_height_broadcast.subscribe()
     }
 
+    pub fn subscribe_peer_disconnected(&self) -> broadcast::Receiver<FuelPeerId> {
+        self.peer_disconnected_broadcast.subscribe()
+    }
+
     pub fn subscribe_reserved_peers_count(&self) -> broadcast::Receiver<usize> {
         self.reserved_peers_broadcast.subscribe()
     }
@@ -1404,6 +1422,7 @@ pub fn build_shared_state(
     let (preconfirmations_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (new_tx_subscription_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (block_height_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
+    let (peer_disconnected_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
 
     let (reserved_peers_broadcast, _) = broadcast::channel::<usize>(
         config
@@ -1421,6 +1440,7 @@ pub fn build_shared_state(
             pre_confirmations_broadcast: preconfirmations_broadcast,
             reserved_peers_broadcast,
             block_height_broadcast,
+            peer_disconnected_broadcast,
             max_txs_per_request: config.max_txs_per_request,
         },
         request_receiver,

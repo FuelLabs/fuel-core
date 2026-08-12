@@ -191,10 +191,12 @@ where
         } = config;
 
         let peer_height_stream = p2p_port.peer_height_stream();
+        let peer_disconnected_stream = p2p_port.peer_disconnected_stream();
 
         let sync_task = SyncTask::new(
             peer_connections_stream,
             peer_height_stream,
+            peer_disconnected_stream,
             min_connected_reserved_peers,
             block_stream,
             last_block,
