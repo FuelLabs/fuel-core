@@ -24,7 +24,10 @@ use fuel_core_types::{
 };
 use tokio::{
     sync::watch,
-    time::Instant,
+    time::{
+        Instant,
+        MissedTickBehavior,
+    },
 };
 use tokio_stream::StreamExt;
 
@@ -63,6 +66,9 @@ pub struct SyncTask {
     peer_heights: HashMap<PeerId, (BlockHeight, Instant)>,
     peer_count: usize,
     peer_height_ttl: Duration,
+    /// Fires even when no p2p/block events arrive, so TTL pruning cannot stall
+    /// while `ensure_synced` / `/v1/ready` wait on `NotSynced`.
+    prune_interval: tokio::time::Interval,
 }
 
 impl SyncTask {
@@ -81,6 +87,11 @@ impl SyncTask {
         };
         let (state_sender, state_receiver) = tokio::sync::watch::channel(initial);
 
+        // Period < TTL so a silent tip is pruned soon after expiry, not only
+        // after a full extra TTL of waiting for the next tick.
+        let mut prune_interval = tokio::time::interval(PEER_HEIGHT_TTL / 2);
+        prune_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
         Self {
             peer_connections_stream,
             peer_height_stream,
@@ -93,7 +104,16 @@ impl SyncTask {
             peer_heights: HashMap::new(),
             peer_count: 0,
             peer_height_ttl: PEER_HEIGHT_TTL,
+            prune_interval,
         }
+    }
+
+    /// Keep the prune timer period aligned with `peer_height_ttl` (tests may
+    /// shorten the TTL).
+    fn reset_prune_interval(&mut self) {
+        let mut prune_interval = tokio::time::interval(self.peer_height_ttl / 2);
+        prune_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        self.prune_interval = prune_interval;
     }
 
     fn update_sync_state(&mut self, new_state: SyncState) {
@@ -179,10 +199,13 @@ impl RunnableService for SyncTask {
     }
 
     async fn into_task(
-        self,
+        mut self,
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        // Interval is ready immediately on first poll; consume that tick so
+        // `run` does not spin on prune before `peer_height_ttl` elapses.
+        self.prune_interval.tick().await;
         Ok(self)
     }
 }
@@ -220,6 +243,12 @@ impl RunnableTask for SyncTask {
                     self.local_header = block_info.block_header;
                     self.recompute_sync_state();
                 }
+                TaskNextAction::Continue
+            }
+            _ = self.prune_interval.tick() => {
+                // No heartbeat/disconnect/block required — TTL must still run
+                // or a silent high tip can permanently block ensure_synced.
+                self.recompute_sync_state();
                 TaskNextAction::Continue
             }
         }
@@ -464,6 +493,38 @@ mod tests {
         );
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn sync_task__ttl_timer_prunes_without_other_events() {
+        // High tip from peer 1 blocks sync; peer 2 is caught up. No further
+        // heartbeats/disconnects/blocks arrive — only the prune timer can
+        // drop peer 1 after TTL and unblock Synced.
+        let (mut sync_task, mut watcher, _tx) =
+            configure_sync_task(1, vec![1], vec![peer(1, 100), peer(2, 10)], vec![], 10);
+
+        let _ = sync_task.run(&mut watcher).await; // peers
+        let _ = sync_task.run(&mut watcher).await; // peer1@100 → NotSynced
+        let _ = sync_task.run(&mut watcher).await; // peer2@10; max still 100
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        // peer1 already past TTL; peer2 must remain fresh after the advance
+        // (`age < ttl`) or both tips prune and we stay NotSynced with no tip.
+        let peer1 = PeerId::from(vec![1]);
+        sync_task.peer_heights.get_mut(&peer1).expect("peer1").1 = Instant::now()
+            .checked_sub(Duration::from_secs(60))
+            .expect("clock");
+        sync_task.peer_height_ttl = Duration::from_secs(5);
+        sync_task.reset_prune_interval();
+        sync_task.prune_interval.tick().await; // discard immediate first tick
+
+        tokio::time::advance(Duration::from_secs(2)).await;
+        let _ = sync_task.run(&mut watcher).await; // prune timer only
+
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "prune timer must drop the stale high tip without other events"
+        );
+    }
+
     #[tokio::test]
     async fn sync_task__expired_peer_height_does_not_block_sync_forever() {
         // Bugbot: monotonic forever-max of departed peers must not pin NotSynced.
@@ -472,6 +533,7 @@ mod tests {
 
         // Seed a stale, unreachable height from a departed peer.
         sync_task.peer_height_ttl = Duration::from_millis(1);
+        sync_task.reset_prune_interval();
         sync_task.peer_heights.insert(
             PeerId::from(vec![1]),
             (
