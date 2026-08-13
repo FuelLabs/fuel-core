@@ -346,6 +346,12 @@ where
             ))
         }
 
+        // P2P imports can advance the tip while we are already Synced (height-gap
+        // allows Synced before full catch-up). Trigger production re-reads the DB
+        // in `try_to_produce_block`; manual production must do the same or it
+        // produces at a stale next_height (IncorrectBlockHeight).
+        self.sync_last_height_from_sync_task_and_db();
+
         let mut block_time = if let Some(time) = block_production.start_time {
             time
         } else {
@@ -375,6 +381,23 @@ where
             }
         }
         Ok(())
+    }
+
+    /// Advance `last_height` / timestamp from SyncTask tip and DB so production
+    /// does not use a stale next height after P2P catch-up.
+    fn sync_last_height_from_sync_task_and_db(&mut self) {
+        let synced_header = match &*self.sync_task_handle.shared.borrow() {
+            SyncState::Synced(block_header) => Some(Arc::clone(block_header)),
+            SyncState::NotSynced => None,
+        };
+        if let Some(block_header) = synced_header {
+            self.update_last_block_values(&block_header);
+        }
+        if let Ok(Some(db_height)) = self.block_importer.latest_block_height()
+            && db_height > self.last_height
+        {
+            self.last_height = db_height;
+        }
     }
 
     async fn produce_block(
@@ -627,11 +650,7 @@ where
         // SyncTask, which can lag. Using a stale next_height causes
         // unreconciled_blocks to return blocks the DB already has,
         // leading to IncorrectBlockHeight errors.
-        if let Ok(Some(db_height)) = self.block_importer.latest_block_height()
-            && db_height > self.last_height
-        {
-            self.last_height = db_height;
-        }
+        self.sync_last_height_from_sync_task_and_db();
 
         match self
             .reconciliation_port
