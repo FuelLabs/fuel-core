@@ -110,6 +110,7 @@ impl SyncTask {
 
     /// Keep the prune timer period aligned with `peer_height_ttl` (tests may
     /// shorten the TTL).
+    #[cfg(test)]
     fn reset_prune_interval(&mut self) {
         let mut prune_interval = tokio::time::interval(self.peer_height_ttl / 2);
         prune_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
