@@ -79,9 +79,7 @@ async fn can_manually_produce_block(
     importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
-    importer
-        .expect_latest_block_header()
-        .returning(|| Ok(None));
+    importer.expect_latest_block_header().returning(|| Ok(None));
 
     let mut producer = MockBlockProducer::default();
     producer
@@ -183,7 +181,12 @@ async fn manual_produce__uses_db_tip_time_when_db_ahead_of_sync_task() {
 
     ctx.service
         .shared
-        .manually_produce_block(None, Mode::Blocks { number_of_blocks: 1 })
+        .manually_produce_block(
+            None,
+            Mode::Blocks {
+                number_of_blocks: 1,
+            },
+        )
         .await
         .expect("manual produce should succeed with DB tip refresh");
 

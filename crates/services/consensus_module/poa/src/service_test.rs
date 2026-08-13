@@ -184,9 +184,7 @@ impl TestContextBuilder {
             importer
                 .expect_latest_block_height()
                 .returning(|| Ok(Some(BlockHeight::from(0u32))));
-            importer
-                .expect_latest_block_header()
-                .returning(|| Ok(None));
+            importer.expect_latest_block_header().returning(|| Ok(None));
             importer
         });
 
