@@ -150,6 +150,11 @@ impl TestContextBuilder {
         self
     }
 
+    fn with_start_time(&mut self, start_time: Tai64N) -> &mut Self {
+        self.start_time = Some(start_time);
+        self
+    }
+
     async fn build(self) -> TestContext {
         let config = self.config.unwrap_or_default();
         let producer = self.producer.unwrap_or_else(|| {
@@ -179,6 +184,9 @@ impl TestContextBuilder {
             importer
                 .expect_latest_block_height()
                 .returning(|| Ok(Some(BlockHeight::from(0u32))));
+            importer
+                .expect_latest_block_header()
+                .returning(|| Ok(None));
             importer
         });
 
@@ -367,6 +375,9 @@ async fn main_task__releases_reconciliation_port_on_shutdown() {
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -417,6 +428,9 @@ async fn main_task__when_reconciliation_returns_follower_then_does_not_produce_b
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -477,6 +491,9 @@ async fn main_task__when_follower_then_does_not_spin_on_leader_state_check() {
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -546,6 +563,9 @@ async fn main_task__when_follower_with_open_trigger_then_does_not_spin_on_leader
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -607,6 +627,9 @@ async fn run__when_leader_state_fails_then_does_not_produce_or_commit_result() {
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -668,6 +691,9 @@ async fn run__when_execute_and_commit_fails_during_reconcile_then_does_not_produ
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -863,6 +889,9 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
@@ -934,6 +963,9 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
@@ -1018,6 +1050,9 @@ async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() 
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
@@ -1069,6 +1104,9 @@ async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
@@ -1166,6 +1204,9 @@ async fn main_task__reconciliation_import_does_not_deadlock_leader() {
     block_importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    block_importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
 
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();

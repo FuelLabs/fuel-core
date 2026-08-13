@@ -79,6 +79,9 @@ async fn can_manually_produce_block(
     importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    importer
+        .expect_latest_block_header()
+        .returning(|| Ok(None));
 
     let mut producer = MockBlockProducer::default();
     producer
@@ -115,6 +118,82 @@ async fn can_manually_produce_block(
 
     // Stop
     assert_eq!(ctx.stop().await, State::Stopped);
+}
+
+/// Height-gap Synced can land before `block_stream` catches the DB tip. Manual /
+/// Interval production must stamp from the DB parent header — not SyncTask's
+/// older tip — or the next block gets a non-parent timestamp.
+#[tokio::test]
+async fn manual_produce__uses_db_tip_time_when_db_ahead_of_sync_task() {
+    let sync_task_time = Tai64::now();
+    let db_tip_time = sync_task_time + 10_000;
+    let block_time = Duration::from_secs(10);
+
+    let mut ctx_builder = TestContextBuilder::new();
+    ctx_builder.with_config(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        min_connected_reserved_peers: 0,
+        ..Default::default()
+    });
+    // SyncTask starts Synced at height 1 with an early timestamp.
+    ctx_builder.with_start_time(sync_task_time.into());
+
+    let mut importer = MockBlockImporter::default();
+    importer.expect_commit_result().returning(|_| Ok(()));
+    importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(3u32))));
+    // DB tip is ahead of SyncTask and carries the real parent time.
+    importer.expect_latest_block_header().returning(move || {
+        Ok(Some(BlockHeader::new_block(
+            BlockHeight::from(3u32),
+            db_tip_time,
+        )))
+    });
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let mut producer = MockBlockProducer::default();
+    producer
+        .expect_produce_and_execute_block()
+        .returning(move |height, time, _, _| {
+            tx.try_send((height, time)).unwrap();
+            let mut block = Block::default();
+            block.header_mut().set_block_height(height);
+            block.header_mut().set_time(time);
+            block.header_mut().recalculate_metadata();
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block,
+                    skipped_transactions: Default::default(),
+                    tx_status: Default::default(),
+                    events: Default::default(),
+                },
+                Default::default(),
+            ))
+        });
+
+    ctx_builder.with_importer(importer);
+    ctx_builder.with_producer(producer);
+    let ctx = ctx_builder.build().await;
+
+    ctx.service
+        .shared
+        .manually_produce_block(None, Mode::Blocks { number_of_blocks: 1 })
+        .await
+        .expect("manual produce should succeed with DB tip refresh");
+
+    let (height, time) = rx.recv().await.expect("produced block");
+    assert_eq!(height, BlockHeight::from(4u32));
+    assert_eq!(
+        time,
+        db_tip_time + block_time.as_secs(),
+        "next block time must advance from DB tip, not SyncTask's older header"
+    );
 }
 
 #[tokio::test]

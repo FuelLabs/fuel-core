@@ -75,6 +75,11 @@ pub trait BlockImporter: Send + Sync {
 
     /// Returns the latest committed block height from the database.
     fn latest_block_height(&self) -> anyhow::Result<Option<BlockHeight>>;
+
+    /// Returns the latest committed block header from the database.
+    /// Prefer this over [`Self::latest_block_height`] when refreshing production
+    /// tip state so height and timestamp stay consistent.
+    fn latest_block_header(&self) -> anyhow::Result<Option<BlockHeader>>;
 }
 
 #[async_trait::async_trait]

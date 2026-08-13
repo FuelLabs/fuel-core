@@ -35,6 +35,7 @@ use fuel_core_types::{
     blockchain::{
         SealedBlock,
         block::Block,
+        header::BlockHeader,
         primitives::BlockId,
     },
     fuel_types::BlockHeight,
@@ -1873,6 +1874,13 @@ impl BlockImporter for BlockImporterAdapter {
 
     fn latest_block_height(&self) -> anyhow::Result<Option<BlockHeight>> {
         self.database.latest_block_height().map_err(Into::into)
+    }
+
+    fn latest_block_header(&self) -> anyhow::Result<Option<BlockHeader>> {
+        if self.database.maybe_latest_height()?.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(self.database.latest_block()?.header().clone()))
     }
 }
 

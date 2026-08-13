@@ -383,8 +383,10 @@ where
         Ok(())
     }
 
-    /// Advance `last_height` / timestamp from SyncTask tip and DB so production
-    /// does not use a stale next height after P2P catch-up.
+    /// Advance production tip (`last_height`, `last_timestamp`, `last_block_created`)
+    /// from SyncTask and DB. When DB is ahead of SyncTask (height-gap Synced +
+    /// lagging `block_stream`), the DB header must win for *all* tip fields —
+    /// bumping height alone leaves timestamps on a non-parent block.
     fn sync_last_height_from_sync_task_and_db(&mut self) {
         let synced_header = match &*self.sync_task_handle.shared.borrow() {
             SyncState::Synced(block_header) => Some(Arc::clone(block_header)),
@@ -393,10 +395,8 @@ where
         if let Some(block_header) = synced_header {
             self.update_last_block_values(&block_header);
         }
-        if let Ok(Some(db_height)) = self.block_importer.latest_block_height()
-            && db_height > self.last_height
-        {
-            self.last_height = db_height;
+        if let Ok(Some(db_header)) = self.block_importer.latest_block_header() {
+            self.update_last_block_values(&Arc::new(db_header));
         }
     }
 
@@ -691,19 +691,14 @@ where
                         Err(err) => {
                             // Re-sync from the DB and skip — the block
                             // may have been imported via P2P between our
-                            // latest_block_height check and now. Stream
-                            // cursors are always restored by the adapter,
-                            // so these entries remain re-readable.
+                            // tip check and now. Stream cursors are always
+                            // restored by the adapter, so these entries
+                            // remain re-readable.
                             tracing::warn!(
                                 "Reconciliation import failed at height \
                                  {block_height}: {err}. Re-syncing from DB."
                             );
-                            if let Ok(Some(db_height)) =
-                                self.block_importer.latest_block_height()
-                                && db_height > self.last_height
-                            {
-                                self.last_height = db_height;
-                            }
+                            self.sync_last_height_from_sync_task_and_db();
                         }
                     }
                 }
