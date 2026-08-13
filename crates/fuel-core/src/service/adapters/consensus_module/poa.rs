@@ -30,7 +30,14 @@ use fuel_core_poa::{
     },
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::Changes;
+use fuel_core_storage::{
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
+    tables::FuelBlocks,
+    transactional::Changes,
+};
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
@@ -1877,10 +1884,15 @@ impl BlockImporter for BlockImporterAdapter {
     }
 
     fn latest_block_header(&self) -> anyhow::Result<Option<BlockHeader>> {
-        if self.database.maybe_latest_height()?.is_none() {
-            return Ok(None);
-        }
-        Ok(Some(self.database.latest_block()?.header().clone()))
+        // Same FuelBlocks reverse-scan as `ImporterDatabase::latest_block_height`
+        // — `maybe_latest_height` / `latest_block` are only on
+        // `OnChainIterableKeyValueView`, not on `Database` itself.
+        Ok(self
+            .database
+            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()?
+            .map(|(_, block)| block.header().clone()))
     }
 }
 
