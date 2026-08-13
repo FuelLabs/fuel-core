@@ -46,6 +46,23 @@ pub trait CollisionManager {
         store_entry: &StorageData,
     );
 
-    /// Inform the collision manager that a transaction was removed.
+    /// Inform the collision manager that a transaction was removed from the pool
+    /// for any reason other than canonical-block commitment (e.g. eviction, TTL
+    /// expiry, rollback-driven eviction).  Cleans up all tracking state including
+    /// the `contract_users` entry for this transaction.
     fn on_removed_transaction(&mut self, transaction: &PoolTransaction);
+
+    /// Inform the collision manager that a transaction was committed to a
+    /// canonical block and has been removed from the pool.  Like
+    /// `on_removed_transaction` but intentionally **skips** the removal of
+    /// this transaction's ID from `contract_users`.  The caller is responsible
+    /// for invoking `remove_from_contract_users` later — after any
+    /// preconfirmation-rollback work is complete — so that rollback logic can
+    /// still observe the full set of contract dependents.
+    fn on_committed_transaction(&mut self, transaction: &PoolTransaction);
+
+    /// Remove the transaction's ID from every `contract_users` entry it
+    /// contributed to.  Call this once per committed transaction, after all
+    /// rollback logic for the relevant block height has finished.
+    fn remove_from_contract_users(&mut self, transaction: &PoolTransaction);
 }
