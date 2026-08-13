@@ -188,8 +188,9 @@ mod p2p {
 
     // Starts first_producer which creates some blocks
     // Then starts second_producer that uses the first one as a reserved peer.
-    // second_producer syncs via height-gap (local >= max peer heartbeat - 1),
-    // then after the first_producer stops, second_producer can produce.
+    // With height-gap sync, a follower becomes Synced once local >= peer tip - 1,
+    // so followers must use Trigger::Never during catch-up or they Interval-race
+    // the leader. After the leader stops, the follower can produce manually.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
         const SYNC_TIMEOUT: u64 = 10;
@@ -210,16 +211,14 @@ mod p2p {
         );
         let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
 
-        let make_node_config = |name: &str| {
+        let make_node_config = |name: &str, trigger: Trigger| {
             let mut config = make_config(
                 name.to_string(),
                 config.clone(),
                 CustomizeConfig::no_overrides(),
             );
             config.debug = true;
-            config.block_production = Trigger::Interval {
-                block_time: Duration::from_secs(1),
-            };
+            config.block_production = trigger;
             config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
             config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
@@ -228,8 +227,14 @@ mod p2p {
             config
         };
 
-        let first_producer_config = make_node_config("First Producer");
-        let second_producer_config = make_node_config("Second Producer");
+        let first_producer_config = make_node_config(
+            "First Producer",
+            Trigger::Interval {
+                block_time: Duration::from_secs(1),
+            },
+        );
+        // Never: height-gap Synced would otherwise let Interval compete with first.
+        let second_producer_config = make_node_config("Second Producer", Trigger::Never);
 
         let first_producer = make_node(first_producer_config, vec![]).await;
 
@@ -268,7 +273,9 @@ mod p2p {
         .expect("Should stop services before timeout")
         .expect("Should stop without any error");
 
-        // Once height-caught-up, the second can produce.
+        // Once height-caught-up, the second can produce. Produce enough that a
+        // reborn node has 5 remote blocks to import (sync may have seen only 3
+        // if first was stopped promptly).
         second_producer
             .node
             .shared
@@ -276,16 +283,18 @@ mod p2p {
             .manually_produce_blocks(
                 None,
                 Mode::Blocks {
-                    number_of_blocks: 1,
+                    number_of_blocks: 2,
                 },
             )
             .await
-            .expect("The second should produce 1 blocks");
+            .expect("The second should produce 2 blocks");
 
-        // Restart fresh first producer.
-        // it should sync remotely 5 blocks.
-        let first_producer =
-            make_node(make_node_config("First Producer reborn"), vec![]).await;
+        // Restart fresh first producer (Never: sync only, no Interval race).
+        let first_producer = make_node(
+            make_node_config("First Producer reborn", Trigger::Never),
+            vec![],
+        )
+        .await;
         tokio::time::timeout(
             Duration::from_secs(SYNC_TIMEOUT),
             first_producer.wait_for_blocks(5, false /* is_local */),

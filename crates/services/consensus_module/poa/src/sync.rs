@@ -50,6 +50,9 @@ pub(crate) fn height_caught_up_to_peers(
 /// ~2× default p2p `heartbeat_max_avg_interval` (20s) so a departed peer's
 /// height cannot pin us `NotSynced` forever.
 const PEER_HEIGHT_TTL: Duration = Duration::from_secs(40);
+/// Period < TTL so a silent tip is pruned soon after expiry, not only after
+/// a full extra TTL of waiting for the next tick.
+const PEER_HEIGHT_PRUNE_INTERVAL: Duration = Duration::from_secs(20);
 
 pub struct SyncTask {
     min_connected_reserved_peers: usize,
@@ -87,9 +90,7 @@ impl SyncTask {
         };
         let (state_sender, state_receiver) = tokio::sync::watch::channel(initial);
 
-        // Period < TTL so a silent tip is pruned soon after expiry, not only
-        // after a full extra TTL of waiting for the next tick.
-        let mut prune_interval = tokio::time::interval(PEER_HEIGHT_TTL / 2);
+        let mut prune_interval = tokio::time::interval(PEER_HEIGHT_PRUNE_INTERVAL);
         prune_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         Self {
@@ -112,7 +113,11 @@ impl SyncTask {
     /// shorten the TTL).
     #[cfg(test)]
     fn reset_prune_interval(&mut self) {
-        let mut prune_interval = tokio::time::interval(self.peer_height_ttl / 2);
+        let period = self
+            .peer_height_ttl
+            .checked_div(2)
+            .unwrap_or(self.peer_height_ttl);
+        let mut prune_interval = tokio::time::interval(period);
         prune_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         self.prune_interval = prune_interval;
     }
