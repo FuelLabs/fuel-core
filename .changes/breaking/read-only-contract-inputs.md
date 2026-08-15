@@ -1,0 +1,1 @@
+Consensus-breaking: with the new fuel-vm, transaction validity is relaxed so a contract input may omit its contract output (a read-only contract access). This is active for every transaction on the new version — it is not gated behind a consensus parameter — so nodes must upgrade in coordination.

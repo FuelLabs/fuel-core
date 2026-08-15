@@ -57,6 +57,8 @@ mod poa;
 #[cfg(not(feature = "only-p2p"))]
 mod preconfirmations;
 #[cfg(not(feature = "only-p2p"))]
+mod read_only_contract;
+#[cfg(not(feature = "only-p2p"))]
 mod recovery;
 #[cfg(not(feature = "only-p2p"))]
 mod regenesis;

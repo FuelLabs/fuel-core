@@ -3548,7 +3548,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -4328,8 +4328,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbab46dc0d8fd70005c1ac69a51928b594ebc8c619e3d56eee1ab417a5ca800d"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 dependencies = [
  "bitflags 2.11.0",
  "fuel-types 0.66.4",
@@ -4340,8 +4339,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c96888e99cf096577b5766a11ea109be46feb3c00fd3e59bb04b52985429a4fd"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 dependencies = [
  "fuel-derive 0.66.4",
  "fuel-types 0.66.4",
@@ -5280,8 +5278,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e555d0c4f378dcc405aaf007bf056b90a0548c05599a0b227844cd383545d74"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 dependencies = [
  "base64ct",
  "coins-bip32",
@@ -5313,8 +5310,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6c58e846078cf4d03a79b4352a3dc46451687fe8f50a1c159aed8f7c5a847df"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5351,8 +5347,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891aed703269d6a54b7c36839ee472b1d948a2e1883381903fee95eb30f593f7"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 dependencies = [
  "derive_more 0.99.20",
  "digest 0.10.7",
@@ -5384,8 +5379,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "520caeef5d7c35eeb178da71956d151bb5ceb60cfb518329dd26899cfd5043bc"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 
 [[package]]
 name = "fuel-tx"
@@ -5412,8 +5406,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d505ce879b4373bd659c693e17d5a6661763ac1352a73c37b8c10abb13fdfb8"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 dependencies = [
  "bitflags 2.11.0",
  "derive_more 1.0.0",
@@ -5446,8 +5439,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28a49a30161642239dce418708ff38be53f579f2dff7fd97356b9b12daf37f27"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 dependencies = [
  "educe",
  "fuel-derive 0.66.4",
@@ -5490,8 +5482,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.66.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27eedfd54d0dfc537b7bb8e97bbdeae5ee6cd92c1968c26037c64504695eacd8"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=feat%2Fread-only-contract-inputs#6f91dfa42ae9e8cca9aaf60e25026f0f8321eae5"
 dependencies = [
  "anyhow",
  "async-trait",
