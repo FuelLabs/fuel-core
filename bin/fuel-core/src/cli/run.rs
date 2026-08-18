@@ -326,10 +326,14 @@ pub struct Command {
     #[clap(long = "min-connected-reserved-peers", default_value = "0", env)]
     pub min_connected_reserved_peers: usize,
 
-    /// Deprecated and ignored. Sync readiness uses height gap with peer
-    /// heartbeats (`local >= max peer height - 1`), not a quiet window.
+    /// Deprecated and ignored. Ready uses Height Gap vs `--max-sync-height-diff`,
+    /// not a quiet window.
     #[clap(long = "time-until-synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
+
+    /// Max reserved-peer Height Gap that still counts as Ready.
+    #[clap(long = "max-sync-height-diff", default_value = "1", env)]
+    pub max_sync_height_diff: u32,
 
     /// The timeout after which the production of a block is considered failed.
     #[clap(long = "production-timeout", default_value = "20s", env)]
@@ -396,6 +400,7 @@ impl Command {
             graphql,
             min_connected_reserved_peers,
             time_until_synced,
+            max_sync_height_diff,
             production_timeout,
             memory_pool_size,
             profiling: _,
@@ -786,6 +791,7 @@ impl Command {
             relayer_consensus_config: verifier,
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
+            max_sync_height_diff,
             production_timeout: production_timeout.into(),
             memory_pool_size,
             tx_status_manager: TxStatusManagerConfig {

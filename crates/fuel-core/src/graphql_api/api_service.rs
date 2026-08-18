@@ -516,8 +516,8 @@ async fn ready(
 ) -> (StatusCode, Json<serde_json::Value>) {
     let services_started = r.services_started();
     let poa_enabled = r.poa_enabled();
-    let synced = r.poa_ready();
-    let ready = r.is_ready();
+    let synced = r.poa_ready().await;
+    let ready = services_started && synced;
     let code = if ready {
         StatusCode::OK
     } else {

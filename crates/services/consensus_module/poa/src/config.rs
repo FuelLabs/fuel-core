@@ -10,9 +10,11 @@ pub struct Config {
     pub signer: SignMode,
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
-    /// Deprecated: ignored. Sync readiness is height-gap based
-    /// (`local >= max peer heartbeat height - 1`), not a quiet window.
+    /// Deprecated: ignored. Ready uses Height Gap vs `--max-sync-height-diff`,
+    /// not a quiet window.
     pub time_until_synced: Duration,
+    /// Largest reserved-peer Height Gap that still counts as Ready.
+    pub max_sync_height_diff: u32,
     pub production_timeout: Duration,
     pub chain_id: ChainId,
 }
@@ -26,6 +28,7 @@ impl Default for Config {
             metrics: false,
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
+            max_sync_height_diff: 1,
             production_timeout: Duration::from_secs(20),
             chain_id: ChainId::default(),
         }

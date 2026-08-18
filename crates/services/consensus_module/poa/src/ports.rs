@@ -1,4 +1,7 @@
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{
+    BoxFuture,
+    BoxStream,
+};
 use fuel_core_storage::{
     Result as StorageResult,
     transactional::Changes,
@@ -22,10 +25,6 @@ use fuel_core_types::{
             UncommittedResult as UncommittedImportResult,
         },
         executor::UncommittedResult as UncommittedExecutionResult,
-        p2p::{
-            BlockHeightHeartbeatData,
-            PeerId,
-        },
     },
     tai64::Tai64,
 };
@@ -117,11 +116,9 @@ pub trait P2pPort: Send + Sync + 'static {
     /// Subscribe to reserved peers connection updates.
     fn reserved_peers_count(&self) -> BoxStream<usize>;
 
-    /// Subscribe to peer heartbeat block heights (with peer id for live tip tracking).
-    fn peer_height_stream(&self) -> BoxStream<BlockHeightHeartbeatData>;
-
-    /// Subscribe to peer disconnects so cached heartbeat tips can be dropped.
-    fn peer_disconnected_stream(&self) -> BoxStream<PeerId>;
+    /// Snapshot: max heartbeat height among currently connected reserved peers.
+    /// `None` if no reserved peer has reported a height yet.
+    fn reserved_peer_network_height(&self) -> BoxFuture<'static, Option<BlockHeight>>;
 }
 
 #[async_trait::async_trait]

@@ -109,12 +109,6 @@ fn generate_p2p_port() -> MockP2pPort {
     p2p_port
         .expect_reserved_peers_count()
         .returning(move || Box::pin(tokio_stream::pending()));
-    p2p_port
-        .expect_peer_height_stream()
-        .returning(move || Box::pin(tokio_stream::pending()));
-    p2p_port
-        .expect_peer_disconnected_stream()
-        .returning(move || Box::pin(tokio_stream::pending()));
 
     p2p_port
 }

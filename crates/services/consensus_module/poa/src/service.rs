@@ -29,8 +29,8 @@ use crate::{
         WaitForReadySignal,
     },
     sync::{
-        SyncState,
         SyncTask,
+        height_gap_is_ready,
     },
 };
 use fuel_core_services::{
@@ -66,7 +66,10 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use serde::Serialize;
-use tokio::time::sleep_until;
+use tokio::time::{
+    sleep,
+    sleep_until,
+};
 
 pub type Service<B, I, S, PB, C, RS, RP> =
     ServiceRunner<MainTask<B, I, S, PB, C, RS, RP>>;
@@ -74,7 +77,10 @@ pub type Service<B, I, S, PB, C, RS, RP> =
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
-    sync_state: tokio::sync::watch::Receiver<SyncState>,
+    min_connected_reserved_peers: usize,
+    max_sync_height_diff: u32,
+    p2p: Arc<dyn P2pPort>,
+    local_height: Arc<dyn Fn() -> Option<BlockHeight> + Send + Sync>,
 }
 
 impl SharedState {
@@ -94,11 +100,21 @@ impl SharedState {
         receiver.await?
     }
 
-    /// Whether PoA considers this node synced with the network and ready to
-    /// produce. Owned here so probes and production gating share one source
-    /// of truth (see `SyncTask`).
-    pub fn is_ready(&self) -> bool {
-        matches!(&*self.sync_state.borrow(), SyncState::Synced(_))
+    /// Live Height Gap check. Isolated/dev (`min_connected_reserved_peers == 0`)
+    /// skips the comparison. Snapshots P2P reserved-peer heights; does not
+    /// latch. Same boolean as `GET /v1/ready` and `ensure_synced`.
+    pub async fn is_ready(&self) -> bool {
+        let network = if self.min_connected_reserved_peers == 0 {
+            None
+        } else {
+            self.p2p.reserved_peer_network_height().await
+        };
+        height_gap_is_ready(
+            self.min_connected_reserved_peers,
+            self.max_sync_height_diff,
+            network,
+            (self.local_height)(),
+        )
     }
 }
 
@@ -135,7 +151,7 @@ pub(crate) enum RequestType {
 pub struct MainTask<B, I, S, PB, C, RS, RP> {
     signer: Arc<S>,
     block_producer: B,
-    block_importer: I,
+    block_importer: Arc<I>,
     new_txs_watcher: tokio::sync::watch::Receiver<()>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -151,11 +167,14 @@ pub struct MainTask<B, I, S, PB, C, RS, RP> {
     /// externally controlled start of block production
     block_production_ready_signal: BlockProductionReadySignal<RS>,
     reconciliation_port: RP,
+    /// Shared with SyncTask — blocks at heights <= this watermark were
+    /// imported via reconciliation and should not trigger NotSynced.
+    reconciliation_watermark: Arc<std::sync::atomic::AtomicU32>,
 }
 
 impl<B, I, S, PB, C, RS, RP> MainTask<B, I, S, PB, C, RS, RP>
 where
-    I: BlockImporter,
+    I: BlockImporter + 'static,
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
@@ -180,26 +199,35 @@ where
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(clock.now(), last_block);
 
+        let block_importer = Arc::new(block_importer);
+        let local_height = {
+            let importer = Arc::clone(&block_importer);
+            Arc::new(move || importer.latest_block_height().ok().flatten())
+                as Arc<dyn Fn() -> Option<BlockHeight> + Send + Sync>
+        };
+        let p2p: Arc<dyn P2pPort> = Arc::new(p2p_port);
+
         let block_stream = block_importer.block_stream();
-        let peer_connections_stream = p2p_port.reserved_peers_count();
+        let peer_connections_stream = p2p.reserved_peers_count();
 
         let Config {
             min_connected_reserved_peers,
+            time_until_synced,
+            max_sync_height_diff,
             trigger,
             production_timeout,
             ..
         } = config;
 
-        let peer_height_stream = p2p_port.peer_height_stream();
-        let peer_disconnected_stream = p2p_port.peer_disconnected_stream();
+        let reconciliation_watermark = Arc::new(std::sync::atomic::AtomicU32::new(0));
 
         let sync_task = SyncTask::new(
             peer_connections_stream,
-            peer_height_stream,
-            peer_disconnected_stream,
             min_connected_reserved_peers,
+            time_until_synced,
             block_stream,
             last_block,
+            Arc::clone(&reconciliation_watermark),
         );
 
         let sync_task_handle = ServiceRunner::new(sync_task);
@@ -215,7 +243,10 @@ where
             request_receiver,
             shared_state: SharedState {
                 request_sender,
-                sync_state: sync_task_handle.shared.clone(),
+                min_connected_reserved_peers,
+                max_sync_height_diff,
+                p2p,
+                local_height,
             },
             last_height,
             last_timestamp,
@@ -227,6 +258,7 @@ where
             production_timeout,
             block_production_ready_signal,
             reconciliation_port,
+            reconciliation_watermark,
         }
     }
 
@@ -290,7 +322,7 @@ where
 impl<B, I, S, PB, C, RS, RP> MainTask<B, I, S, PB, C, RS, RP>
 where
     B: BlockProducer,
-    I: BlockImporter,
+    I: BlockImporter + 'static,
     S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
@@ -343,14 +375,13 @@ where
         if matches!(self.trigger, Trigger::Open { .. }) {
             return Err(anyhow!(
                 "Manual block production is not allowed with trigger `Open`"
-            ))
+            ));
         }
 
-        // P2P imports can advance the tip while we are already Synced (height-gap
-        // allows Synced before full catch-up). Trigger production re-reads the DB
-        // in `try_to_produce_block`; manual production must do the same or it
-        // produces at a stale next_height (IncorrectBlockHeight).
-        self.sync_last_height_from_sync_task_and_db();
+        // P2P imports can advance the tip independently of this task.
+        // Manual production must re-read the DB or it produces at a stale
+        // next_height (IncorrectBlockHeight).
+        self.sync_last_height_from_db();
 
         let mut block_time = if let Some(time) = block_production.start_time {
             time
@@ -383,18 +414,8 @@ where
         Ok(())
     }
 
-    /// Advance production tip (`last_height`, `last_timestamp`, `last_block_created`)
-    /// from SyncTask and DB. When DB is ahead of SyncTask (height-gap Synced +
-    /// lagging `block_stream`), the DB header must win for *all* tip fields —
-    /// bumping height alone leaves timestamps on a non-parent block.
-    fn sync_last_height_from_sync_task_and_db(&mut self) {
-        let synced_header = match &*self.sync_task_handle.shared.borrow() {
-            SyncState::Synced(block_header) => Some(Arc::clone(block_header)),
-            SyncState::NotSynced => None,
-        };
-        if let Some(block_header) = synced_header {
-            self.update_last_block_values(&block_header);
-        }
+    /// Advance production tip from the latest DB header.
+    fn sync_last_height_from_db(&mut self) {
         if let Ok(Some(db_header)) = self.block_importer.latest_block_header() {
             self.update_last_block_values(&Arc::new(db_header));
         }
@@ -410,11 +431,11 @@ where
         let last_block_created = Instant::now();
         // verify signing key is set
         if !self.signer.is_available() {
-            return Err(anyhow!("unable to produce blocks without a consensus key"))
+            return Err(anyhow!("unable to produce blocks without a consensus key"));
         }
 
         if self.last_timestamp > block_time {
-            return Err(anyhow!("The block timestamp should monotonically increase"))
+            return Err(anyhow!("The block timestamp should monotonically increase"));
         }
         // Ask the block producer to create the block
         let (
@@ -481,7 +502,7 @@ where
         tracing::info!("Producing predefined block");
         let last_block_created = Instant::now();
         if !self.signer.is_available() {
-            return Err(anyhow!("unable to produce blocks without a signer"))
+            return Err(anyhow!("unable to produce blocks without a signer"));
         }
 
         // Ask the block producer to create the block
@@ -551,22 +572,19 @@ where
         &mut self,
         watcher: &mut StateWatcher,
     ) -> Option<TaskNextAction> {
-        let mut sync_state = self.sync_task_handle.shared.clone();
-
-        if *sync_state.borrow_and_update() == SyncState::NotSynced {
+        loop {
+            if self.shared_state.is_ready().await {
+                self.sync_last_height_from_db();
+                return None;
+            }
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
                     return Some(result.map(|state| state.started()).into())
                 }
-                _ = sync_state.changed() => {}
+                _ = sleep(Duration::from_millis(100)) => {}
             }
         }
-
-        if let SyncState::Synced(block_header) = &*sync_state.borrow_and_update() {
-            self.update_last_block_values(block_header);
-        }
-        None
     }
 
     async fn maybe_produce_predefined_block(&mut self) -> Option<TaskNextAction> {
@@ -580,7 +598,7 @@ where
             return match res {
                 Ok(()) => Some(TaskNextAction::Continue),
                 Err(err) => Some(TaskNextAction::ErrorContinue(err)),
-            }
+            };
         }
         None
     }
@@ -650,7 +668,7 @@ where
         // SyncTask, which can lag. Using a stale next_height causes
         // unreconciled_blocks to return blocks the DB already has,
         // leading to IncorrectBlockHeight errors.
-        self.sync_last_height_from_sync_task_and_db();
+        self.sync_last_height_from_db();
 
         match self
             .reconciliation_port
@@ -683,6 +701,13 @@ where
                         continue;
                     }
 
+                    // Set watermark so SyncTask doesn't flip NotSynced when
+                    // execute_and_commit broadcasts Source::Network.
+                    self.reconciliation_watermark.fetch_max(
+                        u32::from(block_height),
+                        std::sync::atomic::Ordering::Release,
+                    );
+
                     match self.block_importer.execute_and_commit(block).await {
                         Ok(()) => {
                             self.last_height = block_height;
@@ -698,7 +723,7 @@ where
                                 "Reconciliation import failed at height \
                                  {block_height}: {err}. Re-syncing from DB."
                             );
-                            self.sync_last_height_from_sync_task_and_db();
+                            self.sync_last_height_from_db();
                         }
                     }
                 }
@@ -743,7 +768,7 @@ where
                 return Ok(Self {
                     last_block_created: Instant::now(),
                     ..self
-                })
+                });
             }
         }
 
@@ -754,7 +779,7 @@ where
 impl<B, I, S, PB, C, RS, RP> RunnableTask for MainTask<B, I, S, PB, C, RS, RP>
 where
     B: BlockProducer,
-    I: BlockImporter,
+    I: BlockImporter + 'static,
     S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,

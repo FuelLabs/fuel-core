@@ -47,7 +47,7 @@ impl Default for ReadySignal {
 }
 
 /// Bundle for `/v1/ready`: services-started flag plus optional PoA readiness.
-/// PoA owns sync/readiness in its `SharedState`; this handle only reads it.
+/// PoA owns the live Height Gap check in `SharedState::is_ready()`.
 #[derive(Clone)]
 pub struct Readiness {
     services_started: ReadySignal,
@@ -70,13 +70,16 @@ impl Readiness {
         self.poa.is_some()
     }
 
-    /// `true` when PoA is disabled, or when PoA reports synced/ready.
-    pub fn poa_ready(&self) -> bool {
-        self.poa.as_ref().map(|poa| poa.is_ready()).unwrap_or(true)
+    /// `true` when PoA is disabled, or when PoA reports Ready.
+    pub async fn poa_ready(&self) -> bool {
+        match &self.poa {
+            Some(poa) => poa.is_ready().await,
+            None => true,
+        }
     }
 
-    pub fn is_ready(&self) -> bool {
-        self.services_started() && self.poa_ready()
+    pub async fn is_ready(&self) -> bool {
+        self.services_started() && self.poa_ready().await
     }
 }
 
@@ -95,15 +98,15 @@ mod tests {
         assert!(signal.is_ready());
     }
 
-    #[test]
-    fn readiness_poa_disabled_is_ready_once_services_started() {
+    #[tokio::test]
+    async fn readiness_poa_disabled_is_ready_once_services_started() {
         let signal = ReadySignal::new();
         let readiness = Readiness::new(signal.clone(), None);
 
-        assert!(!readiness.is_ready());
+        assert!(!readiness.is_ready().await);
         signal.send_ready_signal();
-        assert!(readiness.is_ready());
+        assert!(readiness.is_ready().await);
         assert!(!readiness.poa_enabled());
-        assert!(readiness.poa_ready());
+        assert!(readiness.poa_ready().await);
     }
 }
