@@ -1736,9 +1736,7 @@ impl P2pPort for P2PAdapter {
     ) -> fuel_core_services::stream::BoxFuture<'static, Option<BlockHeight>> {
         let service = self.service.clone();
         Box::pin(async move {
-            let Some(service) = service else {
-                return None;
-            };
+            let service = service?;
             service.reserved_peer_network_height().await.ok().flatten()
         })
     }
