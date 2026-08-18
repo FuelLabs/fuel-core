@@ -15,6 +15,7 @@ publish = true
 [[bin]]
 name = "fuel-core"
 path = "src/main.rs"
+doc = false
 
 [features]
 default = ["env", "relayer", "rocksdb", "archive", "jemalloc"]
