@@ -687,21 +687,26 @@ async fn only_leader_produces_blocks(
     block_import_timeout: Duration,
 ) {
     for _ in 0..non_local_blocks_to_check {
-        tokio::time::timeout(block_import_timeout, wait_for_local_block(leader))
-            .await
-            .expect("Leader should import a local block");
-        let mut follower_checks = non_leaders
-            .iter()
-            .map(|node| {
-                tokio::time::timeout(
-                    block_import_timeout,
-                    wait_for_non_local_block_and_fail_on_local(node),
-                )
-            })
-            .collect::<FuturesUnordered<_>>();
-        while let Some(result) = follower_checks.next().await {
-            result.expect("Non-leader should import a non-local block");
-        }
+        // Wait together so followers don't miss the leader's just-imported block.
+        let leader_check =
+            tokio::time::timeout(block_import_timeout, wait_for_local_block(leader));
+        let follower_checks = async {
+            let mut follower_checks = non_leaders
+                .iter()
+                .map(|node| {
+                    tokio::time::timeout(
+                        block_import_timeout,
+                        wait_for_non_local_block_and_fail_on_local(node),
+                    )
+                })
+                .collect::<FuturesUnordered<_>>();
+            while let Some(result) = follower_checks.next().await {
+                result.expect("Non-leader should import a non-local block");
+            }
+        };
+
+        let (leader_result, ()) = tokio::join!(leader_check, follower_checks);
+        leader_result.expect("Leader should import a local block");
     }
 }
 
