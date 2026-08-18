@@ -7,4 +7,5 @@ ignore = [
     "RUSTSEC-2026-0114", # https://github.com/FuelLabs/fuel-core/issues/3293
     "RUSTSEC-2026-0119", # https://github.com/FuelLabs/fuel-core/issues/3296
     "RUSTSEC-2026-0222", # https://rustsec.org/advisories/RUSTSEC-2026-0222 — wasmtime 43.x has no patched release in its line; fix requires a major-version bump (>=46.0.2 or >=47.0.3), out of scope here
+    "RUSTSEC-2026-0258", # https://rustsec.org/advisories/RUSTSEC-2026-0258 — h2 unbounded empty DATA frames; 0.4 line patched at >=0.4.16, but hyper 0.14 / reqwest 0.11 / tonic 0.11 still pin h2 0.3.27 with no 0.3 patch
 ]
