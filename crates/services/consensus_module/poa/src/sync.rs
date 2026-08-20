@@ -91,6 +91,10 @@ pub struct SyncTask {
     state_receiver: watch::Receiver<SyncState>,
     inner_state: InnerSyncState,
     timer: Option<tokio::time::Interval>,
+    /// True after `restart_timer` once the height gap is satisfied; the tick arm
+    /// only advances to Synced when armed so a stale interval from startup cannot
+    /// skip `--time-until-synced`.
+    debounce_armed: bool,
     /// Re-snapshot reserved-peer height vs DB while Synced so `SyncState` tracks
     /// the live height-gap definition (not a one-shot latch on entry).
     synced_recheck: tokio::time::Interval,
@@ -123,6 +127,9 @@ impl SyncTask {
         } else {
             let mut timer = tokio::time::interval(time_until_synced);
             timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            // First Interval tick is immediate — reset so debounce only starts
+            // when we arm it after the height gap is ready.
+            timer.reset();
             Some(timer)
         };
 
@@ -153,6 +160,7 @@ impl SyncTask {
             state_receiver,
             inner_state,
             timer,
+            debounce_armed: false,
             synced_recheck,
             reconciliation_watermark,
         }
@@ -180,6 +188,7 @@ impl SyncTask {
         if !self.height_gap_ready().await {
             return;
         }
+        self.debounce_armed = false;
         self.inner_state = InnerSyncState::Synced {
             block_header: block_header.clone(),
             has_sufficient_peers: true,
@@ -192,12 +201,14 @@ impl SyncTask {
             return;
         }
         if !self.height_gap_ready().await {
+            self.debounce_armed = false;
             return;
         }
         if self.time_until_synced == Duration::ZERO {
             self.advance_to_synced_if_ready().await;
         } else {
             self.restart_timer();
+            self.debounce_armed = true;
         }
     }
 
@@ -322,15 +333,22 @@ impl RunnableTask for SyncTask {
                             };
                             self.update_sync_state(SyncState::Synced(Arc::new(block_info.block_header)));
                         } else {
-                            // we considered to be synced but we're obviously not!
+                            // Network tip moved ahead of us while we were Synced.
+                            // Publish NotSynced first, then re-evaluate the height gap —
+                            // calling on_sufficient_peers_activity before NotSynced can
+                            // publish Synced (time_until_synced=0) and leave the watch
+                            // channel stuck on NotSynced while inner_state is Synced.
                             if *has_sufficient_peers {
-                                self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
-                                self.on_sufficient_peers_activity().await;
+                                self.inner_state = InnerSyncState::SufficientPeers(
+                                    block_info.block_header,
+                                );
                             } else {
-                                self.inner_state = InnerSyncState::InsufficientPeers(block_info.block_header);
+                                self.inner_state = InnerSyncState::InsufficientPeers(
+                                    block_info.block_header,
+                                );
                             }
-
                             self.update_sync_state(SyncState::NotSynced);
+                            self.on_sufficient_peers_activity().await;
                         }
                     }
                     _ => {}
@@ -339,15 +357,19 @@ impl RunnableTask for SyncTask {
                 TaskNextAction::Continue
             }
             _ = tick => {
-                self.advance_to_synced_if_ready().await;
+                // Debounce elapsed only after height gap armed the timer.
+                if self.debounce_armed {
+                    self.advance_to_synced_if_ready().await;
+                }
                 self.recompute_if_synced_lagging().await;
                 TaskNextAction::Continue
             }
             _ = self.synced_recheck.tick() => {
                 // Live P2P snapshot (Green): heartbeats can satisfy the gap while we
-                // sit in SufficientPeers with --time-until-synced 0 and no timer arm.
+                // sit in SufficientPeers. Respect --time-until-synced via
+                // on_sufficient_peers_activity only — do not call
+                // advance_to_synced_if_ready here (that skips the debounce).
                 self.on_sufficient_peers_activity().await;
-                self.advance_to_synced_if_ready().await;
                 self.recompute_if_synced_lagging().await;
                 TaskNextAction::Continue
             }
@@ -755,62 +777,69 @@ mod tests {
         matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_));
     }
 
-    /// Reproduces the deadlock root cause: a network-sourced block (from
-    /// reconciliation via `execute_and_commit`) arrives while the SyncTask
-    /// is in Synced state. Without the watermark fix, this transitions
-    /// the SyncTask to NotSynced, which deadlocks the leader's
-    /// `ensure_synced()` call.
+    /// Without a reconciliation watermark, a network-sourced block leaves Synced.
+    /// Height-gap re-entry is blocked here by requiring reserved peers with no
+    /// heartbeat — so published state stays NotSynced (legacy deadlock case for
+    /// `ensure_synced` when the gap cannot recover immediately).
     #[tokio::test]
     async fn sync_task__network_block_at_reconciliation_height_causes_not_synced_without_watermark()
      {
-        // given: a SyncTask that starts in Synced state (min_peers=0, time=ZERO)
-        let connections_stream = MockStream::<usize>::new(vec![]).into_boxed();
+        let connections_stream = MockStream::new(vec![5]).into_boxed();
         let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
 
         let (tx, shutdown) =
             tokio::sync::watch::channel(fuel_core_services::State::Started);
         let mut watcher: StateWatcher = shutdown.into();
 
-        // Watermark is 0 (not set) — simulates the pre-fix state
         let watermark = Arc::new(AtomicU32::new(0));
+
+        let mut p2p = MockP2pPort::new();
+        // Heartbeat present while catching up to Synced, then cleared so a
+        // network block cannot immediately re-enter via height gap.
+        let heartbeat = Arc::new(std::sync::Mutex::new(Some(BlockHeight::from(5u32))));
+        let heartbeat_for_mock = Arc::clone(&heartbeat);
+        p2p.expect_reserved_peer_network_height()
+            .returning(move || {
+                let height = *heartbeat_for_mock.lock().unwrap();
+                Box::pin(async move { height })
+            });
+
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(|| Ok(Some(BlockHeight::from(5u32))));
 
         let mut sync_task = SyncTask::new(
             connections_stream,
-            0, // min_connected_reserved_peers
+            5,
             Duration::ZERO,
             1,
             block_stream,
             &BlockHeader::new_block(5u32.into(), Tai64::now()),
             watermark,
-            Arc::new(MockP2pPort::new()),
-            Arc::new(MockBlockImporter::new()),
+            Arc::new(p2p),
+            Arc::new(block_importer),
         );
 
-        // Verify we start in Synced state
-        assert!(
-            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
-            "SyncTask should start Synced with min_peers=0 and time_until_synced=ZERO"
-        );
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
 
-        // when: a Source::Network block arrives at height 6 (> current height 5)
-        // This is what happens when reconciliation imports a block via
-        // execute_and_commit, which always uses ImportResult::new_from_network
-        let network_block_stream =
+        *heartbeat.lock().unwrap() = None;
+
+        sync_task.block_stream =
             MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
                 .map(BlockImportInfo::new_from_network)
                 .into_boxed();
-        sync_task.block_stream = network_block_stream;
-
         let _ = sync_task.run(&mut watcher).await;
 
-        // then: SyncTask transitions to NotSynced — THIS IS THE BUG
-        // The leader's ensure_synced() will now block forever because
-        // it can't produce locally-produced blocks while blocked.
         assert_eq!(
             SyncState::NotSynced,
             *sync_task.state_receiver.borrow(),
-            "Without watermark fix, a network-sourced reconciliation block \
-             causes NotSynced — this deadlocks the leader"
+            "Without watermark, a network-sourced block leaves Synced when the \
+             height gap cannot re-satisfy immediately"
         );
 
         drop(tx);
@@ -820,8 +849,7 @@ mod tests {
     /// the block height, a network-sourced block should NOT trigger NotSynced.
     #[tokio::test]
     async fn sync_task__network_block_within_watermark_stays_synced() {
-        // given: a SyncTask in Synced state with watermark set to height 6
-        let connections_stream = MockStream::<usize>::new(vec![]).into_boxed();
+        let connections_stream = MockStream::new(vec![5]).into_boxed();
         let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
 
         let (tx, shutdown) =
@@ -830,48 +858,61 @@ mod tests {
 
         let watermark = Arc::new(AtomicU32::new(6));
 
+        let mut p2p = MockP2pPort::new();
+        let heartbeat = Arc::new(std::sync::Mutex::new(Some(BlockHeight::from(5u32))));
+        let heartbeat_for_mock = Arc::clone(&heartbeat);
+        p2p.expect_reserved_peer_network_height()
+            .returning(move || {
+                let height = *heartbeat_for_mock.lock().unwrap();
+                Box::pin(async move { height })
+            });
+
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(|| Ok(Some(BlockHeight::from(5u32))));
+
         let mut sync_task = SyncTask::new(
             connections_stream,
-            0,
+            5,
             Duration::ZERO,
             1,
             block_stream,
             &BlockHeader::new_block(5u32.into(), Tai64::now()),
             watermark,
-            Arc::new(MockP2pPort::new()),
-            Arc::new(MockBlockImporter::new()),
+            Arc::new(p2p),
+            Arc::new(block_importer),
         );
 
+        let _ = sync_task.run(&mut watcher).await;
         assert!(matches!(
             *sync_task.state_receiver.borrow(),
             SyncState::Synced(_)
         ));
 
-        // when: a Source::Network block at height 6 (within watermark)
-        let network_block_stream =
+        // when: a Source::Network block at height 6 (within watermark).
+        // Keep heartbeat so recompute_if_synced_lagging does not drop Synced after
+        // the watermark path keeps us synced.
+        sync_task.block_stream =
             MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
                 .map(BlockImportInfo::new_from_network)
                 .into_boxed();
-        sync_task.block_stream = network_block_stream;
-
         let _ = sync_task.run(&mut watcher).await;
 
-        // then: should stay Synced because watermark covers height 6
         assert!(
             matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
             "With watermark=6, a network block at height 6 should NOT trigger NotSynced"
         );
 
-        // when: a Source::Network block at height 7 (ABOVE watermark)
-        let network_block_stream =
+        // when: a Source::Network block at height 7 (ABOVE watermark).
+        // Clear heartbeat so height-gap cannot immediately re-enter Synced.
+        *heartbeat.lock().unwrap() = None;
+        sync_task.block_stream =
             MockStream::new(vec![BlockHeader::new_block(7u32.into(), Tai64::now())])
                 .map(BlockImportInfo::new_from_network)
                 .into_boxed();
-        sync_task.block_stream = network_block_stream;
-
         let _ = sync_task.run(&mut watcher).await;
 
-        // then: should transition to NotSynced (watermark doesn't protect above its value)
         assert_eq!(
             SyncState::NotSynced,
             *sync_task.state_receiver.borrow(),
@@ -1053,6 +1094,139 @@ mod tests {
         assert!(
             matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
             "Heartbeat satisfied height gap — recheck must enter Synced"
+        );
+
+        drop(tx);
+    }
+
+    /// Network block while Synced must not leave watch channel on NotSynced while
+    /// inner_state is Synced (Bugbot: on_sufficient_peers_activity before NotSynced).
+    #[tokio::test]
+    async fn sync_task_network_block_keeps_inner_and_published_state_consistent() {
+        let connections_stream = MockStream::new(vec![5]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let mut p2p = MockP2pPort::new();
+        // After importing height 6, gap vs network tip 6 is 0 → ready to re-enter Synced.
+        p2p.expect_reserved_peer_network_height()
+            .returning(|| Box::pin(async { Some(BlockHeight::from(6u32)) }));
+
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(|| Ok(Some(BlockHeight::from(6u32))));
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            5,
+            Duration::ZERO,
+            1,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            Arc::new(AtomicU32::new(0)),
+            Arc::new(p2p),
+            Arc::new(block_importer),
+        );
+
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+
+        sync_task.block_stream =
+            MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
+        let _ = sync_task.run(&mut watcher).await;
+
+        let published = sync_task.state_receiver.borrow().clone();
+        let inner_synced = matches!(sync_task.inner_state, InnerSyncState::Synced { .. });
+        let published_synced = matches!(published, SyncState::Synced(_));
+        assert_eq!(
+            inner_synced, published_synced,
+            "inner_state and published SyncState must agree after network block \
+             (got inner_synced={inner_synced}, published={published:?})"
+        );
+        assert!(
+            published_synced,
+            "With time_until_synced=0 and gap still ok after import, must re-enter Synced"
+        );
+
+        drop(tx);
+    }
+
+    /// Recheck arm must not skip --time-until-synced (Bugbot: advance_to_synced_if_ready
+    /// on the recheck path ignored the debounce).
+    #[tokio::test(start_paused = true)]
+    async fn sync_task_recheck_respects_time_until_synced_debounce() {
+        use std::sync::Mutex;
+
+        let connections_stream = MockStream::new(vec![5]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let network_height = Arc::new(Mutex::new(None::<BlockHeight>));
+        let network_height_for_mock = Arc::clone(&network_height);
+        let mut p2p = MockP2pPort::new();
+        p2p.expect_reserved_peer_network_height()
+            .returning(move || {
+                let height = *network_height_for_mock.lock().unwrap();
+                Box::pin(async move { height })
+            });
+
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(|| Ok(Some(BlockHeight::from(5u32))));
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+
+        let debounce = Duration::from_secs(2);
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            5,
+            debounce,
+            1,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            Arc::new(AtomicU32::new(0)),
+            Arc::new(p2p),
+            Arc::new(block_importer),
+        );
+
+        let _ = sync_task.run(&mut watcher).await;
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        *network_height.lock().unwrap() = Some(BlockHeight::from(5u32));
+        // Drain select arms: a stale timer tick may run before recheck arms debounce.
+        tokio::time::advance(SYNCED_HEIGHT_GAP_RECHECK_INTERVAL).await;
+        for _ in 0..4 {
+            let _ = sync_task.run(&mut watcher).await;
+            if sync_task.debounce_armed {
+                break;
+            }
+        }
+        assert!(
+            sync_task.debounce_armed,
+            "Recheck must arm debounce once the height gap is satisfied"
+        );
+        assert_eq!(
+            SyncState::NotSynced,
+            *sync_task.state_receiver.borrow(),
+            "Recheck must not enter Synced before time_until_synced elapses"
+        );
+
+        tokio::time::advance(debounce).await;
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "After time_until_synced elapses, tick arm must enter Synced"
         );
 
         drop(tx);
