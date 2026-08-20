@@ -186,6 +186,8 @@ impl SyncTask {
             return;
         };
         if !self.height_gap_ready().await {
+            // Gap lost before the debounce fired — require a fresh window.
+            self.debounce_armed = false;
             return;
         }
         self.debounce_armed = false;
@@ -206,7 +208,9 @@ impl SyncTask {
         }
         if self.time_until_synced == Duration::ZERO {
             self.advance_to_synced_if_ready().await;
-        } else {
+        } else if !self.debounce_armed {
+            // Arm once; recheck must not reset_timer every 10s or a long
+            // --time-until-synced never completes.
             self.restart_timer();
             self.debounce_armed = true;
         }
@@ -1227,6 +1231,155 @@ mod tests {
         assert!(
             matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
             "After time_until_synced elapses, tick arm must enter Synced"
+        );
+
+        drop(tx);
+    }
+
+    /// Recheck must not `restart_timer` while debounce is already armed
+    /// (Bugbot: --time-until-synced > 10s never completed).
+    #[tokio::test(start_paused = true)]
+    async fn sync_task_recheck_does_not_restart_armed_debounce() {
+        use std::sync::Mutex;
+
+        let connections_stream = MockStream::new(vec![5]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let network_height = Arc::new(Mutex::new(None::<BlockHeight>));
+        let network_height_for_mock = Arc::clone(&network_height);
+        let mut p2p = MockP2pPort::new();
+        p2p.expect_reserved_peer_network_height()
+            .returning(move || {
+                let height = *network_height_for_mock.lock().unwrap();
+                Box::pin(async move { height })
+            });
+
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(|| Ok(Some(BlockHeight::from(5u32))));
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+
+        // Longer than the 10s recheck interval so a reset would prevent Synced.
+        let debounce = Duration::from_secs(15);
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            5,
+            debounce,
+            1,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            Arc::new(AtomicU32::new(0)),
+            Arc::new(p2p),
+            Arc::new(block_importer),
+        );
+
+        let _ = sync_task.run(&mut watcher).await;
+        *network_height.lock().unwrap() = Some(BlockHeight::from(5u32));
+
+        tokio::time::advance(SYNCED_HEIGHT_GAP_RECHECK_INTERVAL).await;
+        for _ in 0..4 {
+            let _ = sync_task.run(&mut watcher).await;
+            if sync_task.debounce_armed {
+                break;
+            }
+        }
+        assert!(sync_task.debounce_armed);
+
+        // Another full recheck cycle while still gap-ready must not reset the timer.
+        tokio::time::advance(SYNCED_HEIGHT_GAP_RECHECK_INTERVAL).await;
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(
+            sync_task.debounce_armed,
+            "Gap still ready: debounce stays armed without restart"
+        );
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        // Remaining debounce after one recheck (15s - 10s = 5s) should finish.
+        tokio::time::advance(Duration::from_secs(5)).await;
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "Debounce must complete despite intervening rechecks"
+        );
+
+        drop(tx);
+    }
+
+    /// A debounce tick that fails the height-gap check must disarm so the next
+    /// tick cannot enter Synced without a fresh --time-until-synced window.
+    #[tokio::test(start_paused = true)]
+    async fn sync_task_failed_debounce_tick_disarms() {
+        use std::sync::Mutex;
+
+        let connections_stream = MockStream::new(vec![5]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let network_height = Arc::new(Mutex::new(None::<BlockHeight>));
+        let network_height_for_mock = Arc::clone(&network_height);
+        let mut p2p = MockP2pPort::new();
+        p2p.expect_reserved_peer_network_height()
+            .returning(move || {
+                let height = *network_height_for_mock.lock().unwrap();
+                Box::pin(async move { height })
+            });
+
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(|| Ok(Some(BlockHeight::from(5u32))));
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+
+        let debounce = Duration::from_secs(2);
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            5,
+            debounce,
+            1,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            Arc::new(AtomicU32::new(0)),
+            Arc::new(p2p),
+            Arc::new(block_importer),
+        );
+
+        // Enter SufficientPeers with gap not yet ready.
+        let _ = sync_task.run(&mut watcher).await;
+        *network_height.lock().unwrap() = Some(BlockHeight::from(5u32));
+
+        tokio::time::advance(SYNCED_HEIGHT_GAP_RECHECK_INTERVAL).await;
+        for _ in 0..4 {
+            let _ = sync_task.run(&mut watcher).await;
+            if sync_task.debounce_armed {
+                break;
+            }
+        }
+        assert!(sync_task.debounce_armed);
+
+        // Gap widens before the debounce fires.
+        *network_height.lock().unwrap() = Some(BlockHeight::from(100u32));
+        tokio::time::advance(debounce).await;
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(
+            !sync_task.debounce_armed,
+            "Failed advance must clear debounce_armed"
+        );
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        // Gap recovers; without a new arm, a stray timer tick must not Synced.
+        *network_height.lock().unwrap() = Some(BlockHeight::from(5u32));
+        tokio::time::advance(debounce).await;
+        let _ = sync_task.run(&mut watcher).await;
+        assert_eq!(
+            SyncState::NotSynced,
+            *sync_task.state_receiver.borrow(),
+            "Must not Synced on tick while disarmed"
         );
 
         drop(tx);
