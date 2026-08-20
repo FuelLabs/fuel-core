@@ -10,8 +10,8 @@ pub struct Config {
     pub signer: SignMode,
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
-    /// Deprecated: ignored. Ready uses Height Gap vs `--max-sync-height-diff`,
-    /// not a quiet window.
+    /// Quiet window after the height gap is within `--max-sync-height-diff`
+    /// before declaring Synced. Zero transitions immediately once the gap is ok.
     pub time_until_synced: Duration,
     /// Largest reserved-peer Height Gap that still counts as Ready.
     pub max_sync_height_diff: u32,

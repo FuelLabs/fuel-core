@@ -236,10 +236,6 @@ impl Broadcast for FakeBroadcast {
         todo!()
     }
 
-    fn peer_disconnected_broadcast(&self, _peer_id: FuelPeerId) -> anyhow::Result<()> {
-        todo!()
-    }
-
     fn tx_broadcast(&self, _transaction: TransactionGossipData) -> anyhow::Result<()> {
         todo!()
     }

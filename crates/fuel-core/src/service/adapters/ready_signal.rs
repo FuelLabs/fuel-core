@@ -47,7 +47,7 @@ impl Default for ReadySignal {
 }
 
 /// Bundle for `/v1/ready`: services-started flag plus optional PoA readiness.
-/// PoA owns the live Height Gap check in `SharedState::is_ready()`.
+/// PoA owns Ready via `SyncTask` (`height_gap_is_ready` + `time_until_synced`).
 #[derive(Clone)]
 pub struct Readiness {
     services_started: ReadySignal,

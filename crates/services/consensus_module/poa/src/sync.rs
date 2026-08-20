@@ -19,6 +19,10 @@ use fuel_core_services::{
         BoxStream,
     },
 };
+use crate::ports::{
+    BlockImporter,
+    P2pPort,
+};
 use fuel_core_types::{
     blockchain::header::BlockHeader,
     fuel_types::BlockHeight,
@@ -50,7 +54,7 @@ impl SyncState {
     }
 }
 
-/// Live Ready check: Height Gap = reserved-peer network height − local DB height.
+/// Height Gap = reserved-peer network height − local DB height.
 /// Isolated/dev (`min_connected_reserved_peers == 0`) skips the comparison.
 pub(crate) fn height_gap_is_ready(
     min_connected_reserved_peers: usize,
@@ -69,15 +73,27 @@ pub(crate) fn height_gap_is_ready(
     gap <= max_sync_height_diff
 }
 
+/// While Synced, re-snapshot P2P vs DB on this interval so `SyncState` tracks Green's
+/// live height-gap definition (entry and exit), including when peer heartbeats advance
+/// the network tip without a reserved-peer count or block-import event.
+const SYNCED_HEIGHT_GAP_RECHECK_INTERVAL: Duration = Duration::from_secs(10);
+
 pub struct SyncTask {
     min_connected_reserved_peers: usize,
+    max_sync_height_diff: u32,
+    time_until_synced: Duration,
     peer_connections_stream: BoxStream<usize>,
     block_stream: BoxStream<BlockImportInfo>,
+    p2p: Arc<dyn P2pPort>,
+    block_importer: Arc<dyn BlockImporter>,
     state_sender: watch::Sender<SyncState>,
     // shared with `MainTask` via SyncTask::SharedState
     state_receiver: watch::Receiver<SyncState>,
     inner_state: InnerSyncState,
     timer: Option<tokio::time::Interval>,
+    /// Re-snapshot reserved-peer height vs DB while Synced so `SyncState` tracks
+    /// the live height-gap definition (not a one-shot latch on entry).
+    synced_recheck: tokio::time::Interval,
     /// Blocks at heights <= this watermark were imported via reconciliation
     /// by the leader and should not trigger Synced → NotSynced transitions.
     /// Set by MainTask via `fetch_max`, monotonically increasing, never cleared.
@@ -85,13 +101,17 @@ pub struct SyncTask {
 }
 
 impl SyncTask {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         peer_connections_stream: BoxStream<usize>,
         min_connected_reserved_peers: usize,
         time_until_synced: Duration,
+        max_sync_height_diff: u32,
         block_stream: BoxStream<BlockImportInfo>,
         block_header: &BlockHeader,
         reconciliation_watermark: Arc<AtomicU32>,
+        p2p: Arc<dyn P2pPort>,
+        block_importer: Arc<dyn BlockImporter>,
     ) -> Self {
         let inner_state = InnerSyncState::from_config(
             min_connected_reserved_peers,
@@ -115,16 +135,93 @@ impl SyncTask {
         let (state_sender, state_receiver) =
             tokio::sync::watch::channel(initial_sync_state);
 
+        let mut synced_recheck = tokio::time::interval(SYNCED_HEIGHT_GAP_RECHECK_INTERVAL);
+        synced_recheck.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        // Don't fire immediately on startup — give P2P heartbeats time to arrive.
+        synced_recheck.reset();
+
         Self {
             peer_connections_stream,
             min_connected_reserved_peers,
+            max_sync_height_diff,
+            time_until_synced,
             block_stream,
+            p2p,
+            block_importer,
             state_sender,
             state_receiver,
             inner_state,
             timer,
+            synced_recheck,
             reconciliation_watermark,
         }
+    }
+
+    async fn height_gap_ready(&self) -> bool {
+        if self.min_connected_reserved_peers == 0 {
+            return true;
+        }
+        let network = self.p2p.reserved_peer_network_height().await;
+        let local = self
+            .block_importer
+            .latest_block_height()
+            .ok()
+            .flatten();
+        height_gap_is_ready(
+            self.min_connected_reserved_peers,
+            self.max_sync_height_diff,
+            network,
+            local,
+        )
+    }
+
+    async fn advance_to_synced_if_ready(&mut self) {
+        let InnerSyncState::SufficientPeers(block_header) = self.inner_state.clone() else {
+            return;
+        };
+        if !self.height_gap_ready().await {
+            return;
+        }
+        self.inner_state = InnerSyncState::Synced {
+            block_header: block_header.clone(),
+            has_sufficient_peers: true,
+        };
+        self.update_sync_state(SyncState::Synced(Arc::new(block_header)));
+    }
+
+    async fn on_sufficient_peers_activity(&mut self) {
+        if !matches!(self.inner_state, InnerSyncState::SufficientPeers(_)) {
+            return;
+        }
+        if !self.height_gap_ready().await {
+            return;
+        }
+        if self.time_until_synced == Duration::ZERO {
+            self.advance_to_synced_if_ready().await;
+        } else {
+            self.restart_timer();
+        }
+    }
+
+    /// Leave Synced when the live height gap exceeds `--max-sync-height-diff`.
+    /// Peer-count blips alone do not flip Synced (legacy behaviour preserved).
+    async fn recompute_if_synced_lagging(&mut self) {
+        let InnerSyncState::Synced {
+            block_header,
+            has_sufficient_peers,
+        } = self.inner_state.clone()
+        else {
+            return;
+        };
+        if self.height_gap_ready().await {
+            return;
+        }
+        self.inner_state = if has_sufficient_peers {
+            InnerSyncState::SufficientPeers(block_header)
+        } else {
+            InnerSyncState::InsufficientPeers(block_header)
+        };
+        self.update_sync_state(SyncState::NotSynced);
     }
 
     fn update_sync_state(&mut self, new_state: SyncState) {
@@ -188,11 +285,9 @@ impl RunnableTask for SyncTask {
                 match &self.inner_state {
                     InnerSyncState::InsufficientPeers(block_header) if sufficient_peers => {
                         self.inner_state = InnerSyncState::SufficientPeers(block_header.clone());
-                        self.restart_timer();
                     }
                     InnerSyncState::SufficientPeers(block_header) if !sufficient_peers => {
                         self.inner_state = InnerSyncState::InsufficientPeers(block_header.clone());
-                        self.restart_timer();
                     }
                     InnerSyncState::Synced { block_header, .. } => {
                         self.inner_state = InnerSyncState::Synced {
@@ -202,6 +297,8 @@ impl RunnableTask for SyncTask {
                     }
                     _ => {},
                 }
+                self.on_sufficient_peers_activity().await;
+                self.recompute_if_synced_lagging().await;
                 TaskNextAction::Continue
             }
             Some(block_info) = self.block_stream.next() => {
@@ -213,7 +310,7 @@ impl RunnableTask for SyncTask {
                     }
                     InnerSyncState::SufficientPeers(block_header) if new_block_height > block_header.height() => {
                         self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
-                        self.restart_timer();
+                        self.on_sufficient_peers_activity().await;
                     }
                     InnerSyncState::Synced { block_header, has_sufficient_peers } if new_block_height > block_header.height() => {
                         let watermark = self.reconciliation_watermark.load(Ordering::Acquire);
@@ -230,7 +327,7 @@ impl RunnableTask for SyncTask {
                             // we considered to be synced but we're obviously not!
                             if *has_sufficient_peers {
                                 self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
-                                self.restart_timer();
+                                self.on_sufficient_peers_activity().await;
                             } else {
                                 self.inner_state = InnerSyncState::InsufficientPeers(block_info.block_header);
                             }
@@ -240,17 +337,20 @@ impl RunnableTask for SyncTask {
                     }
                     _ => {}
                 }
+                self.recompute_if_synced_lagging().await;
                 TaskNextAction::Continue
             }
             _ = tick => {
-                if let InnerSyncState::SufficientPeers(block_header) = &self.inner_state {
-                    let block_header = block_header.clone();
-                    self.inner_state = InnerSyncState::Synced {
-                        block_header: block_header.clone(),
-                        has_sufficient_peers: true
-                    };
-                    self.update_sync_state(SyncState::Synced(Arc::new(block_header)));
-                }
+                self.advance_to_synced_if_ready().await;
+                self.recompute_if_synced_lagging().await;
+                TaskNextAction::Continue
+            }
+            _ = self.synced_recheck.tick() => {
+                // Live P2P snapshot (Green): heartbeats can satisfy the gap while we
+                // sit in SufficientPeers with --time-until-synced 0 and no timer arm.
+                self.on_sufficient_peers_activity().await;
+                self.advance_to_synced_if_ready().await;
+                self.recompute_if_synced_lagging().await;
                 TaskNextAction::Continue
             }
         }
@@ -273,9 +373,11 @@ enum InnerSyncState {
     ///
     /// SufficientPeers -> Synced(...)
     /// SufficientPeers -> InsufficientPeers(...)
+    /// Height gap must be within `--max-sync-height-diff`; then `time_until_synced`
+    /// debounce applies (immediate when zero).
     SufficientPeers(BlockHeader),
-    /// We can go into this state if we didn't receive any notification
-    /// about new block height from the network for `time_until_synced` timeout.
+    /// We can go into this state once the height gap is within threshold and
+    /// `time_until_synced` has elapsed (or is zero).
     ///
     /// We can leave this state only in the case, if we received a valid block
     /// from the network with higher block height.
@@ -318,6 +420,10 @@ impl InnerSyncState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ports::{
+        MockBlockImporter,
+        MockP2pPort,
+    };
     use std::{
         collections::VecDeque,
         pin::Pin,
@@ -386,6 +492,16 @@ mod tests {
         .map(BlockImportInfo::from)
         .into_boxed();
 
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(move || Ok(Some(BlockHeight::from(biggest_block))));
+
+        let mut p2p = MockP2pPort::new();
+        p2p.expect_reserved_peer_network_height().returning(move || {
+            Box::pin(async move { Some(BlockHeight::from(biggest_block)) })
+        });
+
         let (tx, shutdown) =
             tokio::sync::watch::channel(fuel_core_services::State::Started);
         let watcher = shutdown.into();
@@ -394,9 +510,12 @@ mod tests {
             connections_stream,
             min_connected_reserved_peers,
             time_until_synced,
+            1,
             block_stream,
             &Default::default(),
             Arc::new(AtomicU32::new(0)),
+            Arc::new(p2p),
+            Arc::new(block_importer),
         );
 
         (sync_task, watcher, tx)
@@ -660,9 +779,12 @@ mod tests {
             connections_stream,
             0, // min_connected_reserved_peers
             Duration::ZERO,
+            1,
             block_stream,
             &BlockHeader::new_block(5u32.into(), Tai64::now()),
             watermark,
+            Arc::new(MockP2pPort::new()),
+            Arc::new(MockBlockImporter::new()),
         );
 
         // Verify we start in Synced state
@@ -713,9 +835,12 @@ mod tests {
             connections_stream,
             0,
             Duration::ZERO,
+            1,
             block_stream,
             &BlockHeader::new_block(5u32.into(), Tai64::now()),
             watermark,
+            Arc::new(MockP2pPort::new()),
+            Arc::new(MockBlockImporter::new()),
         );
 
         assert!(matches!(
@@ -815,5 +940,122 @@ mod tests {
             Some(BlockHeight::from(12u32)),
             Some(BlockHeight::from(10u32))
         ));
+    }
+
+    /// Synced must track the live height-gap definition (Green): if peers advance
+    /// while local DB stalls, SyncTask clears SyncState even without a new block.
+    #[tokio::test]
+    async fn sync_task_synced_leaves_synced_when_height_gap_grows() {
+        use std::sync::Mutex;
+
+        let connections_stream = MockStream::new(vec![5, 5]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let network_height = Arc::new(Mutex::new(Some(BlockHeight::from(5u32))));
+        let network_height_for_mock = Arc::clone(&network_height);
+        let mut p2p = MockP2pPort::new();
+        p2p.expect_reserved_peer_network_height()
+            .returning(move || {
+                let height = *network_height_for_mock.lock().unwrap();
+                Box::pin(async move { height })
+            });
+
+        let local_height = BlockHeight::from(5u32);
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(move || Ok(Some(local_height)));
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            5,
+            Duration::ZERO,
+            1,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            Arc::new(AtomicU32::new(0)),
+            Arc::new(p2p),
+            Arc::new(block_importer),
+        );
+
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+
+        *network_height.lock().unwrap() = Some(BlockHeight::from(10u32));
+        let _ = sync_task.run(&mut watcher).await;
+
+        assert_eq!(
+            SyncState::NotSynced,
+            *sync_task.state_receiver.borrow(),
+            "Reserved-peer tip advanced while local DB stalled — must leave Synced"
+        );
+
+        drop(tx);
+    }
+
+    /// Heartbeat-only gap satisfaction must enter Synced via the live P2P recheck arm
+    /// (DEVOPS-1520 follower case: peer count stable, first heartbeat arrives later).
+    #[tokio::test(start_paused = true)]
+    async fn sync_task_sufficient_peers_enters_synced_on_heartbeat_recheck() {
+        use std::sync::Mutex;
+
+        let connections_stream = MockStream::new(vec![5]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let network_height = Arc::new(Mutex::new(None::<BlockHeight>));
+        let network_height_for_mock = Arc::clone(&network_height);
+        let mut p2p = MockP2pPort::new();
+        p2p.expect_reserved_peer_network_height()
+            .returning(move || {
+                let height = *network_height_for_mock.lock().unwrap();
+                Box::pin(async move { height })
+            });
+
+        let local_height = BlockHeight::from(5u32);
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(move || Ok(Some(local_height)));
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            5,
+            Duration::ZERO,
+            1,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            Arc::new(AtomicU32::new(0)),
+            Arc::new(p2p),
+            Arc::new(block_importer),
+        );
+
+        let _ = sync_task.run(&mut watcher).await;
+        assert_eq!(
+            SyncState::NotSynced,
+            *sync_task.state_receiver.borrow(),
+            "No heartbeat height yet — must stay NotSynced"
+        );
+
+        *network_height.lock().unwrap() = Some(BlockHeight::from(5u32));
+        tokio::time::advance(SYNCED_HEIGHT_GAP_RECHECK_INTERVAL).await;
+        let _ = sync_task.run(&mut watcher).await;
+
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "Heartbeat satisfied height gap — recheck must enter Synced"
+        );
+
+        drop(tx);
     }
 }

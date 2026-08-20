@@ -7,6 +7,7 @@ use tokio::{
     sync::{
         mpsc,
         oneshot,
+        watch,
     },
     time::Instant,
 };
@@ -29,8 +30,8 @@ use crate::{
         WaitForReadySignal,
     },
     sync::{
+        SyncState,
         SyncTask,
-        height_gap_is_ready,
     },
 };
 use fuel_core_services::{
@@ -66,10 +67,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use serde::Serialize;
-use tokio::time::{
-    sleep,
-    sleep_until,
-};
+use tokio::time::sleep_until;
 
 pub type Service<B, I, S, PB, C, RS, RP> =
     ServiceRunner<MainTask<B, I, S, PB, C, RS, RP>>;
@@ -77,10 +75,7 @@ pub type Service<B, I, S, PB, C, RS, RP> =
 #[derive(Clone)]
 pub struct SharedState {
     request_sender: mpsc::Sender<Request>,
-    min_connected_reserved_peers: usize,
-    max_sync_height_diff: u32,
-    p2p: Arc<dyn P2pPort>,
-    local_height: Arc<dyn Fn() -> Option<BlockHeight> + Send + Sync>,
+    sync_state: watch::Receiver<SyncState>,
 }
 
 impl SharedState {
@@ -100,21 +95,9 @@ impl SharedState {
         receiver.await?
     }
 
-    /// Live Height Gap check. Isolated/dev (`min_connected_reserved_peers == 0`)
-    /// skips the comparison. Snapshots P2P reserved-peer heights; does not
-    /// latch. Same boolean as `GET /v1/ready` and `ensure_synced`.
+    /// PoA Ready: `SyncTask` publishes `SyncState`; height gap is re-checked there.
     pub async fn is_ready(&self) -> bool {
-        let network = if self.min_connected_reserved_peers == 0 {
-            None
-        } else {
-            self.p2p.reserved_peer_network_height().await
-        };
-        height_gap_is_ready(
-            self.min_connected_reserved_peers,
-            self.max_sync_height_diff,
-            network,
-            (self.local_height)(),
-        )
+        matches!(*self.sync_state.borrow(), SyncState::Synced(_))
     }
 }
 
@@ -200,11 +183,7 @@ where
             Self::extract_block_info(clock.now(), last_block);
 
         let block_importer = Arc::new(block_importer);
-        let local_height = {
-            let importer = Arc::clone(&block_importer);
-            Arc::new(move || importer.latest_block_height().ok().flatten())
-                as Arc<dyn Fn() -> Option<BlockHeight> + Send + Sync>
-        };
+        let block_importer_for_sync = block_importer.clone() as Arc<dyn BlockImporter>;
         let p2p: Arc<dyn P2pPort> = Arc::new(p2p_port);
 
         let block_stream = block_importer.block_stream();
@@ -225,12 +204,16 @@ where
             peer_connections_stream,
             min_connected_reserved_peers,
             time_until_synced,
+            max_sync_height_diff,
             block_stream,
             last_block,
             Arc::clone(&reconciliation_watermark),
+            Arc::clone(&p2p),
+            block_importer_for_sync,
         );
 
         let sync_task_handle = ServiceRunner::new(sync_task);
+        let sync_state = sync_task_handle.shared.clone();
 
         let block_production_ready_signal =
             BlockProductionReadySignal::new(block_production_ready_signal);
@@ -243,10 +226,7 @@ where
             request_receiver,
             shared_state: SharedState {
                 request_sender,
-                min_connected_reserved_peers,
-                max_sync_height_diff,
-                p2p,
-                local_height,
+                sync_state,
             },
             last_height,
             last_timestamp,
@@ -572,19 +552,22 @@ where
         &mut self,
         watcher: &mut StateWatcher,
     ) -> Option<TaskNextAction> {
-        loop {
-            if self.shared_state.is_ready().await {
-                self.sync_last_height_from_db();
-                return None;
-            }
+        let mut sync_state = self.sync_task_handle.shared.clone();
+
+        if *sync_state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
                     return Some(result.map(|state| state.started()).into())
                 }
-                _ = sleep(Duration::from_millis(100)) => {}
+                _ = sync_state.changed() => {}
             }
         }
+
+        if matches!(*sync_state.borrow_and_update(), SyncState::Synced(_)) {
+            self.sync_last_height_from_db();
+        }
+        None
     }
 
     async fn maybe_produce_predefined_block(&mut self) -> Option<TaskNextAction> {

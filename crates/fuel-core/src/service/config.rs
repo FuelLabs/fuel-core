@@ -122,7 +122,8 @@ pub struct Config {
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
     /// The number of reserved peers to connect to before starting to sync.
     pub min_connected_reserved_peers: usize,
-    /// Deprecated: ignored by PoA Ready (height-gap based). Kept for CLI compat.
+    /// Quiet window after the height gap is within `--max-sync-height-diff`
+    /// before PoA declares Ready. Zero means immediate once the gap is ok.
     pub time_until_synced: Duration,
     /// Largest reserved-peer Height Gap that still counts as Ready.
     pub max_sync_height_diff: u32,

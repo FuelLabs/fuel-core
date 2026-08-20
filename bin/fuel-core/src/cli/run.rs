@@ -326,8 +326,8 @@ pub struct Command {
     #[clap(long = "min-connected-reserved-peers", default_value = "0", env)]
     pub min_connected_reserved_peers: usize,
 
-    /// Deprecated and ignored. Ready uses Height Gap vs `--max-sync-height-diff`,
-    /// not a quiet window.
+    /// Quiet window after the reserved-peer height gap is within
+    /// `--max-sync-height-diff` before PoA declares Synced. Zero means immediate.
     #[clap(long = "time-until-synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
 
