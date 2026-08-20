@@ -9,6 +9,10 @@ use std::{
     time::Duration,
 };
 
+use crate::ports::{
+    BlockImporter,
+    P2pPort,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -18,10 +22,6 @@ use fuel_core_services::{
         BoxFuture,
         BoxStream,
     },
-};
-use crate::ports::{
-    BlockImporter,
-    P2pPort,
 };
 use fuel_core_types::{
     blockchain::header::BlockHeader,
@@ -135,7 +135,8 @@ impl SyncTask {
         let (state_sender, state_receiver) =
             tokio::sync::watch::channel(initial_sync_state);
 
-        let mut synced_recheck = tokio::time::interval(SYNCED_HEIGHT_GAP_RECHECK_INTERVAL);
+        let mut synced_recheck =
+            tokio::time::interval(SYNCED_HEIGHT_GAP_RECHECK_INTERVAL);
         synced_recheck.set_missed_tick_behavior(MissedTickBehavior::Skip);
         // Don't fire immediately on startup — give P2P heartbeats time to arrive.
         synced_recheck.reset();
@@ -162,11 +163,7 @@ impl SyncTask {
             return true;
         }
         let network = self.p2p.reserved_peer_network_height().await;
-        let local = self
-            .block_importer
-            .latest_block_height()
-            .ok()
-            .flatten();
+        let local = self.block_importer.latest_block_height().ok().flatten();
         height_gap_is_ready(
             self.min_connected_reserved_peers,
             self.max_sync_height_diff,
@@ -176,7 +173,8 @@ impl SyncTask {
     }
 
     async fn advance_to_synced_if_ready(&mut self) {
-        let InnerSyncState::SufficientPeers(block_header) = self.inner_state.clone() else {
+        let InnerSyncState::SufficientPeers(block_header) = self.inner_state.clone()
+        else {
             return;
         };
         if !self.height_gap_ready().await {
@@ -498,9 +496,10 @@ mod tests {
             .returning(move || Ok(Some(BlockHeight::from(biggest_block))));
 
         let mut p2p = MockP2pPort::new();
-        p2p.expect_reserved_peer_network_height().returning(move || {
-            Box::pin(async move { Some(BlockHeight::from(biggest_block)) })
-        });
+        p2p.expect_reserved_peer_network_height()
+            .returning(move || {
+                Box::pin(async move { Some(BlockHeight::from(biggest_block)) })
+            });
 
         let (tx, shutdown) =
             tokio::sync::watch::channel(fuel_core_services::State::Started);
