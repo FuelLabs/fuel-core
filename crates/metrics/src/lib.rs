@@ -30,18 +30,30 @@ pub mod importer;
 pub mod p2p_metrics;
 pub mod parallel_executor_metrics;
 pub mod poa_metrics;
+pub mod producer_metrics;
 pub mod tx_status_manager_metrics;
 pub mod txpool_metrics;
 
 pub use self::parallel_executor_metrics::{
+    BlockTimeDecomposition,
     next_debug_batch_metrics_block_height,
     record_batch_execute,
     record_batch_prepare,
     record_batch_total,
+    record_block_merge,
+    record_block_time_decomposition,
+    record_contract_handoff_merge,
+    record_contract_handoff_split,
     record_execution_time,
+    record_pool_ask,
     record_scheduler_run_time,
+    record_sequential_fallback,
     set_batch_anchor_contracts,
     set_block_height,
+    set_complex_txs_classified,
+    set_complex_txs_remaining,
+    set_complex_txs_selected,
+    set_hot_contracts_tracked,
     set_max_workers_used,
     set_non_empty_batch_allocated_gas,
     set_non_empty_batch_transactions,

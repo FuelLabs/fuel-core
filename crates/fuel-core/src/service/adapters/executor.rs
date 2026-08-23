@@ -24,6 +24,7 @@ use fuel_core_executor::{
 };
 #[cfg(feature = "parallel-executor")]
 use fuel_core_parallel_executor::ports::{
+    BatchFeedbackHandle,
     Filter,
     TransactionFiltered,
     TransactionSourceExecutableTransactions,
@@ -54,10 +55,12 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
             .extract_transactions_for_block(Constraints {
                 minimal_gas_price: self.minimum_gas_price,
                 max_gas: gas_limit,
+                total_gas: gas_limit,
                 maximum_txs: transactions_limit,
                 maximum_block_size: block_transaction_size_limit,
                 excluded_contracts: HashSet::default(),
                 execution_worker_count: 1,
+                free_worker_count: 1,
             })
             .unwrap_or_default()
             .into_iter()
@@ -75,37 +78,90 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
     async fn get_executable_transactions(
         &self,
         gas_limit: u64,
+        total_gas_limit: u64,
         tx_count_limit: u32,
         block_transaction_size_limit: u64,
         selection_worker_count: usize,
+        free_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
-        let (transactions, excluded_contract_ids, anchor_contract_ids) = self
+        let (extracted_batches, excluded_contract_ids, ask_timings) = self
             .tx_pool
             .extract_transactions_for_block_async(Constraints {
                 minimal_gas_price: self.minimum_gas_price,
                 max_gas: gas_limit,
+                total_gas: total_gas_limit,
                 maximum_txs: tx_count_limit,
                 maximum_block_size: block_transaction_size_limit,
                 excluded_contracts: filter.excluded_contract_ids,
                 execution_worker_count: selection_worker_count,
+                free_worker_count,
             })
             .await
             .map_err(|e| anyhow::anyhow!("{e}"))?;
-        let transactions = transactions
+        // Per-ask lifecycle checkpoints (in-memory counters; means = value /
+        // parallel_executor_pool_asks): send->worker-start, in-pool, and the
+        // return hop observed here. The executor-side "ready for workers"
+        // stage is the existing prepare phase metric.
+        {
+            let m =
+                fuel_core_metrics::parallel_executor_metrics::parallel_executor_metrics();
+            m.pool_ask_queue_us.observe(ask_timings.queue_us as f64);
+            m.pool_ask_in_pool_us.observe(ask_timings.in_pool_us as f64);
+            m.pool_ask_return_us
+                .observe(ask_timings.responded_at.elapsed().as_micros() as f64);
+        }
+        // The lane scheduler answers one ask with the COMPLETE worker
+        // assignment (up to one batch per free worker), each carrying its
+        // `BatchId`; the classic path answers with at most one id-less batch.
+        let answered_all_workers = extracted_batches
+            .iter()
+            .any(|batch| batch.batch_id.is_some());
+        let batches = extracted_batches
             .into_iter()
-            .map(|tx| {
-                let transaction = Arc::unwrap_or_clone(tx);
-                transaction.into()
+            .map(|batch| {
+                let transactions = batch
+                    .txs
+                    .into_iter()
+                    .map(|tx| {
+                        let transaction = Arc::unwrap_or_clone(tx);
+                        transaction.into()
+                    })
+                    .collect();
+                // When the txpool lane scheduler answered this extraction it
+                // assigned a `BatchId`; wrap it in an opaque handle that
+                // reports the executor's measured timings straight back into
+                // the pool. The executor never sees the batch id or the pool
+                // channel — only the handle. When the lane scheduler is off,
+                // `batch_id` is `None` and no handle is produced.
+                let feedback_handle = batch.batch_id.map(|batch_id| {
+                    let tx_pool = self.tx_pool.clone();
+                    BatchFeedbackHandle::new(move |report| {
+                        tx_pool.report_lane_scheduler_feedback(
+                            batch_id,
+                            report.execution_time,
+                            report.overhead_time,
+                            report.completed,
+                        );
+                    })
+                });
+                fuel_core_parallel_executor::ports::ExecutableBatch {
+                    transactions,
+                    anchor_contract_ids: batch.contracts,
+                    feedback_handle,
+                    // Production: contiguous indices from the scheduler's
+                    // running counter (explicit indices are validation-only).
+                    execution_indices: None,
+                }
             })
             .collect();
         Ok(TransactionSourceExecutableTransactions {
-            transactions,
-            anchor_contract_ids,
+            batches,
             filtered: TransactionFiltered::Filtered,
             filter: Filter {
                 excluded_contract_ids,
             },
+            answered_all_workers,
         })
     }
 

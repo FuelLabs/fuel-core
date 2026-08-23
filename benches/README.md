@@ -7,6 +7,41 @@ To run the benchmarks, you can use `cargo bench -p fuel-core-benches` command av
 Alternatively you can use `cargo criterion -p fuel-core-benches` if you have it installed.
 For more information on using criterion see [the guide](https://bheisler.github.io/criterion.rs/book/).
 
+## `pool_executor_bench` — txpool_v2 + parallel executor (self-contained)
+
+`pool_executor_bench` (`src/bin/pool_executor_bench.rs`) drives the real
+`txpool_v2` service and the **parallel executor** together, multi-threaded, on a
+programmatically-built chain state. Unlike `tps_bench` it needs **no external
+snapshot** — funded user coins and deployed contracts are created at genesis in
+memory, so it runs on any checkout with a single command. The workload is a
+Zipf-ish mix of single-contract calls, multi-contract calls (2-3 contracts, the
+point of the `feature/handle-multi-contract-txs` branch) and plain transfers,
+so it exercises the contract-batching / lane-scheduling path.
+
+Assembly level: the **full `FuelService`** (real txpool_v2 service + real
+parallel executor + block production through the client), assembled via
+`test_helpers::builder::TestSetupBuilder`. The only source touched outside
+`benches/` is one additive `lane_scheduler` field on `TestSetupBuilder`
+(defaulting to `false`).
+
+A/B the lane scheduler (the two runs are one flag apart):
+
+```sh
+cargo run --release -p fuel-core-benches --bin pool_executor_bench -- \
+    --txs 2000 --contracts 16 --workers 4 --block-gas 30000000 --lane-scheduler off
+
+cargo run --release -p fuel-core-benches --bin pool_executor_bench -- \
+    --txs 2000 --contracts 16 --workers 4 --block-gas 30000000 --lane-scheduler on
+```
+
+Key flags (`--help` for all): `--workers/--threads N` (executor worker count),
+`--block-gas LIMIT` (total block gas limit, also the per-tx max-gas ceiling),
+`--lane-scheduler on|off`, `--txs N`, `--blocks N` (default: run until the pool
+drains), `--seed`, `--contracts K`, `--contract-tx-share`,
+`--multi-contract-share`, `--script-gas`. Output is a config header, per-block
+lines (txs / declared gas / produce time) and a summary (TPS, gas/s, blocks to
+drain) plus cumulative parallel-executor metrics.
+
 ## Profiling a benchmark
 Sometimes it is useful to produce a flamegraph from a benchmark to verify
 you are measuring the correct things.

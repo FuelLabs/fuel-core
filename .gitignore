@@ -26,3 +26,4 @@ benches/benches-outputs/src/test_gas_costs_output.rs
 .idea
 .vscode
 
+.claude/worktrees/

@@ -42,6 +42,7 @@ use fuel_core_types::{
         Chargeable,
         ConsensusParameters,
         Contract,
+        ContractId,
         Input,
         Output,
         PanicReason,
@@ -283,6 +284,99 @@ fn insert__tx_with_dependency_on_invalid_utxo_type() {
         matches!(err, Error::InputValidation(InputValidationError::UtxoNotFound(id)) if id == utxo_id)
     );
     universe.assert_pool_integrity(&[tx]);
+}
+
+#[test]
+fn extract_transactions_for_block__revisits_deferred_complex_txs_in_same_block() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    let contract_a = ContractId::from([1u8; 32]);
+    let contract_b = ContractId::from([2u8; 32]);
+
+    let simple_a = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_a,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let simple_b = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_b,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let complex_ab_1 = universe.build_script_transaction(
+        Some(vec![
+            create_contract_input(Default::default(), 0, contract_a),
+            create_contract_input(Default::default(), 1, contract_b),
+        ]),
+        Some(vec![
+            Output::contract(0, Default::default(), Default::default()),
+            Output::contract(1, Default::default(), Default::default()),
+        ]),
+        20,
+    );
+    let complex_ab_2 = universe.build_script_transaction(
+        Some(vec![
+            create_contract_input(Default::default(), 0, contract_a),
+            create_contract_input(Default::default(), 1, contract_b),
+        ]),
+        Some(vec![
+            Output::contract(0, Default::default(), Default::default()),
+            Output::contract(1, Default::default(), Default::default()),
+        ]),
+        20,
+    );
+
+    let simple_a = universe.verify_and_insert(simple_a).unwrap();
+    let simple_b = universe.verify_and_insert(simple_b).unwrap();
+    let complex_ab_1 = universe.verify_and_insert(complex_ab_1).unwrap();
+    let complex_ab_2 = universe.verify_and_insert(complex_ab_2).unwrap();
+
+    let pool = universe.get_pool();
+    let selected: Vec<_> = pool
+        .write()
+        .extract_transactions_for_block_with_anchors(&Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: 10,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: HashSet::new(),
+            execution_worker_count: 13,
+            free_worker_count: 13,
+        })
+        .into_iter()
+        .flat_map(|batch| batch.txs)
+        .collect();
+
+    let selected_ids = selected.iter().map(|tx| tx.id()).collect::<HashSet<_>>();
+    let expected_ids = [
+        simple_a.id(),
+        simple_b.id(),
+        complex_ab_1.id(),
+        complex_ab_2.id(),
+    ]
+    .into_iter()
+    .collect::<HashSet<_>>();
+
+    assert_eq!(selected_ids, expected_ids);
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -643,10 +737,12 @@ fn get_sorted_out_tx1_2_3() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -702,10 +798,12 @@ fn get_sorted_out_tx_same_tips() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -761,10 +859,12 @@ fn get_sorted_out_zero_tip() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -820,10 +920,12 @@ fn get_sorted_out_tx_profitable_ratios() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -861,10 +963,12 @@ fn get_sorted_out_tx_by_creation_instant() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -1302,10 +1406,12 @@ fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
                 .extract_transactions_for_block(&Constraints {
                     minimal_gas_price: 0,
                     max_gas: u64::MAX,
-                    maximum_txs: u32::MAX,
+                    total_gas: u64::MAX,
+                    maximum_txs: !0,
                     maximum_block_size: u64::MAX,
                     excluded_contracts: Default::default(),
                     execution_worker_count: 1,
+                    free_worker_count: 1,
                 });
         assert_eq!(txs.len(), 1);
         assert_eq!(pool_dependency_tx.id(), txs[0].id());
@@ -1513,10 +1619,12 @@ fn extract__tx_with_excluded_contract() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts,
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -1524,3 +1632,660 @@ fn extract__tx_with_excluded_contract() {
     assert_eq!(txs[2].id(), tx2_id, "First should be tx2");
     universe.assert_pool_integrity(&[tx1]);
 }
+
+// ============================================================================
+// Dependent-transaction promotion around block commit (core pool, lane
+// scheduler OFF). These cover the three orderings of "child spends a Coin
+// output of parent" vs the parent's extraction/commit, and document that the
+// core dependency-graph promotion is sound in all three.
+// ============================================================================
+
+/// Case (a): parent and child both in the pool (child is a graph dependent).
+/// The parent commits while still in the pool (e.g. the block came from
+/// another producer). The child must be promoted to executable immediately.
+#[test]
+fn process_committed__parent_committed_from_pool_promotes_child() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given: tx2 depends on tx1's coin output; both in the pool.
+    let (output, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
+    let tx1_id = tx1.id(&ChainId::default());
+    universe.verify_and_insert(tx1).unwrap();
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
+    let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx2).unwrap();
+
+    // When: the parent commits (imported block) while still in the pool.
+    universe
+        .get_pool()
+        .write()
+        .process_committed_transactions(std::iter::once(tx1_id));
+
+    // Then: the child is promptly executable/extractable.
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    let ids: Vec<_> = extracted.iter().map(|tx| tx.id()).collect();
+    assert_eq!(ids, vec![tx2_id]);
+    universe.assert_pool_integrity(&[]);
+}
+
+/// Case (b): the child arrives while the parent is EXTRACTED for a block that
+/// is currently being produced (parent neither in the pool nor committed).
+/// The child validates against the extracted outputs, becomes executable, and
+/// must remain extractable after the parent's block commits.
+#[test]
+fn insert__child_mid_extraction_stays_extractable_after_parent_commit() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given: the parent is extracted for a block being produced.
+    let (output, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
+    let tx1_id = tx1.id(&ChainId::default());
+    universe.verify_and_insert(tx1).unwrap();
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    assert_eq!(extracted.len(), 1);
+    assert_eq!(extracted[0].id(), tx1_id);
+
+    // When: the child arrives mid-production (spends the parent's coin output)
+    // and then the parent's block commits.
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
+    let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx2).unwrap();
+    {
+        let pool = universe.get_pool();
+        let mut pool = pool.write();
+        // Mirrors `PoolWorker::process_block` for the committed parent.
+        pool.process_committed_transactions(std::iter::once(tx1_id));
+        pool.extracted_outputs.new_executed_transaction(&tx1_id);
+    }
+
+    // Then: the child is promptly extractable for the next block.
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    let ids: Vec<_> = extracted.iter().map(|tx| tx.id()).collect();
+    assert_eq!(ids, vec![tx2_id]);
+    universe.assert_pool_integrity(&[]);
+}
+
+/// Case (c): the child arrives AFTER the parent's block committed (the coin is
+/// already in the database). The child must be executable immediately.
+#[test]
+fn insert__child_after_parent_commit_is_immediately_extractable() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given: the parent was extracted and its block committed.
+    let (output, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
+    let tx1_id = tx1.id(&ChainId::default());
+    universe.verify_and_insert(tx1).unwrap();
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    assert_eq!(extracted.len(), 1);
+    {
+        let pool = universe.get_pool();
+        let mut pool = pool.write();
+        pool.process_committed_transactions(std::iter::once(tx1_id));
+        pool.extracted_outputs.new_executed_transaction(&tx1_id);
+    }
+    // The importer wrote the parent's coin output to the database.
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
+    {
+        use fuel_core_types::entities::coins::coin::CompressedCoin;
+        let mut coin = CompressedCoin::default();
+        coin.set_owner(*input.input_owner().unwrap());
+        coin.set_amount(1);
+        coin.set_asset_id(AssetId::BASE);
+        universe
+            .database_mut()
+            .data
+            .lock()
+            .unwrap()
+            .coins
+            .insert(UtxoId::new(tx1_id, 0), coin);
+    }
+
+    // When: the child arrives after the commit.
+    let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx2).unwrap();
+
+    // Then: it is immediately extractable.
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    let ids: Vec<_> = extracted.iter().map(|tx| tx.id()).collect();
+    assert_eq!(ids, vec![tx2_id]);
+    universe.assert_pool_integrity(&[]);
+}
+
+// ============================================================================
+// Lane scheduler integration tests (config flag `lane_scheduler`).
+// ============================================================================
+
+fn lane_config() -> Config {
+    Config {
+        lane_scheduler: true,
+        // Contract-input transactions in these tests reference contracts that
+        // are not present in the mock DB; skip UTXO/contract existence checks
+        // (mirrors how contract-input txs are exercised elsewhere).
+        utxo_validation: false,
+        ..Default::default()
+    }
+}
+
+/// Extract everything the lane scheduler is willing to give in one call, using a
+/// non-binding (huge) budget and no in-flight locks.
+fn extract_one_batch(
+    universe: &TestPoolUniverse,
+    excluded: HashSet<ContractId>,
+) -> Vec<fuel_core_types::services::txpool::ArcPoolTx> {
+    universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block(&Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: excluded,
+            execution_worker_count: 1,
+            free_worker_count: 1,
+        })
+}
+
+/// Like [`extract_one_batch`] but also returns the lane-scheduler `BatchId`
+/// assigned to the extracted batch (used to round-trip completion feedback).
+fn extract_one_batch_with_id(
+    universe: &TestPoolUniverse,
+    excluded: HashSet<ContractId>,
+) -> (
+    Vec<fuel_core_types::services::txpool::ArcPoolTx>,
+    Option<crate::lane_integration::BatchId>,
+) {
+    let batches = universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block_with_anchors(&Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: excluded,
+            execution_worker_count: 1,
+            free_worker_count: 1,
+        });
+    let mut txs = Vec::new();
+    let mut batch_id = None;
+    for batch in batches {
+        batch_id = batch.batch_id.or(batch_id);
+        txs.extend(batch.txs);
+    }
+    (txs, batch_id)
+}
+
+#[test]
+fn lane_scheduler__batch_feedback_round_trips_completion() {
+    use crate::lane_integration::BatchFeedback;
+
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    // Given: two independent transactions extracted as a single in-flight batch.
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+
+    let (batch, batch_id) = extract_one_batch_with_id(&universe, HashSet::new());
+    assert_eq!(batch.len(), 2, "both txs should be dispatched in one batch");
+    let batch_id = batch_id.expect("lane scheduler must assign a batch id");
+
+    // The batch is dispatched but not yet reported complete → in flight.
+    let in_flight_before = universe
+        .get_pool()
+        .read()
+        .lane_scheduler
+        .as_ref()
+        .expect("lane scheduler enabled")
+        .in_flight_batches();
+    assert_eq!(
+        in_flight_before, 1,
+        "one dispatched batch awaiting feedback"
+    );
+
+    // When: the executor reports the batch complete (the executor→pool half of
+    // the feedback loop), then the pool is asked again (feedback is drained onto
+    // the next request, the scheduler's documented transport).
+    universe
+        .get_pool()
+        .write()
+        .lane_scheduler_feedback(BatchFeedback {
+            batch_id,
+            overhead_time: 5,
+            execution_time: 100,
+            completed: true,
+        });
+    let (drained, _) = extract_one_batch_with_id(&universe, HashSet::new());
+    assert!(
+        drained.is_empty(),
+        "pool already drained; nothing new to give"
+    );
+
+    // Then: the completed batch is no longer in flight — the feedback landed.
+    let in_flight_after = universe
+        .get_pool()
+        .read()
+        .lane_scheduler
+        .as_ref()
+        .expect("lane scheduler enabled")
+        .in_flight_batches();
+    assert_eq!(
+        in_flight_after, 0,
+        "completion feedback must clear the in-flight batch"
+    );
+}
+
+#[test]
+fn lane_scheduler__committed_parent_makes_child_proposable_after_dropped_handle() {
+    // Liveness regression: a parent is dispatched in a batch whose feedback
+    // handle is DROPPED (executor crash / shutdown / any missed report). The
+    // parent then commits on-chain and the pool processes the commit. The
+    // parent's in-pool child must become proposable by the lane scheduler even
+    // though no completion feedback ever arrived — the commit is an independent
+    // completion path.
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    // Given: parent tx1 with a coin output, and child tx2 that spends it.
+    let (output, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
+    let tx1_id = tx1.id(&ChainId::default());
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
+    let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+
+    // Extract: only the parent is proposable/extractable (the child still has an
+    // in-pool dependency).
+    let (batch, batch_id) = extract_one_batch_with_id(&universe, HashSet::new());
+    let batch_ids: HashSet<_> = batch.iter().map(|tx| tx.id()).collect();
+    assert_eq!(
+        batch_ids,
+        [tx1_id].into_iter().collect::<HashSet<_>>(),
+        "only the parent is extractable in the first batch"
+    );
+    let _batch_id = batch_id.expect("lane scheduler must assign a batch id");
+
+    // The feedback handle is DROPPED: we never call `lane_scheduler_feedback`.
+    // (In production the executor owns the handle; a crash/shutdown drops it.)
+
+    // Now the parent commits on-chain and the pool processes the commit. This
+    // removes the parent and promotes the child to executable inside the pool.
+    universe
+        .get_pool()
+        .write()
+        .process_committed_transactions(std::iter::once(tx1_id));
+
+    // Then: the child MUST now be proposable by the lane scheduler.
+    let (batch2, _) = extract_one_batch_with_id(&universe, HashSet::new());
+    let batch2_ids: HashSet<_> = batch2.iter().map(|tx| tx.id()).collect();
+    assert_eq!(
+        batch2_ids,
+        [tx2_id].into_iter().collect::<HashSet<_>>(),
+        "committed parent must make the child proposable even without feedback"
+    );
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn lane_scheduler__unrelated_tx_stays_live_after_dropped_handle() {
+    // A dispatched batch whose feedback handle is dropped must NOT wedge
+    // unrelated (non-descendant) transactions: the scheduler keeps no persistent
+    // lock table, so an in-flight-but-never-reported batch cannot block a fresh
+    // independent tx.
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    // Given: one independent tx dispatched as a batch, handle dropped.
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    universe.verify_and_insert(tx1).unwrap();
+    let (batch, batch_id) = extract_one_batch_with_id(&universe, HashSet::new());
+    assert_eq!(batch.len(), 1);
+    let _ = batch_id.expect("lane scheduler must assign a batch id");
+    // No feedback: the handle is dropped.
+
+    // When: a fresh unrelated tx arrives.
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx2).unwrap();
+
+    // Then: it is immediately proposable.
+    let (batch2, _) = extract_one_batch_with_id(&universe, HashSet::new());
+    let batch2_ids: HashSet<_> = batch2.iter().map(|tx| tx.id()).collect();
+    assert_eq!(
+        batch2_ids,
+        [tx2_id].into_iter().collect::<HashSet<_>>(),
+        "an unrelated tx must stay live despite a dropped in-flight handle"
+    );
+}
+
+fn writes_contract(
+    tx: &fuel_core_types::services::txpool::ArcPoolTx,
+    contract: ContractId,
+) -> bool {
+    crate::lane_integration::derive_contract_accesses(tx)
+        .into_iter()
+        .any(|(c, access)| {
+            c == contract && access == crate::lane_integration::Access::Write
+        })
+}
+
+#[test]
+fn lane_scheduler__round_trips_independent_txs_when_enabled() {
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    // Given: three independent (no-contract) transactions.
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 9);
+    let tx3 = universe.build_script_transaction(None, None, 20);
+    let expected: HashSet<_> = [
+        tx1.id(&ChainId::default()),
+        tx2.id(&ChainId::default()),
+        tx3.id(&ChainId::default()),
+    ]
+    .into_iter()
+    .collect();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+    universe.verify_and_insert(tx3).unwrap();
+
+    // When: draining the pool via the lane scheduler (loop across batches).
+    let mut collected = HashSet::new();
+    for _ in 0..10 {
+        let batch = extract_one_batch(&universe, HashSet::new());
+        if batch.is_empty() {
+            break;
+        }
+        for tx in batch {
+            collected.insert(tx.id());
+        }
+    }
+
+    // Then: every transaction is selected exactly once and the pool empties.
+    assert_eq!(collected, expected);
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn lane_scheduler__off_by_default_uses_classic_selection() {
+    // Default config keeps the lane scheduler off — classic path returns txs.
+    assert!(!Config::default().lane_scheduler);
+
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+
+    let txs = extract_one_batch(&universe, HashSet::new());
+    assert_eq!(txs.len(), 2);
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn lane_scheduler__excluded_contract_writer_is_not_selected() {
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    let contract_a = ContractId::from([1u8; 32]);
+    let contract_b = ContractId::from([2u8; 32]);
+    // Register the contracts so their contract inputs validate.
+    {
+        let db = universe.database();
+        let mut data = db.data.lock().unwrap();
+        data.contracts.insert(contract_a, Contract::default());
+        data.contracts.insert(contract_b, Contract::default());
+    }
+
+    // Writer of contract_a (contract input WITH matching output).
+    let writes_a = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_a,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    // Writer of contract_b.
+    let writes_b = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_b,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_a = universe.verify_and_insert(writes_a).unwrap();
+    let writes_b = universe.verify_and_insert(writes_b).unwrap();
+
+    // When: contract_a is already locked by an in-flight batch.
+    let excluded = HashSet::from([contract_a]);
+    let batch = extract_one_batch(&universe, excluded);
+
+    // Then: the contract_a writer is withheld; only the contract_b writer runs.
+    let ids: HashSet<_> = batch.iter().map(|tx| tx.id()).collect();
+    assert!(
+        ids.contains(&writes_b.id()),
+        "contract_b writer should be selected"
+    );
+    assert!(
+        !ids.contains(&writes_a.id()),
+        "contract_a writer must not run concurrently with the in-flight lock"
+    );
+    for tx in &batch {
+        assert!(
+            !writes_contract(tx, contract_a),
+            "no selected tx may write the excluded contract"
+        );
+    }
+}
+
+/// Extract with an explicit worker count and total-gas budget, returning the
+/// raw batches (multi-batch lane protocol).
+fn extract_batches(
+    universe: &TestPoolUniverse,
+    excluded: HashSet<ContractId>,
+    free_worker_count: usize,
+    total_gas: u64,
+) -> Vec<crate::pool::ExtractedBatch> {
+    universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block_with_anchors(&Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            total_gas,
+            maximum_txs: !0,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: excluded,
+            execution_worker_count: free_worker_count,
+            free_worker_count,
+        })
+}
+
+#[test]
+fn lane_scheduler__one_ask_answers_all_free_workers_with_disjoint_batches() {
+    // One ask covering two free workers is answered with two conflict-free
+    // batches (one per worker), each with its own batch id — the complete
+    // worker assignment for the dispatch round.
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    let contract_a = ContractId::from([1u8; 32]);
+    let contract_b = ContractId::from([2u8; 32]);
+    {
+        let db = universe.database();
+        let mut data = db.data.lock().unwrap();
+        data.contracts.insert(contract_a, Contract::default());
+        data.contracts.insert(contract_b, Contract::default());
+    }
+
+    let writes_a = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_a,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_b = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_b,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_a = universe.verify_and_insert(writes_a).unwrap();
+    let writes_b = universe.verify_and_insert(writes_b).unwrap();
+
+    let batches = extract_batches(&universe, HashSet::new(), 2, u64::MAX);
+
+    assert_eq!(
+        batches.len(),
+        2,
+        "two disjoint writers over two free workers must yield two batches"
+    );
+    let ids_per_batch: Vec<HashSet<_>> = batches
+        .iter()
+        .map(|batch| batch.txs.iter().map(|tx| tx.id()).collect())
+        .collect();
+    let all_ids: HashSet<_> = ids_per_batch.iter().flatten().copied().collect();
+    assert_eq!(all_ids, HashSet::from([writes_a.id(), writes_b.id()]));
+    assert_ne!(
+        batches[0].batch_id, batches[1].batch_id,
+        "each batch carries its own scheduler-assigned id"
+    );
+    assert!(batches.iter().all(|batch| batch.batch_id.is_some()));
+    // Conflict-free by construction: no contract appears in both batches.
+    let contracts_a: HashSet<_> = batches[0].contracts.iter().copied().collect();
+    let contracts_b: HashSet<_> = batches[1].contracts.iter().copied().collect();
+    assert!(contracts_a.is_disjoint(&contracts_b));
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn lane_scheduler__cumulative_total_gas_caps_extraction_across_batches() {
+    // The block's remaining `total_gas` bounds the CUMULATIVE extraction across
+    // all batches of one ask, even when each per-worker budget alone would
+    // admit more.
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    let contract_a = ContractId::from([1u8; 32]);
+    let contract_b = ContractId::from([2u8; 32]);
+    {
+        let db = universe.database();
+        let mut data = db.data.lock().unwrap();
+        data.contracts.insert(contract_a, Contract::default());
+        data.contracts.insert(contract_b, Contract::default());
+    }
+
+    let writes_a = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_a,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_b = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_b,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_a = universe.verify_and_insert(writes_a).unwrap();
+    let writes_b = universe.verify_and_insert(writes_b).unwrap();
+    // Both txs have the same declared gas; a budget of exactly one tx's gas
+    // admits the first and must stop before the second.
+    let single_tx_gas = writes_a.max_gas();
+
+    let batches = extract_batches(&universe, HashSet::new(), 2, single_tx_gas);
+
+    let extracted: Vec<_> = batches
+        .iter()
+        .flat_map(|batch| batch.txs.iter().map(|tx| tx.id()))
+        .collect();
+    assert_eq!(
+        extracted.len(),
+        1,
+        "cumulative total_gas admits exactly one of the two transactions"
+    );
+
+    // The withheld transaction stays pooled and is answered on the next ask.
+    let remaining = if extracted[0] == writes_a.id() {
+        writes_b.clone()
+    } else {
+        writes_a.clone()
+    };
+    universe.assert_pool_integrity(std::slice::from_ref(&remaining));
+    let batches = extract_batches(&universe, HashSet::new(), 2, u64::MAX);
+    let extracted: Vec<_> = batches
+        .iter()
+        .flat_map(|batch| batch.txs.iter().map(|tx| tx.id()))
+        .collect();
+    assert_eq!(extracted, vec![remaining.id()]);
+    universe.assert_pool_integrity(&[]);
+}
+
+// NOTE (finding): reader-sharing is NOT reachable through a valid fuel
+// transaction. A contract INPUT with no matching contract OUTPUT — the
+// Read-derivation case — is rejected by consensus validity
+// (`ValidityError::InputContractAssociatedOutputContract`): fuel-tx requires
+// every contract input to have a matching contract output. The Read/Write
+// derivation rule is therefore correct per the lane-scheduler spec, but every
+// VALID fuel transaction yields only `Write` accesses today. The Read code path
+// (and its concurrent reader-sharing) only becomes exercisable if a
+// protocol-level read/write intent is introduced. The derivation itself is unit
+// tested in `lane_integration::tests` (which builds the inputs/outputs directly,
+// bypassing consensus validity).

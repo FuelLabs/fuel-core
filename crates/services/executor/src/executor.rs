@@ -258,6 +258,7 @@ impl NewTxWaiterPort for TimeoutOnlyTxWaiter {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
 pub struct TransparentPreconfirmationSender;
 
 impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
@@ -319,6 +320,33 @@ pub fn convert_tx_execution_result_to_preconfirmation(
         },
     };
     Preconfirmation { tx_id, status }
+}
+
+/// The block-relative transaction-index type used for `TxPointer`.
+#[cfg(feature = "u32-tx-count")]
+pub type TxIndex = u32;
+/// The block-relative transaction-index type used for `TxPointer`.
+#[cfg(not(feature = "u32-tx-count"))]
+pub type TxIndex = u16;
+
+/// How block-relative transaction indices are assigned during
+/// [`BlockExecutor::execute_l2_transactions`].
+///
+/// Stored coin outputs and `ContractsLatestUtxo` embed
+/// `TxPointer(height, tx_index)`, so the index each transaction executes at is
+/// consensus-relevant.
+#[derive(Debug, Clone)]
+pub enum TxIndices {
+    /// Production: indices are contiguous, starting at the given index (the
+    /// number of block transactions scheduled before this call). Behavior is
+    /// identical to the historical `start_idx` parameter.
+    Contiguous(TxIndex),
+    /// Validation: each transaction executes at its explicit position in the
+    /// RECEIVED block. Parallel validation executes conflict-free batches whose
+    /// transactions occupy non-contiguous positions of the received block, so
+    /// the index cannot be derived from a running counter. Must contain one
+    /// index per transaction the source yields, in yield order.
+    Explicit(Vec<TxIndex>),
 }
 
 /// Data that is generated after executing all transactions.
@@ -755,14 +783,19 @@ where
         mut self,
         transactions: Components<TxSource>,
         block_storage_tx: &mut StructuredStorage<D>,
-        #[cfg(feature = "u32-tx-count")] start_idx: u32,
-        #[cfg(not(feature = "u32-tx-count"))] start_idx: u16,
+        indices: TxIndices,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<(Vec<Transaction>, ExecutionData)>
     where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column> + Modifiable,
     {
+        let (start_idx, explicit_indices) = match indices {
+            TxIndices::Contiguous(start_idx) => (start_idx, None),
+            TxIndices::Explicit(list) => {
+                (list.first().copied().unwrap_or_default(), Some(list))
+            }
+        };
         let mut partial_block =
             PartialFuelBlock::new(transactions.header_to_produce, vec![]);
 
@@ -771,12 +804,13 @@ where
             ..Default::default()
         };
 
-        self.process_l2_txs(
+        self.process_l2_txs_with_indices(
             &mut partial_block,
             &transactions,
             block_storage_tx,
             &mut execution_data,
             memory,
+            explicit_indices.as_deref(),
         )
         .await?;
 
@@ -829,6 +863,33 @@ where
         T: KeyValueInspect<Column = Column> + Modifiable,
         TxSource: TransactionsSource,
     {
+        self.process_l2_txs_with_indices(
+            block, components, storage_tx, data, memory, None,
+        )
+        .await
+    }
+
+    /// [`Self::process_l2_txs`] with an optional list of EXPLICIT block-relative
+    /// transaction indices (see [`TxIndices::Explicit`]). When `None`
+    /// (production) behavior is byte-identical to the historical contiguous
+    /// path: `data.tx_count` keeps running from its seeded start index. When
+    /// `Some`, `data.tx_count` is overwritten with the transaction's explicit
+    /// index right before it executes, so its `TxPointer` lands at its position
+    /// in the RECEIVED block (parallel validation).
+    async fn process_l2_txs_with_indices<T, TxSource>(
+        &mut self,
+        block: &mut PartialFuelBlock,
+        components: &Components<TxSource>,
+        storage_tx: &mut StructuredStorage<T>,
+        data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
+        explicit_indices: Option<&[TxIndex]>,
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column> + Modifiable,
+        TxSource: TransactionsSource,
+    {
+        let mut explicit_pos: usize = 0;
         let Components {
             transactions_source: l2_tx_source,
             coinbase_recipient: coinbase_contract_id,
@@ -862,6 +923,19 @@ where
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
+                if let Some(indices) = explicit_indices {
+                    // Every yielded transaction consumes one index slot, even if
+                    // it is skipped below (the caller's list covers the whole
+                    // batch in yield order).
+                    let Some(explicit_index) = indices.get(explicit_pos) else {
+                        return Err(ExecutorError::Other(format!(
+                            "explicit transaction index list exhausted at \
+                             position {explicit_pos} (transaction {tx_id})"
+                        )));
+                    };
+                    explicit_pos = explicit_pos.saturating_add(1);
+                    data.tx_count = *explicit_index;
+                }
                 let tx_max_gas = transaction.max_gas(&self.consensus_params)?;
                 if tx_max_gas > remaining_gas_limit {
                     data.skipped_transactions.push((
@@ -937,8 +1011,16 @@ where
         Ok(())
     }
 
+    /// Execute a single transaction on top of `storage_tx` and commit its
+    /// changes, appending the resulting transaction/status to `block` /
+    /// `execution_data`. The transaction executes at index
+    /// `execution_data.tx_count` (which is then advanced by one).
+    ///
+    /// `pub` so the parallel executor's validation path can execute the
+    /// received block's mint transaction exactly like the sequential
+    /// [`Self::validate_block`] does.
     #[allow(clippy::too_many_arguments)]
-    fn execute_transaction_and_commit<'a, W>(
+    pub fn execute_transaction_and_commit<'a, W>(
         &'a self,
         block: &'a mut PartialFuelBlock,
         storage_tx: &mut StructuredStorage<W>,
@@ -1109,7 +1191,13 @@ where
         Ok(forced_transactions)
     }
 
-    fn check_block_matches(
+    /// Check that the re-executed `new_partial_block` matches the received
+    /// `old_block`: every transaction must be identical and the re-generated
+    /// header must equal the received header.
+    ///
+    /// `pub` so the parallel executor's validation path can reuse the exact
+    /// sequential comparison.
+    pub fn check_block_matches(
         &self,
         new_partial_block: PartialFuelBlock,
         old_block: &Block,

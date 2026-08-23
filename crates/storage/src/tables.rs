@@ -135,6 +135,24 @@ impl Mappable for StateTransitionBytecodeVersions {
     type OwnedValue = Bytes32;
 }
 
+/// The actual gas each transaction of a block used, in block-transaction
+/// order (position `i` is the block's `i`-th transaction). This is a
+/// NON-CONSENSUS scheduling hint: the parallel validator plans a block's
+/// batches by transaction gas, and the true used gas gives a far tighter plan
+/// than the declared `max_gas` (which over-declares heavily). It is not
+/// committed to any Merkle root and never affects the state transition — a
+/// missing or wrong entry only makes validation scheduling less optimal, never
+/// incorrect. Written at block commit from the execution result; read by the
+/// validator when planning.
+pub struct TransactionsGasUsage;
+
+impl Mappable for TransactionsGasUsage {
+    type Key = Self::OwnedKey;
+    type OwnedKey = BlockHeight;
+    type Value = [u64];
+    type OwnedValue = alloc::vec::Vec<u64>;
+}
+
 /// The module contains definition of merkle-related tables.
 pub mod merkle {
     use crate::{

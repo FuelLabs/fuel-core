@@ -1,6 +1,12 @@
 use std::{
     collections::HashMap,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{
+            AtomicUsize,
+            Ordering,
+        },
+    },
     time::Duration,
 };
 
@@ -55,6 +61,9 @@ pub struct UpdateSender {
     pub(crate) permits: GetPermit,
     /// TTL for senders
     pub(crate) ttl: Duration,
+    /// Operation counter driving the amortized full-map sweep (see
+    /// [`Self::maybe_sweep`]).
+    pub(crate) sweep_ops: Arc<AtomicUsize>,
 }
 
 /// Error returned when a transaction status update cannot be sent.
@@ -214,6 +223,27 @@ impl UpdateSender {
             senders: Default::default(),
             permits: Arc::new(Semaphore::new(capacity)),
             ttl,
+            sweep_ops: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    /// Amortized subscriber cleanup.
+    ///
+    /// Historically EVERY `send`/`subscribe` swept the whole sender map
+    /// (closed + TTL check per sender, under the global mutex). At thousands
+    /// of status updates per second with ~1000+ live subscriptions that
+    /// O(subscribers) sweep per operation saturated the mutex and capped
+    /// transaction intake. Per-operation correctness does not need the full
+    /// sweep: `send` cleans the entry it touches, dropped subscribers close
+    /// their channel and are skipped, and permits are reclaimed on demand in
+    /// `try_subscribe` when the semaphore runs dry. The full sweep still runs
+    /// every `SWEEP_EVERY_OPS` operations so idle entries (subscribers that
+    /// never receive another status) are eventually TTL-reaped.
+    fn maybe_sweep(&self) {
+        const SWEEP_EVERY_OPS: usize = 1024;
+        let prev = self.sweep_ops.fetch_add(1, Ordering::Relaxed);
+        if prev.checked_rem(SWEEP_EVERY_OPS) == Some(SWEEP_EVERY_OPS - 1) {
+            remove_closed_and_expired(&mut self.senders.lock(), self.ttl);
         }
     }
 
@@ -222,11 +252,18 @@ impl UpdateSender {
     where
         C: CreateChannel,
     {
-        // Remove closed senders from the list
-        remove_closed_and_expired(&mut self.senders.lock(), self.ttl);
+        self.maybe_sweep();
 
-        // Try to acquire a permit from the semaphore
-        let permit = Arc::clone(&self.permits).try_acquire()?;
+        // Try to acquire a permit from the semaphore. When the semaphore is
+        // exhausted, closed-but-unswept subscribers may still be holding
+        // permits: reclaim them now and retry once.
+        let permit = match Arc::clone(&self.permits).try_acquire() {
+            Some(permit) => permit,
+            None => {
+                remove_closed_and_expired(&mut self.senders.lock(), self.ttl);
+                Arc::clone(&self.permits).try_acquire()?
+            }
+        };
 
         // Call subscribe_inner with the acquired permit
         Some(self.subscribe_inner::<C>(tx_id, permit))
@@ -240,30 +277,32 @@ impl UpdateSender {
         // Lock the senders Mutex
         let mut senders = self.senders.lock();
 
-        // Remove closed senders from the list
-        remove_closed_and_expired(&mut senders, self.ttl);
-
         // Call the subscribe function with the tx_id, senders, and permit
+        // (cleanup is amortized; see `maybe_sweep`)
         subscribe::<_, C>(tx_id, &mut (*senders), permit)
     }
 
     /// Send updates to all subscribed senders.
     pub fn send(&self, update: TxUpdate) {
+        self.maybe_sweep();
+
         // Lock the senders Mutex.
         let mut senders = self.senders.lock();
         let tx_id = *update.tx_id();
-
-        // Remove closed senders from the list
-        remove_closed_and_expired(&mut senders, self.ttl);
 
         // Initialize a flag to check if there are no senders
         // left for a given tx_id.
         let mut empty = false;
 
         if let Some(senders) = senders.get_mut(&tx_id) {
-            // Retain only senders that are able to receive the update.
+            // Retain only live, unexpired senders that are able to receive the
+            // update (the touched entry gets the exact cleanup the historical
+            // full-map sweep gave it; untouched entries are swept amortized).
             let message = update.into_msg();
-            senders.retain_mut(|sender| sender.try_send(message.clone()).is_ok());
+            let ttl = self.ttl;
+            senders.retain_mut(|sender| {
+                sender.created.elapsed() < ttl && sender.try_send(message.clone()).is_ok()
+            });
 
             // Check if the list of senders for the tx_id is empty.
             empty = senders.is_empty();
@@ -338,6 +377,7 @@ impl Clone for UpdateSender {
             senders: self.senders.clone(),
             permits: self.permits.clone(),
             ttl: self.ttl,
+            sweep_ops: self.sweep_ops.clone(),
         }
     }
 }

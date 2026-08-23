@@ -134,6 +134,144 @@ async fn dry_run_script() {
     assert_eq!(err.kind(), NotFound);
 }
 
+// A parallel-executor node must answer a dry-run (e.g. the gas estimation behind
+// any fuels-SDK default `.call()`) instead of panicking. The parallel executor
+// itself does not implement dry-run; the adapter routes it through the sequential
+// (upgradable) executor. Run with:
+//   cargo test -p fuel-core-tests --no-default-features \
+//     --features parallel-executor dry_run_script__parallel_executor
+#[cfg(feature = "parallel-executor")]
+#[tokio::test]
+async fn dry_run_script__parallel_executor_does_not_panic() {
+    let mut config = Config::local_node();
+    config.executor.mode = fuel_core::service::config::ExecutorMode::Parallel;
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
+    ];
+    let script: Vec<u8> = script
+        .iter()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
+        .collect();
+
+    let tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(1_000_000)
+        .add_fee_input()
+        .finalize_as_transaction();
+
+    // Must return a result, not panic the node.
+    let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
+    let receipts = tx_statuses
+        .last()
+        .expect("Nonempty response")
+        .result
+        .receipts();
+    assert!(matches!(receipts[0],
+        Receipt::Log { ra, rb, .. } if ra == 0xca && rb == 0xba));
+}
+
+// Manual block production (the GraphQL `produceBlocks` path) under the parallel
+// executor must complete promptly: execute what the pool holds and close the
+// block — matching sequential manual semantics. It must not hang until the PoA
+// 20s production timeout.
+//
+// The node uses an INTERVAL trigger with a huge period — the "interval-manual"
+// topology (auto-production parked, blocks produced on demand), which is how
+// benchmarking/probe nodes run. This is the regression shape: the interval-mode
+// executor-budget extension used to leak into manual requests, handing the
+// parallel scheduler a deadline `now + 1s + interval` — hours away — so manual
+// production hung until the production timeout. Covers both a non-empty pool
+// (the submitted txs must be included) and an empty pool (a mint-only block).
+// Run with:
+//   cargo test -p fuel-core-tests --no-default-features \
+//     --features parallel-executor produce_blocks__parallel_executor
+#[cfg(feature = "parallel-executor")]
+#[tokio::test]
+async fn produce_blocks__parallel_executor_manual_trigger_completes_promptly() {
+    use crate::helpers::TestSetupBuilder;
+
+    let mut rng = StdRng::seed_from_u64(121210);
+    let mut test_builder = TestSetupBuilder::new(121210);
+
+    // A few distinct pool txs, funded at genesis (utxo validation on, like a
+    // real manual-production node).
+    const NUM_TXS: usize = 5;
+    let transactions: Vec<Script> = (0..NUM_TXS)
+        .map(|i| {
+            let script = [op::addi(0x10, RegId::ZERO, i as u16), op::ret(RegId::ONE)];
+            let script: Vec<u8> = script
+                .iter()
+                .flat_map(|op| u32::from(*op).to_be_bytes())
+                .collect();
+            TransactionBuilder::script(script, vec![])
+                .script_gas_limit(1_000_000)
+                .add_unsigned_coin_input(
+                    SecretKey::random(&mut rng),
+                    rng.r#gen(),
+                    u32::MAX as u64,
+                    Default::default(),
+                    Default::default(),
+                )
+                .finalize()
+        })
+        .collect();
+    test_builder
+        .config_coin_inputs_from_transactions(&transactions.iter().collect::<Vec<_>>());
+    test_builder.trigger = Trigger::Interval {
+        block_time: Duration::from_secs(3_600),
+    };
+    test_builder.utxo_validation = true;
+    test_builder.executor_mode = fuel_core::service::config::ExecutorMode::Parallel;
+    test_builder.executor_parallel_worker_count = 2;
+    let TestContext { client, srv, .. } = test_builder.finalize().await;
+    let _srv = srv;
+
+    for tx in &transactions {
+        let tx: Transaction = tx.clone().into();
+        client.submit(&tx).await.unwrap();
+    }
+
+    // Manual production must include the pool txs and complete well before the
+    // 20s production timeout.
+    let height =
+        tokio::time::timeout(Duration::from_secs(5), client.produce_blocks(1, None))
+            .await
+            .expect("manual block production with pool txs must not hang")
+            .unwrap();
+    assert_eq!(u32::from(height), 1);
+
+    let block = client
+        .block_by_height(height)
+        .await
+        .unwrap()
+        .expect("produced block must exist");
+    assert_eq!(
+        block.transactions.len(),
+        NUM_TXS + 1, // + mint
+        "manual block must contain the pool transactions plus the mint"
+    );
+
+    // An empty pool must still produce a (mint-only) block without hanging.
+    let height =
+        tokio::time::timeout(Duration::from_secs(5), client.produce_blocks(1, None))
+            .await
+            .expect("manual block production with an empty pool must not hang")
+            .unwrap();
+    assert_eq!(u32::from(height), 2);
+
+    let block = client
+        .block_by_height(height)
+        .await
+        .unwrap()
+        .expect("produced block must exist");
+    assert_eq!(block.transactions.len(), 1, "mint-only block expected");
+}
+
 #[tokio::test]
 async fn dry_run_create() {
     let mut rng = StdRng::seed_from_u64(2322);

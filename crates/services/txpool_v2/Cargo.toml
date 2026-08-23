@@ -25,6 +25,10 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-syscall = { workspace = true, default-features = false, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
+# TEMPORARY local path dep (see workspace Cargo.toml note) — the event-driven
+# rw-lanes parallel-execution scheduler embedded behind the `lane_scheduler`
+# config flag (default off).
+lane-scheduler = { workspace = true }
 lru = "0.16.3"
 num-rational = { workspace = true }
 parking_lot = { workspace = true }

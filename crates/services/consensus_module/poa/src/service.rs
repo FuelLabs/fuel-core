@@ -290,10 +290,46 @@ where
         block_time: Tai64,
         source: TransactionsSource,
         deadline: Instant,
+        request_type: RequestType,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>> {
-        let future = self
-            .block_producer
-            .produce_and_execute_block(height, block_time, source, deadline);
+        // `deadline` spaces blocks (the post-production `sleep_until` below). The
+        // executor gets its own, larger EXECUTION budget. In interval mode the
+        // periodic wait has already elapsed, so `deadline` is essentially "now" —
+        // handing that straight to the executor gave it a ZERO budget: the
+        // parallel scheduler treats the deadline as a hard wall-clock execution
+        // budget, so it dispatched roughly one batch and immediately drained,
+        // packing only a handful of txs per block regardless of the gas/count
+        // limits. But the node has the whole next `block_time` window before the
+        // following block is due, so the executor may keep pulling and executing
+        // until then. The sequential executor uses the same value as its
+        // new-transaction wait budget (how long to keep the block open for
+        // arriving txs), which mirrors how `Open` accumulates over its period.
+        // Block cadence is unaffected — spacing still comes from `deadline`.
+        //
+        // The extension applies ONLY to trigger-driven interval production.
+        // MANUAL production (the `produceBlocks` GraphQL path) arrives with its
+        // own, already-real execution budget (`now + 1s`), and manual requests
+        // are legal on interval nodes — commonly configured with a very large
+        // interval precisely to park auto-production (e.g. benchmarking).
+        // Adding the interval there hands the executor a deadline hours away:
+        // the parallel scheduler (which closes the block only at its deadline)
+        // then never terminates and manual production hangs until the
+        // production timeout kills it.
+        let execution_deadline = match (&self.trigger, request_type) {
+            (
+                Trigger::Interval {
+                    block_time: interval,
+                },
+                RequestType::Trigger,
+            ) => deadline.checked_add(*interval).unwrap_or(deadline),
+            _ => deadline,
+        };
+        let future = self.block_producer.produce_and_execute_block(
+            height,
+            block_time,
+            source,
+            execution_deadline,
+        );
 
         let result = tokio::time::timeout(self.production_timeout, future)
             .await
@@ -316,6 +352,7 @@ where
             self.next_time(RequestType::Trigger)?,
             TransactionsSource::TxPool,
             deadline,
+            RequestType::Trigger,
         )
         .await
     }
@@ -347,6 +384,7 @@ where
                         TransactionsSource::TxPool,
                         // TODO: Don't hardcode deadline
                         Instant::now() + Duration::from_secs(1),
+                        RequestType::Manual,
                     )
                     .await?;
                     block_time = self.next_time(RequestType::Manual)?;
@@ -358,6 +396,7 @@ where
                     block_time,
                     TransactionsSource::SpecificTransactions(txs),
                     Instant::now(),
+                    RequestType::Manual,
                 )
                 .await?;
             }
@@ -371,6 +410,7 @@ where
         block_time: Tai64,
         source: TransactionsSource,
         deadline: Instant,
+        request_type: RequestType,
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
@@ -391,7 +431,7 @@ where
             },
             storage_changes,
         ) = self
-            .signal_produce_block(height, block_time, source, deadline)
+            .signal_produce_block(height, block_time, source, deadline, request_type)
             .await?
             .into();
 

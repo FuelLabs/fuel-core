@@ -6,10 +6,18 @@ use std::{
 use crate::{
     Constraints,
     error::Error,
-    pool::TxPoolStats,
+    lane_integration::{
+        BatchFeedback,
+        BatchId,
+    },
+    pool::{
+        ExtractedBatch,
+        TxPoolStats,
+    },
     pool_worker::{
         self,
         PoolReadRequest,
+        PoolUpdateRequest,
     },
     service::{
         TxInfo,
@@ -39,6 +47,10 @@ pub struct SharedState {
     pub(crate) select_transactions_requests_sender:
         mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) request_read_sender: mpsc::Sender<PoolReadRequest>,
+    /// Update-request channel, cloned from the pool worker. Carries
+    /// lane-scheduler batch feedback (and shares the pool worker's update queue
+    /// with block processing / expiry).
+    pub(crate) request_update_sender: mpsc::Sender<PoolUpdateRequest>,
     pub(crate) new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
 }
@@ -85,6 +97,7 @@ impl SharedState {
             .try_send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
                     constraints,
+                    sent_at: std::time::Instant::now(),
                     transactions: select_transactions_sender,
                 },
             )
@@ -93,8 +106,8 @@ impl SharedState {
         loop {
             let result = select_transactions_receiver.try_recv();
             match result {
-                Ok((txs, _, _)) => {
-                    return Ok(txs);
+                Ok((batches, _, _)) => {
+                    return Ok(batches.into_iter().flat_map(|batch| batch.txs).collect());
                 }
                 Err(TryRecvError::Empty) => continue,
                 Err(TryRecvError::Closed) => {
@@ -104,16 +117,28 @@ impl SharedState {
         }
     }
 
+    /// Ask the pool for the next executable batches: up to one batch per free
+    /// executor worker with the lane scheduler enabled, at most one batch on
+    /// the classic path. Also returns the excluded-contract set echoed back
+    /// from the request's constraints.
     pub async fn extract_transactions_for_block_async(
         &self,
         constraints: Constraints,
-    ) -> Result<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>), Error> {
+    ) -> Result<
+        (
+            Vec<ExtractedBatch>,
+            HashSet<ContractId>,
+            pool_worker::AskTimings,
+        ),
+        Error,
+    > {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
             .try_send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
                     constraints,
+                    sent_at: std::time::Instant::now(),
                     transactions: select_transactions_sender,
                 },
             )
@@ -122,6 +147,38 @@ impl SharedState {
         select_transactions_receiver
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)
+    }
+
+    /// Report lane-scheduler batch-completion feedback for the batch identified
+    /// by `batch_id` (assigned by [`Self::extract_transactions_for_block_async`]).
+    ///
+    /// This is the executor→pool half of the feedback loop: the executor calls
+    /// it once a batch's execution result is registered. The send is
+    /// non-blocking and best-effort — if the queue is full or the pool worker
+    /// has shut down the feedback is silently dropped, which the lane scheduler
+    /// tolerates by design (missing feedback only stops the adaptive slice from
+    /// adapting; correctness is unaffected). No-op transport-wise when the lane
+    /// scheduler is disabled (no batch id is ever produced, so this is never
+    /// called on that path).
+    pub fn report_lane_scheduler_feedback(
+        &self,
+        batch_id: BatchId,
+        execution_time: u64,
+        overhead_time: u64,
+        completed: bool,
+    ) {
+        let feedback = BatchFeedback {
+            batch_id,
+            execution_time,
+            overhead_time,
+            completed,
+        };
+        // Best-effort: ignore a full queue or a closed receiver (shutdown).
+        let _ = self.request_update_sender.try_send(
+            PoolUpdateRequest::LaneSchedulerFeedback {
+                feedback: vec![feedback],
+            },
+        );
     }
 
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {

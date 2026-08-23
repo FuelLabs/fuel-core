@@ -37,6 +37,8 @@ pub mod rollback;
 pub mod run;
 #[cfg(feature = "rocksdb")]
 pub mod snapshot;
+#[cfg(feature = "rocksdb")]
+pub mod validate_benchmark;
 
 // Default database cache is 1 GB
 pub const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
@@ -65,6 +67,10 @@ pub enum Fuel {
     #[cfg(feature = "rocksdb")]
     #[clap(subcommand)]
     Archive(archive::Command),
+    /// Re-validate already-produced blocks from a run database and time each
+    /// validation (sequential vs parallel executor benchmark).
+    #[cfg(feature = "rocksdb")]
+    ValidateBenchmark(validate_benchmark::Command),
 }
 
 pub const LOG_FILTER: &str = "RUST_LOG";
@@ -151,6 +157,8 @@ pub async fn run_cli() -> anyhow::Result<()> {
             Fuel::Rollback(command) => rollback::exec(command).await,
             #[cfg(feature = "rocksdb")]
             Fuel::Archive(command) => archive::exec(command),
+            #[cfg(feature = "rocksdb")]
+            Fuel::ValidateBenchmark(command) => validate_benchmark::exec(command).await,
         },
         Err(e) => {
             // Prints the error and exits.

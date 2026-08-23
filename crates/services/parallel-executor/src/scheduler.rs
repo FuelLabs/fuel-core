@@ -8,6 +8,8 @@ use crate::{
     memory::MemoryPool,
     once_transaction_source::OnceTransactionsSource,
     ports::{
+        BatchExecutionReport,
+        BatchFeedbackHandle,
         Filter,
         TransactionsSource,
     },
@@ -17,6 +19,7 @@ use crate::{
     },
     tx_waiter::NoWaitTxs,
 };
+use ::fuel_core_metrics as parallel_executor_metrics;
 use ::futures::{
     StreamExt,
     stream::FuturesUnordered,
@@ -29,6 +32,7 @@ use fuel_core_executor::{
     executor::{
         BlockExecutor,
         ExecutionData,
+        TxIndices,
     },
     ports::{
         MaybeCheckedTransaction,
@@ -36,19 +40,22 @@ use fuel_core_executor::{
         RelayerPort,
     },
 };
-use ::fuel_core_metrics as parallel_executor_metrics;
 use fuel_core_storage::{
     Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
     column::Column,
-    kv_store::KeyValueInspect,
+    kv_store::{
+        KeyValueInspect,
+        WriteOperation,
+    },
     structured_storage::StructuredStorage,
+    tables::Coins,
     transactional::{
         AtomicView,
         Changes,
         ConflictPolicy,
         IntoTransaction,
-        Modifiable,
-        ReadTransaction,
         StorageChanges,
         StorageTransaction,
     },
@@ -65,9 +72,19 @@ use fuel_core_types::{
         Output,
         Transaction,
         TxId,
+        TxPointer,
+        UniqueIdentifier,
         UtxoId,
+        field::Inputs,
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
     },
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     fuel_vm::checked_transaction::IntoChecked,
     services::{
         block_producer::Components,
@@ -84,6 +101,7 @@ use std::{
     collections::{
         HashMap,
         HashSet,
+        btree_map,
     },
     sync::{
         Arc,
@@ -139,6 +157,47 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     state: SchedulerState,
     /// Batch preparation stats keyed by batch id
     batch_preparations: Option<HashMap<usize, BatchPreparationStats>>,
+    /// Producer feedback handles keyed by (internal) batch id, awaiting the
+    /// batch's completion so the measured timings can be reported back. Only
+    /// populated for batches whose producer requested feedback (i.e. the txpool
+    /// lane scheduler is enabled); empty otherwise, so the flag-off path is
+    /// untouched.
+    batch_feedback: FxHashMap<usize, PendingBatchFeedback>,
+    /// Per-batch snapshot of the accumulated per-contract `Changes` that each
+    /// dispatched batch was SEEDED with (i.e. the state of those contracts as
+    /// left by all previously-dispatched batches). Populated in
+    /// [`Self::execute_batch`] with a clone of the seed handed to the worker,
+    /// but ONLY for contracts that already carried accumulated changes — a batch
+    /// touching only fresh contracts stores nothing, so the common path pays
+    /// only for genuinely re-touched (contended) contracts.
+    ///
+    /// This is the reconstruction source for [`Self::sequential_fallback`]: when
+    /// a runtime hazard forces a batch-id range to be re-executed sequentially,
+    /// the replay must observe the contract state left by the KEPT earlier
+    /// batches (id `< lower`), which was moved out of `contracts_changes` when
+    /// the in-range batches picked those contracts up (and then discarded with
+    /// the aborted parallel results). The seed handed to the lowest-id in-range
+    /// batch that touched a contract is exactly that as-of-`lower` state, so the
+    /// fallback rebuilds its replay seed from here rather than from the (stale)
+    /// pre-block view. Entries are consumed by the fallback and otherwise freed
+    /// when the per-block scheduler is dropped.
+    dispatched_contract_seeds: FxHashMap<usize, FxHashMap<ContractId, Changes>>,
+    /// The EXPLICIT block-relative execution indices each dispatched batch
+    /// carried (validation mode only; see
+    /// [`crate::ports::ExecutableBatch::execution_indices`]). Consumed by
+    /// [`Self::verify_coherency_and_merge_results`] to reconstruct every merged
+    /// transaction's final block index for the coin-input `TxPointer`
+    /// normalization. Empty in production (contiguous indexing).
+    dispatched_explicit_indices: FxHashMap<usize, Vec<u32>>,
+    /// The block-relative starting transaction index each dispatched batch was
+    /// given (`start_idx_txs`, i.e. the count of block txs scheduled before it).
+    /// `sequential_fallback` replays the `[lower, higher]` range starting at the
+    /// index the lowest-id batch in the range originally used, so the replayed
+    /// txs land at the same block positions the sequential executor assigns —
+    /// their `TxPointer` (hence e.g. `ContractsLatestUtxo`) must match, or the
+    /// producer diverges from the validator. Populated for every dispatched
+    /// batch; freed with the per-block scheduler.
+    dispatched_start_idx: FxHashMap<usize, u32>,
     /// Total maximum of transactions left
     tx_left: u32,
     /// Total maximum of byte size left
@@ -149,8 +208,57 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     deadline: Instant,
     /// Gas used by blob transactions
     blob_gas: u64,
+    /// `true` when this scheduler run validates a RECEIVED block (see
+    /// [`Self::with_validation_budget`]): the run loop exits as soon as the
+    /// transaction budget is exhausted and all in-flight batches completed
+    /// (instead of sleeping to the deadline), and the sequential fallback —
+    /// which drops skipped transactions and would silently corrupt the
+    /// received block's transaction indices — becomes a hard error (a skipped
+    /// transaction during validation means the block is invalid anyway).
+    validation_mode: bool,
     /// Counters for tracking worker concurrency when metrics are enabled
     worker_counters: Option<WorkerCounters>,
+    /// Per-block time-spend accumulators (only meaningful when metrics are on;
+    /// the adds are cheap and happen at the existing timing sites). Emitted once
+    /// as the block-summary decomposition at the end of [`Self::run`].
+    time_accounting: TimeAccounting,
+    /// The run loop's start instant, shared with every worker task so that all
+    /// per-batch timestamps (`batch_timing`) land on ONE clock and a worker
+    /// busy/idle timeline can be reconstructed offline. Set at the top of
+    /// [`Self::run`]; `None` only before the run starts.
+    run_epoch: Option<Instant>,
+}
+
+/// Cheap per-block accumulators feeding the time-spend block summary. Each field
+/// is summed at the site where that phase's duration is already measured, so no
+/// new timers run in hot loops (only one extra timer wraps the per-ask txpool
+/// call, at the same cadence as the existing batch-prepare timer).
+#[derive(Default)]
+struct TimeAccounting {
+    /// Elapsed-from-block-start at the first batch dispatch.
+    first_dispatch: Option<Duration>,
+    /// `prepare_transactions_batch` cost (batch prepare minus the txpool ask).
+    prepare: Duration,
+    /// Time blocked in `get_executable_transactions` (the txpool ask).
+    pool_ask: Duration,
+    /// Per-contract `Changes` handoff, both split and merge sides.
+    handoff: Duration,
+    /// Sequential-fallback re-execution.
+    fallback: Duration,
+    /// Worker-seconds actually spent executing batch inner work (sum over
+    /// completed and discarded batches).
+    worker_busy: Duration,
+    /// Worker-phase split of `worker_busy` (answers "where does the worker's
+    /// time go INSIDE a batch"): storage-view/setup, VM execution, and
+    /// output/changes extraction. Sums over all completed batches.
+    worker_setup: Duration,
+    worker_vm: Duration,
+    worker_extract: Duration,
+    /// Dispatch-to-start latency summed over batches: the batch existed but
+    /// its worker task had not started running yet (tokio scheduling). The
+    /// remainder of (window*workers - busy - spawn_gap) is STARVATION: no
+    /// schedulable batch existed for that worker-time (lanes locked/empty).
+    worker_spawn_gap: Duration,
 }
 
 struct WorkSessionExecutionResult {
@@ -194,6 +302,19 @@ struct WorkSessionExecutionResult {
     coinbase: u64,
     /// Execution time for this batch
     execution_duration: Duration,
+    /// Dispatch-to-start latency (task creation to first poll).
+    spawn_gap: Duration,
+    /// Phase split of `execution_duration` (setup / vm / extract).
+    setup_duration: Duration,
+    vm_duration: Duration,
+    extract_duration: Duration,
+    /// Worker-task first poll / last instruction, on the run loop's clock
+    /// ([`Scheduler::run_epoch`]) — the batch's busy interval for offline
+    /// timeline reconstruction. The gap from `end_since_epoch` to the
+    /// `batch_timing` log's `t_report_us` is the RETURN-PATH latency (result
+    /// queued behind the run loop), which no other counter observes.
+    start_since_epoch: Duration,
+    end_since_epoch: Duration,
 }
 
 #[derive(Clone, Copy)]
@@ -201,6 +322,28 @@ struct BatchPreparationStats {
     duration: Duration,
     tx_count: u32,
     gas: u64,
+}
+
+/// A producer feedback handle held until its batch completes, together with the
+/// parallelization overhead accumulated for the batch so far. On completion the
+/// inner execution time is added as a separate field and the report is sent.
+struct PendingBatchFeedback {
+    handle: BatchFeedbackHandle,
+    /// Parallelization overhead directly attributable to this batch. Accrued at
+    /// three sites: batch preparation (at dispatch), the split side of the
+    /// per-contract `Changes` handoff (taking changes into the worker, in
+    /// `execute_batch`), and the merge side (re-inserting them on completion, in
+    /// `register_execution_result`).
+    ///
+    /// Attribution choice: only costs that are *directly per-batch measurable*
+    /// are folded in here. The block-level coherency+merge stage
+    /// (`verify_coherency_and_merge_results` + the canonical fold) is a single
+    /// whole-block cost with no non-arbitrary per-batch split, so it is
+    /// deliberately EXCLUDED from `overhead_time` and instead exported on its own
+    /// (`record_block_merge`). This keeps the per-batch `overhead_time` the lane
+    /// scheduler's EMA consumes an unbiased sum of that batch's own overhead,
+    /// while the block-level merge cost remains observable as an aggregate.
+    overhead: Duration,
 }
 
 #[derive(Default)]
@@ -293,12 +436,15 @@ impl SchedulerExecutionResult {
             .extend(blob_execution_data.skipped_transactions);
         self.transactions_status
             .extend(blob_execution_data.tx_status);
-        // Should contains all the changes from all executions
+        // `blob_execution_data.changes` is the fully-merged block state at the
+        // point blobs run: the base view plus DA + every batch/contract change
+        // (seeded into the blob transaction) plus the blob txs' own writes. So
+        // this field is expected to be *non-empty* — it carries all the changes
+        // from all executions, as the comment above says. The previous
+        // `debug_assert!(self.changes.is_empty(), ..)` was self-contradictory
+        // (it fired immediately after assigning a non-empty value) and panicked
+        // every debug-build block that contained a blob.
         self.changes = StorageChanges::Changes(blob_execution_data.changes);
-        debug_assert!(
-            self.changes.is_empty(),
-            "Changes should be empty after blob merging"
-        );
         self.used_gas = self.used_gas.saturating_add(blob_execution_data.used_gas);
         self.used_size = self.used_size.saturating_add(blob_execution_data.used_size);
         self.coinbase = self.coinbase.saturating_add(blob_execution_data.coinbase);
@@ -317,6 +463,30 @@ pub(crate) struct PreparedBatch {
     pub coins_used: Vec<CoinInBatch>,
     pub message_nonces_used: Vec<Nonce>,
     pub number_of_transactions: u32,
+    /// Explicit block-relative execution indices for `transactions` (same
+    /// order), carried through from
+    /// [`crate::ports::ExecutableBatch::execution_indices`]. `None` in
+    /// production (contiguous indexing).
+    pub execution_indices: Option<Vec<u32>>,
+}
+
+/// A source batch prepared for dispatch: the checked/derived [`PreparedBatch`]
+/// plus the metadata that travels with it to the dispatch site.
+struct ReadyBatch {
+    batch: PreparedBatch,
+    anchor_contract_ids: Vec<ContractId>,
+    feedback_handle: Option<BatchFeedbackHandle>,
+    /// This batch's share of the round's ask+prepare cost (the shared cost is
+    /// split evenly across the round's batches).
+    prepare_duration: Duration,
+}
+
+/// The outcome of one ask round: the prepared batches (guaranteed non-empty)
+/// and whether the source's answer covered all requested workers (see
+/// [`crate::ports::TransactionSourceExecutableTransactions::answered_all_workers`]).
+struct ReadyBatches {
+    batches: Vec<ReadyBatch>,
+    answered_all_workers: bool,
 }
 
 #[derive(Clone)]
@@ -399,8 +569,29 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             blob_gas: 0,
             deadline,
             batch_preparations,
+            batch_feedback: FxHashMap::default(),
+            dispatched_contract_seeds: FxHashMap::default(),
+            dispatched_explicit_indices: FxHashMap::default(),
+            dispatched_start_idx: FxHashMap::default(),
             worker_counters,
+            time_accounting: TimeAccounting::default(),
+            run_epoch: None,
+            validation_mode: false,
         })
+    }
+
+    /// Switch this scheduler into block-VALIDATION mode with an exact
+    /// transaction budget (the received block's L2 transaction count).
+    ///
+    /// With the budget set exactly, `tx_left` reaches `0` precisely when every
+    /// block transaction has been dispatched, which (together with an empty
+    /// in-flight set) is the run loop's early-exit condition — validation must
+    /// not sleep until the production deadline. See the `validation_mode` field
+    /// for the sequential-fallback behavior change.
+    pub fn with_validation_budget(mut self, tx_budget: u32) -> Self {
+        self.tx_left = tx_budget;
+        self.validation_mode = true;
+        self
     }
 }
 
@@ -421,6 +612,7 @@ where
         TxSource: TransactionsSource,
     {
         let instant = Instant::now();
+        self.run_epoch = Some(instant);
         let view = self.storage.latest_view()?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
@@ -457,7 +649,7 @@ where
             ))?;
         let mut total_gas: u64 = 0;
 
-        tracing::warn!("scheduler starting run loop at {:?}", instant.elapsed());
+        tracing::trace!("scheduler starting run loop at {:?}", instant.elapsed());
         'outer: loop {
             let tx_notifier = if new_tx_notifier.has_changed().is_ok() {
                 Either::Left(new_tx_notifier.changed())
@@ -467,85 +659,180 @@ where
             };
 
             if self.is_worker_idling() {
-                // If we requested transactions, we shouldn't drop them,
-                // so we await them here.
-                let batch_prepare_start = Instant::now();
+                // ONE ask per dispatch round: request batches for ALL currently
+                // free workers in a single call, then dispatch every returned
+                // batch to its own worker exactly as received (the lane
+                // scheduler's proposals are conflict-free by construction and
+                // must not be re-packed). The classic (non-lane) txpool path
+                // still answers with a single batch per ask, keeping its
+                // historical ask cadence.
                 let selection_worker_count = self.selection_worker_count();
-                let (mut batch, anchor_contract_ids) = self
-                    .ask_new_transactions_batch(
+                let free_worker_count = self.worker_pool.available_workers();
+                let ask_started = instant.elapsed();
+                let ready_batches = self
+                    .ask_new_transaction_batches(
                         tx_source,
                         now,
                         initial_gas_per_worker,
                         selection_worker_count,
+                        free_worker_count,
                     )
                     .await?;
-                let batch_prepare_duration = batch_prepare_start.elapsed();
-                tracing::warn!(
-                    "new batch id {:?} prepared at: {:?}",
-                    nb_batch_created,
-                    instant.elapsed()
+                // One sample per ask, on the run loop's own clock: how many
+                // workers were free and how many batches came back. Together
+                // with `batch_timing`'s per-batch start/end/report timestamps
+                // this reconstructs the whole worker busy/idle timeline —
+                // idle-while-work-was-ready (dispatch latency) versus
+                // idle-with-nothing-startable (structural) — offline.
+                tracing::debug!(
+                    target: "parallel_executor::ask_timing",
+                    t_us = ask_started.as_micros() as u64,
+                    ask_us = instant.elapsed().saturating_sub(ask_started).as_micros()
+                        as u64,
+                    free = free_worker_count,
+                    served = ready_batches
+                        .as_ref()
+                        .map(|ready| ready.batches.len())
+                        .unwrap_or(0),
                 );
 
-                let blob_transactions = core::mem::take(&mut batch.blob_transactions);
-                self.blob_transactions.extend(blob_transactions.into_iter());
-                self.blob_gas = self.blob_gas.saturating_add(batch.blob_gas);
-
-                if batch.transactions.is_empty() {
+                let Some(ready_batches) = ready_batches else {
                     self.state = SchedulerState::NoTransactionsForPickup;
-                    tracing::warn!(
+                    tracing::trace!(
                         "No transactions to execute, waiting for new transactions or workers to finish"
                     );
                     continue 'outer;
-                }
+                };
+                let returned_batches = ready_batches.batches.len();
 
-                let batch_len = batch.number_of_transactions;
-                if self.config.metrics {
-                    if let Some(batch_tx_counts) = non_empty_batch_tx_counts.as_mut() {
-                        batch_tx_counts.push(batch_len);
+                for ready in ready_batches.batches {
+                    // The source must never return more batches than the free
+                    // workers the ask covered: extracted transactions cannot be
+                    // handed back, so failing loudly beats dropping them.
+                    if self.worker_pool.is_empty() {
+                        return Err(SchedulerError::InternalError(
+                            "Transaction source returned more batches than free workers"
+                                .to_string(),
+                        ));
                     }
-                    if let Some(batch_allocated_gas) =
-                        non_empty_batch_allocated_gas.as_mut()
-                    {
-                        batch_allocated_gas.push(batch.gas);
-                    }
-                    if let Some(batch_used_gas) = non_empty_batch_used_gas.as_mut() {
-                        batch_used_gas.push(0);
-                    }
-                    if let Some(batch_anchors) = non_empty_batch_anchors.as_mut() {
-                        batch_anchors.push(anchor_contract_ids);
-                    }
-                    parallel_executor_metrics::record_batch_prepare(
-                        batch_prepare_duration,
-                        batch_len,
-                        batch.gas,
+                    let ReadyBatch {
+                        batch,
+                        anchor_contract_ids,
+                        feedback_handle,
+                        prepare_duration,
+                    } = ready;
+                    tracing::trace!(
+                        "new batch id {:?} prepared at: {:?}",
+                        nb_batch_created,
+                        instant.elapsed()
                     );
-                    if let Some(batch_preparations) = self.batch_preparations.as_mut() {
-                        batch_preparations.insert(
+                    let batch_len = batch.number_of_transactions;
+                    if self.config.metrics {
+                        if let Some(batch_tx_counts) = non_empty_batch_tx_counts.as_mut()
+                        {
+                            batch_tx_counts.push(batch_len);
+                        }
+                        if let Some(batch_allocated_gas) =
+                            non_empty_batch_allocated_gas.as_mut()
+                        {
+                            batch_allocated_gas.push(batch.gas);
+                        }
+                        if let Some(batch_used_gas) = non_empty_batch_used_gas.as_mut() {
+                            batch_used_gas.push(0);
+                        }
+                        if let Some(batch_anchors) = non_empty_batch_anchors.as_mut() {
+                            batch_anchors.push(anchor_contract_ids);
+                        }
+                        parallel_executor_metrics::record_batch_prepare(
+                            prepare_duration,
+                            batch_len,
+                            batch.gas,
+                        );
+                        if self.time_accounting.first_dispatch.is_none() {
+                            self.time_accounting.first_dispatch = Some(instant.elapsed());
+                        }
+                        if let Some(batch_preparations) = self.batch_preparations.as_mut()
+                        {
+                            batch_preparations.insert(
+                                nb_batch_created,
+                                BatchPreparationStats {
+                                    duration: prepare_duration,
+                                    tx_count: batch_len,
+                                    gas: batch.gas,
+                                },
+                            );
+                        }
+                        total_gas = total_gas.saturating_add(batch.gas);
+                    }
+
+                    // Hold the producer feedback handle (if any) until this
+                    // batch's execution result is registered, so its measured
+                    // timings can be reported back. `feedback_handle` is `None`
+                    // (and this map stays empty) unless the txpool lane
+                    // scheduler is enabled. A batch that never reaches
+                    // completion simply drops its handle (silent-safe by
+                    // design).
+                    if let Some(handle) = feedback_handle {
+                        self.batch_feedback.insert(
                             nb_batch_created,
-                            BatchPreparationStats {
-                                duration: batch_prepare_duration,
-                                tx_count: batch_len,
-                                gas: batch.gas,
+                            PendingBatchFeedback {
+                                handle,
+                                overhead: prepare_duration,
                             },
                         );
                     }
-                    total_gas = total_gas.saturating_add(batch.gas);
+
+                    self.execute_batch(
+                        batch,
+                        nb_batch_created,
+                        nb_transactions,
+                        storage_with_da.clone(),
+                    )?;
+
+                    nb_batch_created = nb_batch_created.saturating_add(1);
+                    nb_transactions = nb_transactions.checked_add(batch_len).ok_or(
+                        SchedulerError::InternalError(
+                            "Transaction count overflow".to_string(),
+                        ),
+                    )?;
                 }
 
-                self.execute_batch(
-                    batch,
-                    nb_batch_created,
-                    nb_transactions,
-                    storage_with_da.clone(),
-                )?;
-
-                nb_batch_created = nb_batch_created.saturating_add(1);
-                nb_transactions = nb_transactions.checked_add(batch_len).ok_or(
-                    SchedulerError::InternalError(
-                        "Transaction count overflow".to_string(),
-                    ),
-                )?;
+                // The lane-scheduler path answers the WHOLE ask at once: fewer
+                // batches than requested workers means nothing more is
+                // schedulable right now, so wait for a state change (a batch
+                // completion or a new-transaction notification) instead of
+                // immediately re-asking for the leftover workers. The classic
+                // path (`answered_all_workers == false`) keeps its historical
+                // behavior of asking again for the remaining workers.
+                if ready_batches.answered_all_workers
+                    && returned_batches < free_worker_count
+                {
+                    self.state = SchedulerState::NoTransactionsForPickup;
+                }
             } else if self.current_execution_tasks.is_empty() {
+                // Early exit: the block's transaction budget is exhausted and no
+                // batch is in flight — nothing can ever be dispatched again, so
+                // waiting for the deadline (or for new transactions) is pure
+                // idle time. This is the normal end-of-block path for
+                // VALIDATION (the budget is set exactly to the received block's
+                // transaction count, see `with_validation_budget`). In
+                // production `tx_left` starts at `u32::MAX` and effectively
+                // never reaches 0; if it ever does the block is full and
+                // sealing early is correct there too.
+                if self.tx_left == 0 {
+                    if !execution_time_recorded {
+                        parallel_executor_metrics::record_execution_time(
+                            instant.elapsed(),
+                        );
+                        execution_time_recorded = true;
+                    }
+                    tracing::debug!(
+                        "transaction budget exhausted and no in-flight batches; \
+                         ending block early at {:?}",
+                        instant.elapsed()
+                    );
+                    break 'outer;
+                }
                 let waiting = Instant::now();
                 tokio::select! {
                     _ = tx_notifier => {
@@ -559,33 +846,37 @@ where
                             parallel_executor_metrics::record_execution_time(execution_time);
                             execution_time_recorded = true;
                         }
-                        tracing::warn!("******");
-                        tracing::warn!("waited until deadline for {:?}, total elapsed: {:?}", waiting.elapsed(), instant.elapsed());
+                        tracing::trace!("waited until deadline for {:?}, total elapsed: {:?}", waiting.elapsed(), instant.elapsed());
                         break 'outer;
                     }
                 }
             } else {
-                tracing::warn!("Waiting for workers to finish");
+                tracing::trace!("Waiting for workers to finish");
                 tokio::select! {
                     _ = tx_notifier => {
-                        tracing::warn!("New transactions received");
+                        tracing::trace!("New transactions received");
                         self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     result = self.current_execution_tasks.select_next_some() => {
-                        tracing::warn!("Worker finished at {:?}", instant.elapsed());
+                        tracing::trace!("Worker finished at {:?}", instant.elapsed());
                         match result {
                             Ok(res) => {
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
-                                    if self.config.metrics {
-                                        if let Some(batch_preparations) =
-                                            self.batch_preparations.as_mut()
-                                        {
-                                            batch_preparations.remove(&res.batch_id);
-                                        }
-                                    }
+                                    // Fallback consumes this batch (and every
+                                    // other in-flight one); it reports their
+                                    // feedback as `completed: false` and clears
+                                    // their `batch_preparations`/`batch_feedback`
+                                    // bookkeeping — so no explicit cleanup here.
                                     drop(res.worker_id);
-                                    self.sequential_fallback(res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used).await?;
+                                    // The fallback drops the range's skipped txs,
+                                    // so the running block-tx counter must be
+                                    // reset to the true committed count (the range
+                                    // start + what the replay committed) — else
+                                    // every later batch/blob gets a shifted
+                                    // `start_idx_txs` and its `TxPointer`s diverge
+                                    // from the sequential validator.
+                                    nb_transactions = self.sequential_fallback(res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used, res.execution_duration, storage_with_da.clone()).await?;
                                     continue;
                                 }
 
@@ -636,17 +927,23 @@ where
                         }
                     }
                     _ = tokio::time::sleep_until(deadline) => {
-                        tracing::warn!("timeout waiting on workers");
+                        tracing::trace!("timeout waiting on workers");
                         break 'outer;
                     }
                 }
             }
         }
 
-        tracing::warn!("******");
-        tracing::warn!("waiting for execution tasks: {:?}", instant.elapsed());
-        let exceeded_deadline = self.wait_all_execution_tasks().await?;
-        tracing::warn!("execution tasks done: {:?}", instant.elapsed());
+        tracing::trace!("waiting for execution tasks: {:?}", instant.elapsed());
+        let (exceeded_deadline, fallback_next_start_idx) = self
+            .wait_all_execution_tasks(storage_with_da.clone())
+            .await?;
+        if let Some(next_idx) = fallback_next_start_idx {
+            // A drain-time fallback dropped skipped txs; keep the block-tx
+            // counter contiguous for the blob stage / metrics below.
+            nb_transactions = next_idx;
+        }
+        tracing::trace!("execution tasks done: {:?}", instant.elapsed());
         if self.config.metrics {
             if exceeded_deadline && !execution_time_recorded {
                 parallel_executor_metrics::record_execution_time(instant.elapsed());
@@ -688,6 +985,14 @@ where
         //     storage_with_da.clone(),
         // )?;
 
+        // Time the block-level coherency + merge stage: coin/nonce verification
+        // and the canonical fold(s). Blob execution (below) is a separate cost
+        // and is excluded from this measurement.
+        let merge_start = Instant::now();
+
+        // Statuses are seeded with the L1 prefix while `transactions` is not,
+        // so the tx-id list for the merged transactions starts at this offset.
+        let l1_status_count = l1_execution_data.transactions_status.len();
         let result = self.verify_coherency_and_merge_results(
             nb_batch_created,
             l1_execution_data,
@@ -698,48 +1003,195 @@ where
             tracing::warn!("coherency result: {:?}", result);
         }
 
-        let mut res = result?;
+        let (mut res, mut final_tx_indices, db_coin_pointers) = result?;
 
-        tracing::warn!("scheduler done: {:?}", instant.elapsed());
+        tracing::trace!("scheduler done: {:?}", instant.elapsed());
+
+        // FIX 1 — coalesce same-key operations across the parallel batches'
+        // (and per-contract) `Changes` into a single, already-merged `Changes`.
+        //
+        // `verify_coherency_and_merge_results` returns a `ChangesList` with one
+        // entry per batch (in batch-id order) followed by the per-contract
+        // entries. A coin created in batch `i` and spent in batch `j > i` lands
+        // as an `Insert` in entry `i` and a `Remove` in entry `j` — legal (the
+        // block orders creation before spend), but the strict conflict finder in
+        // `RocksDb::commit_changes` (and the blob path's `Fail`-policy commit)
+        // rejects the same key appearing in two entries. Folding the list in
+        // canonical order collapses that pair to a net `Remove`, exactly what
+        // the SEQUENTIAL executor's single coalescing map produces for the same
+        // block. Emitting one merged `Changes` — the same shape the sequential
+        // executor/validator emits — is what keeps producer and validator
+        // symmetric: every node commits one coalesced map, so the same block is
+        // accepted everywhere.
+        let mut merged = fold_changes_in_canonical_order(
+            core::mem::take(&mut res.changes).extract_list_of_changes(),
+        )?;
+        // Merge time accrued so far (verify + first fold), before the blob stage.
+        let mut merge_elapsed = merge_start.elapsed();
+
         if !self.blob_transactions.is_empty() {
-            let mut tx = StorageTransaction::transaction(
+            // Execute the blob txs against the fully-merged block state so far:
+            // base view + DA changes (both carried by `storage_with_da`) plus
+            // every batch/contract change (`merged`). `Overwrite` here is safe —
+            // `merged` is already conflict-checked by the fold above, and blob
+            // txs run sequentially on top (a blob spending a batch-created coin
+            // simply turns that `Insert` into a `Remove`, matching sequential).
+            let tx = StorageTransaction::transaction(
                 storage_with_da.clone(),
-                ConflictPolicy::Fail,
-                Default::default(),
+                ConflictPolicy::Overwrite,
+                merged,
             );
-
-            // TODO: Rework this part to avoid `commit_changes` and decreasing performance
-            for changes in res.changes.extract_list_of_changes() {
-                if let Err(e) = tx.commit_changes(changes) {
-                    return Err(SchedulerError::StorageError(e));
-                }
-            }
-            tracing::warn!("committed changes: {:?}", instant.elapsed());
-            res.changes = StorageChanges::Changes(Default::default());
 
             let (blob_execution_data, blob_txs) =
                 self.execute_blob_transactions(tx, nb_transactions).await?;
-            tracing::warn!("blob execution done: {:?}", instant.elapsed());
+            tracing::trace!("blob execution done: {:?}", instant.elapsed());
+            // Blob txs execute contiguously from the running block-tx counter
+            // (validation never reaches here — blob-carrying blocks are
+            // rejected by `Executor::validate`'s guard rails).
+            let mut blob_index = nb_transactions;
+            for _ in 0..blob_txs.len() {
+                final_tx_indices.push(blob_index);
+                blob_index = blob_index.checked_add(1).ok_or_else(|| {
+                    SchedulerError::InternalError(
+                        "Transaction count overflow".to_string(),
+                    )
+                })?;
+            }
             res.add_blob_execution_data(blob_execution_data, blob_txs);
-            tracing::warn!("blob execution data added: {:?}", instant.elapsed());
+            tracing::trace!("blob execution data added: {:?}", instant.elapsed());
+            merged = match core::mem::take(&mut res.changes) {
+                StorageChanges::Changes(changes) => changes,
+                StorageChanges::ChangesList(list) => {
+                    fold_changes_in_canonical_order(list)?
+                }
+            };
         }
 
+        // Fold the DA-import changes in FIRST (their canonical position is
+        // before batch 0): a DA-imported message is `Insert`-ed in `da_changes`
+        // and `Remove`-d by its single in-block consumer inside `merged`, so
+        // `[Insert(da), Remove(batch)]` folds to a net `Remove` — the message is
+        // consumed. `da_changes` never inserts a key that a batch also inserts,
+        // so this fold only ever pairs DA inserts with batch removes.
         // TODO: Avoid cloning the DA changes
+        let da_fold_start = Instant::now();
         let da_changes = storage_with_da.changes().clone();
-        match &mut res.changes {
-            StorageChanges::Changes(changes) => {
-                let changes = core::mem::take(changes);
-                res.changes = StorageChanges::ChangesList(vec![changes, da_changes]);
+        let final_changes = fold_changes_in_canonical_order(vec![da_changes, merged])?;
+        res.changes = StorageChanges::Changes(final_changes);
+        merge_elapsed = merge_elapsed.saturating_add(da_fold_start.elapsed());
+
+        // FIX (consensus divergence, found by the validation benchmark's first
+        // run): batch execution necessarily runs with `forbid_fake_utxo: false`
+        // (batches execute against pre-block views where same-block coins do
+        // not exist yet), and in that mode `get_coin_or_default` NEVER reads
+        // the coin — every CoinSigned/CoinPredicate input keeps a ZEROED
+        // `tx_pointer`. The sequential validator (with `utxo_validation` on)
+        // reads the real coin and fills the true pointer, so it would reject
+        // every parallel-produced block spending a coin
+        // ("Transaction doesn't match expected result"). Normalize here — over
+        // the COMPLETE merged transaction list (batches + fallback replays +
+        // blob txs) and BEFORE the block's transactions enter header
+        // generation (`finalize_block` / `check_block_matches`) — to the
+        // pointer the sequential executor computes. Input `tx_pointer` is a
+        // malleable field excluded from the transaction id, so this
+        // post-execution mutation cannot invalidate tx ids, receipts, or
+        // statuses. Gated on `utxo_validation`: with it OFF the sequential
+        // executor itself fabricates default (zeroed) pointers for every coin
+        // input, so zeroed is already the consensus-correct value there.
+        if self.config.utxo_validation {
+            let merged_tx_ids: Vec<TxId> = res
+                .transactions_status
+                .get(l1_status_count..)
+                .ok_or_else(|| {
+                    SchedulerError::InternalError(
+                        "transaction statuses shorter than the L1 prefix".to_string(),
+                    )
+                })?
+                .iter()
+                .map(|status| status.id)
+                .collect();
+            if merged_tx_ids.len() != res.transactions.len()
+                || final_tx_indices.len() != res.transactions.len()
+            {
+                return Err(SchedulerError::InternalError(format!(
+                    "coin-pointer normalization misalignment: {} transactions, \
+                     {} statuses, {} indices",
+                    res.transactions.len(),
+                    merged_tx_ids.len(),
+                    final_tx_indices.len()
+                )));
             }
-            StorageChanges::ChangesList(list) => {
-                list.push(da_changes);
-            }
+            normalize_coin_input_tx_pointers(
+                &mut res.transactions,
+                &merged_tx_ids,
+                &final_tx_indices,
+                *self.header_to_produce.height(),
+                &db_coin_pointers,
+                storage_with_da.as_ref(),
+            )?;
         }
 
         let execution_time = instant.elapsed();
-        tracing::warn!("Scheduler `run` execution time: {:?}", execution_time);
+        tracing::trace!("Scheduler `run` execution time: {:?}", execution_time);
         if self.config.metrics {
+            parallel_executor_metrics::record_block_merge(
+                merge_elapsed,
+                nb_transactions,
+                total_gas,
+            );
             parallel_executor_metrics::record_scheduler_run_time(execution_time);
+
+            // Block-summary time-spend decomposition: where and how much time the
+            // scheduler spent this block. `prepare` excludes the txpool ask
+            // (reported separately as `pool_ask`); `worker_busy` is the parallel
+            // worker-seconds spent executing (occupancy vs `worker_available`),
+            // shown alongside the serial phases rather than summed into them.
+            let worker_count = self.config.worker_count.get() as u32;
+            let worker_available = execution_time
+                .checked_mul(worker_count)
+                .unwrap_or(execution_time);
+            let prepare = self
+                .time_accounting
+                .prepare
+                .saturating_sub(self.time_accounting.pool_ask);
+            let decomposition = parallel_executor_metrics::BlockTimeDecomposition {
+                window: execution_time,
+                prepare,
+                pool_ask: self.time_accounting.pool_ask,
+                handoff: self.time_accounting.handoff,
+                merge: merge_elapsed,
+                fallback: self.time_accounting.fallback,
+                first_dispatch: self.time_accounting.first_dispatch.unwrap_or_default(),
+                worker_busy: self.time_accounting.worker_busy,
+                worker_available,
+            };
+            let util = if worker_available.as_secs_f64() > 0.0 {
+                100.0 * self.time_accounting.worker_busy.as_secs_f64()
+                    / worker_available.as_secs_f64()
+            } else {
+                0.0
+            };
+            tracing::info!(
+                target: "parallel_executor::block_summary",
+                height = u32::from(*self.header_to_produce.height()),
+                txs = nb_transactions,
+                window_ms = execution_time.as_millis() as u64,
+                first_dispatch_ms = decomposition.first_dispatch.as_millis() as u64,
+                prepare_ms = prepare.as_millis() as u64,
+                pool_ask_ms = self.time_accounting.pool_ask.as_millis() as u64,
+                execute_worker_ms = self.time_accounting.worker_busy.as_millis() as u64,
+                worker_setup_ms = self.time_accounting.worker_setup.as_millis() as u64,
+                worker_vm_ms = self.time_accounting.worker_vm.as_millis() as u64,
+                worker_extract_ms = self.time_accounting.worker_extract.as_millis() as u64,
+                worker_spawn_gap_ms = self.time_accounting.worker_spawn_gap.as_millis() as u64,
+                handoff_ms = self.time_accounting.handoff.as_millis() as u64,
+                merge_ms = merge_elapsed.as_millis() as u64,
+                fallback_ms = self.time_accounting.fallback.as_millis() as u64,
+                idle_ms = decomposition.idle().as_millis() as u64,
+                worker_util_pct = util,
+                "block time-spend decomposition (prepare/pool_ask/execute/handoff/merge/fallback/idle)",
+            );
+            parallel_executor_metrics::record_block_time_decomposition(decomposition);
         }
         Ok(res)
     }
@@ -773,13 +1225,21 @@ where
             && self.state == SchedulerState::TransactionsReadyForPickup
     }
 
-    async fn ask_new_transactions_batch<TxSource>(
+    /// One ask covering `free_worker_count` workers: fetch the source's next
+    /// executable batches, prepare each one (tx checking / metadata derivation
+    /// — NO re-packing: batches execute exactly as received), account the
+    /// blob transactions, and charge the block budgets.
+    ///
+    /// Returns `None` when the source yielded no executable (non-blob)
+    /// transactions at all, otherwise the prepared batches ready for dispatch.
+    async fn ask_new_transaction_batches<TxSource>(
         &mut self,
         tx_source: &TxSource,
         start_execution_time: Instant,
         initial_gas_per_core: u64,
         selection_worker_count: usize,
-    ) -> Result<(PreparedBatch, Vec<ContractId>), SchedulerError>
+        free_worker_count: usize,
+    ) -> Result<Option<ReadyBatches>, SchedulerError>
     where
         TxSource: TransactionsSource,
     {
@@ -805,13 +1265,22 @@ where
         .map_err(|_| {
             SchedulerError::InternalError("Current gas overflowed u64".to_string())
         })?;
+        // The block's total remaining declared-gas budget across all workers:
+        // the source must keep the CUMULATIVE gas of the returned batches under
+        // it (per-worker `current_gas` budgets alone may sum above it).
+        let total_gas_limit = self.gas_left.saturating_sub(self.blob_gas);
 
+        // Time the txpool ask (how long the scheduler blocks waiting for the pool
+        // to hand back the batches) — one of the "where does time go" signals.
+        let pool_ask_start = Instant::now();
         let executable_transactions = tx_source
             .get_executable_transactions(
                 current_gas,
+                total_gas_limit,
                 self.tx_left,
                 self.tx_size_left,
                 selection_worker_count,
+                free_worker_count,
                 Filter {
                     excluded_contract_ids: std::mem::take(
                         &mut self.current_executing_contracts,
@@ -825,25 +1294,96 @@ where
                     e
                 ))
             })?;
+        if self.config.metrics {
+            self.time_accounting.pool_ask = self
+                .time_accounting
+                .pool_ask
+                .saturating_add(pool_ask_start.elapsed());
+            let returned_txs = executable_transactions
+                .batches
+                .iter()
+                .map(|batch| batch.transactions.len())
+                .sum::<usize>();
+            parallel_executor_metrics::record_pool_ask(
+                executable_transactions.batches.len(),
+                returned_txs,
+            );
+        }
         self.current_executing_contracts =
             executable_transactions.filter.excluded_contract_ids;
-        let anchor_contract_ids = executable_transactions.anchor_contract_ids;
+        let answered_all_workers = executable_transactions.answered_all_workers;
 
-        let prepared_batch = prepare_transactions_batch(
-            &self.consensus_parameters,
-            executable_transactions.transactions,
-        )?;
-        self.update_constraints(
-            prepared_batch.number_of_transactions,
-            prepared_batch.total_size,
-            prepared_batch.gas,
-        )?;
-        tracing::warn!(
-            "new batch prepared in: {:?}, for {:?} txs",
+        let mut batches = Vec::with_capacity(executable_transactions.batches.len());
+        for source_batch in executable_transactions.batches {
+            let prepared_batch = prepare_transactions_batch(
+                &self.consensus_parameters,
+                source_batch.transactions,
+                source_batch.execution_indices,
+            )?;
+            self.update_constraints(
+                prepared_batch.number_of_transactions,
+                prepared_batch.total_size,
+                prepared_batch.gas,
+            )?;
+            let mut prepared_batch = prepared_batch;
+            let blob_transactions =
+                core::mem::take(&mut prepared_batch.blob_transactions);
+            self.blob_transactions.extend(blob_transactions.into_iter());
+            self.blob_gas = self.blob_gas.saturating_add(prepared_batch.blob_gas);
+            if prepared_batch.transactions.is_empty() {
+                // Blob-only (or empty) batch: nothing to dispatch onto a worker.
+                // Its feedback handle (if any) is dropped, which the producer
+                // tolerates by design.
+                continue;
+            }
+            batches.push(ReadyBatch {
+                batch: prepared_batch,
+                anchor_contract_ids: source_batch.anchor_contract_ids,
+                feedback_handle: source_batch.feedback_handle,
+                // Placeholder; the shared preparation cost is split evenly over
+                // the returned batches right below.
+                prepare_duration: Duration::default(),
+            });
+        }
+
+        // Split the shared ask+prepare cost of this round evenly across its
+        // batches: it is the per-batch parallelization overhead the producer's
+        // feedback loop consumes, and per-ask fixed protocol cost is exactly
+        // what the multi-batch protocol amortizes.
+        let prepare_total = instant.elapsed();
+        let batch_count = batches.len();
+        if batch_count > 0 {
+            let share = prepare_total
+                .checked_div(batch_count as u32)
+                .unwrap_or_default();
+            for ready in batches.iter_mut() {
+                ready.prepare_duration = share;
+            }
+            if self.config.metrics {
+                // `prepare_total` includes the txpool ask; the `prepare` phase
+                // subtracts `pool_ask` at emit time so the two do not
+                // double-count in the block summary.
+                self.time_accounting.prepare =
+                    self.time_accounting.prepare.saturating_add(prepare_total);
+            }
+        }
+        tracing::trace!(
+            "new batches prepared in: {:?}, {:?} batches, for {:?} txs",
             instant.elapsed(),
-            prepared_batch.number_of_transactions
+            batch_count,
+            batches
+                .iter()
+                .map(|b| b.batch.number_of_transactions)
+                .sum::<u32>(),
         );
-        Ok((prepared_batch, anchor_contract_ids))
+        if batch_count == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(ReadyBatches {
+                batches,
+                answered_all_workers,
+            }))
+        }
     }
 
     fn selection_worker_count(&self) -> usize {
@@ -860,6 +1400,12 @@ where
         start_idx_txs: u32,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
+        let input_tx_ids = batch
+            .transactions
+            .iter()
+            .map(|tx| tx.id(&self.consensus_parameters.chain_id()))
+            .collect::<Vec<_>>();
+        let chain_id = self.consensus_parameters.chain_id();
         let worker_id =
             self.worker_pool
                 .take_worker()
@@ -870,23 +1416,78 @@ where
 
         let mut changes_per_contract = Vec::with_capacity(batch.contracts_used.len());
 
+        // Split side of the per-contract `Changes` handoff: take each contract's
+        // accumulated changes out of the shared map to hand into the worker.
+        let split_start = Instant::now();
         for contract in batch.contracts_used.iter() {
             self.current_executing_contracts.insert(*contract);
             if let Some(changes) = self.contracts_changes.remove(contract) {
                 changes_per_contract.push((*contract, changes));
             }
         }
+        let split_duration = split_start.elapsed();
+        let handoff_contract_count = changes_per_contract.len();
+        let handoff_changeset_keys: usize = changes_per_contract
+            .iter()
+            .map(|(_, changes)| {
+                changes.values().map(|column| column.len()).sum::<usize>()
+            })
+            .sum();
+        if self.config.metrics {
+            parallel_executor_metrics::record_contract_handoff_split(
+                split_duration,
+                handoff_contract_count,
+                handoff_changeset_keys,
+            );
+            self.time_accounting.handoff =
+                self.time_accounting.handoff.saturating_add(split_duration);
+        }
+        // Attribute this batch's split-handoff cost to its overhead (the merge
+        // side is added on completion). Only present when the producer requested
+        // feedback (lane scheduler on).
+        if let Some(pending) = self.batch_feedback.get_mut(&batch_id) {
+            pending.overhead = pending.overhead.saturating_add(split_duration);
+        }
+
+        // Snapshot the seed this batch is dispatched with (the accumulated
+        // per-contract state of everything scheduled before it) so
+        // `sequential_fallback` can rebuild the correct as-of-`lower` replay
+        // view if this or a neighbouring batch later aborts. Only non-empty
+        // seeds (contracts that already carried changes) are stored, so a batch
+        // over fresh contracts adds nothing.
+        if !changes_per_contract.is_empty() {
+            self.dispatched_contract_seeds
+                .insert(batch_id, changes_per_contract.iter().cloned().collect());
+        }
+        self.dispatched_start_idx.insert(batch_id, start_idx_txs);
 
         let executor = self.executor.clone();
         let coinbase_recipient = self.coinbase_recipient;
         let gas_price = self.gas_price;
         let header_to_produce = self.header_to_produce;
         let mut memory = self.memory_pool.take_raw();
+        // Production batches execute at contiguous indices from the scheduler's
+        // running counter; validation batches carry the explicit positions of
+        // their transactions in the received block (TxPointer correctness).
+        let tx_indices = match batch.execution_indices.take() {
+            Some(indices) => {
+                // Retained so the merge phase can recover each transaction's
+                // final block index (validation batches are non-contiguous).
+                self.dispatched_explicit_indices
+                    .insert(batch_id, indices.clone());
+                TxIndices::Explicit(indices)
+            }
+            None => TxIndices::Contiguous(start_idx_txs),
+        };
 
         let future = {
             let instant = Instant::now();
+            let epoch = self.run_epoch.unwrap_or(instant);
             let storage_with_da = storage_with_da.clone();
             async move {
+                let started = Instant::now();
+                let spawn_gap = started.duration_since(instant);
+                let start_since_epoch = started.duration_since(epoch);
                 let _worker_guard = worker_counters.as_ref().map(|counters| {
                     counters.record_started();
                     WorkerCountGuard {
@@ -900,7 +1501,9 @@ where
                     changes_per_contract,
                 );
                 let mut storage_tx = StructuredStorage::new(memory_tx);
+                let setup_duration = started.elapsed();
 
+                let vm_start = Instant::now();
                 let (transactions, execution_data) = executor
                     .execute_l2_transactions(
                         Components {
@@ -912,10 +1515,50 @@ where
                             gas_price,
                         },
                         &mut storage_tx,
-                        start_idx_txs,
+                        tx_indices,
                         memory.as_mut(),
                     )
                     .await?;
+                let vm_duration = vm_start.elapsed();
+                if std::env::var("DUMP_BLOCK").is_ok() {
+                    let h = u32::from(*header_to_produce.height());
+                    for status in execution_data.tx_status.iter() {
+                        let id = status.id;
+                        let gas = status.result.total_gas();
+                        eprintln!("DUMPGAS h={h} id={id:x} gas={gas}");
+                    }
+                }
+                let extract_start = Instant::now();
+                let returned_tx_ids = transactions
+                    .iter()
+                    .map(|tx| tx.id(&chain_id))
+                    .collect::<Vec<_>>();
+                let skipped_errors = execution_data
+                    .skipped_transactions
+                    .iter()
+                    .map(|(tx_id, error)| format!("{tx_id}: {error}"))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                // Anomalies ONLY: a batch that lost transactions, burned no
+                // gas, or skipped something. (This used to also print for
+                // every batch of <= 4 txs, which at a ~4.7-tx batch average
+                // was nearly EVERY batch — hot-path output that inflated
+                // every measured window.)
+                if transactions.len() != input_tx_ids.len()
+                    || execution_data.used_gas == 0
+                    || !skipped_errors.is_empty()
+                {
+                    eprintln!(
+                        "parallel executor batch {batch_id}: input_count={} returned_count={} skipped_count={} used_gas={} input_ids=[{}] returned_ids=[{}] skipped_errors=[{}]",
+                        input_tx_ids.len(),
+                        transactions.len(),
+                        execution_data.skipped_transactions.len(),
+                        execution_data.used_gas,
+                        format_tx_ids(input_tx_ids.iter().copied()),
+                        format_tx_ids(returned_tx_ids.iter().copied()),
+                        skipped_errors,
+                    );
+                }
                 let coins_created = get_coins_outputs(
                     transactions.iter().zip(
                         execution_data
@@ -935,13 +1578,37 @@ where
                             }
                         });
                     }
+                    // Re-key the survivors onto the COMMITTED transaction list.
+                    // `coins_used` carries the index each coin had in the batch
+                    // as DISPATCHED, but `coins_created` is enumerated over the
+                    // committed transactions and the merge assigns block indices
+                    // to those — so after a skip the two bases disagree and a
+                    // coin's index can even run past the batch's committed
+                    // length. Drop any survivor whose transaction did not
+                    // commit (defensive: `retain` above should have removed it).
+                    let committed_position: FxHashMap<TxId, usize> = execution_data
+                        .tx_status
+                        .iter()
+                        .enumerate()
+                        .map(|(position, status)| (status.id, position))
+                        .collect();
+                    batch.coins_used.retain_mut(|coin| {
+                        match committed_position.get(coin.tx_id()) {
+                            Some(position) => {
+                                coin.set_idx(*position);
+                                true
+                            }
+                            None => false,
+                        }
+                    });
                 }
 
                 let (changes, changes_per_contract) =
                     storage_tx.into_storage().into_changes();
+                let extract_duration = extract_start.elapsed();
 
                 let batch_duration = instant.elapsed();
-                tracing::warn!(
+                tracing::trace!(
                     "batch {:?} duration: {:?} with {:?} txs",
                     batch_id,
                     batch_duration,
@@ -966,6 +1633,12 @@ where
                     used_size: execution_data.used_size,
                     coinbase: execution_data.coinbase,
                     execution_duration: batch_duration,
+                    spawn_gap,
+                    setup_duration,
+                    vm_duration,
+                    extract_duration,
+                    start_since_epoch,
+                    end_since_epoch: Instant::now().duration_since(epoch),
                 })
             }
         };
@@ -975,15 +1648,132 @@ where
         Ok(())
     }
 
+    /// Report a batch's measured timings back to its producer (the txpool lane
+    /// scheduler) if it requested feedback, then clear this batch's per-batch
+    /// bookkeeping (`batch_feedback` + `batch_preparations`). Every
+    /// batch-completion path — the main-loop [`Self::register_execution_result`],
+    /// the end-of-block drain in [`Self::wait_all_execution_tasks`], and the
+    /// [`Self::sequential_fallback`] path — routes through here, so no feedback
+    /// handle is silently dropped and no map entry leaks to scheduler drop.
+    /// Fire-at-most-once: a batch id with no pending handle (already reported, or
+    /// the lane scheduler is disabled) is a no-op.
+    ///
+    /// `completed` selects the two semantics the lane scheduler distinguishes
+    /// (see `lane-scheduler`'s `apply_feedback`, which feeds the overhead EMA on
+    /// *every* report but only promotes the batch's in-pool children when
+    /// `completed`):
+    /// * `true`  — this batch's results are KEPT (they become part of the block).
+    ///   Feeds the EMA and completes the batch's txs (idempotent with the
+    ///   on-chain `RemovalReason::Committed` promotion path).
+    /// * `false` — this batch executed but its results are DISCARDED and
+    ///   re-executed sequentially ([`Self::sequential_fallback`]). The overhead
+    ///   and inner-execution time genuinely happened, so we still feed them to
+    ///   the EMA (this is exactly the overhead-floor signal that was being
+    ///   starved), but we must NOT signal completion: the discarded batch never
+    ///   committed, and its children are promoted by the commit path instead.
+    ///   `completed: false` is therefore the safe, idempotent signal for
+    ///   discarded work.
+    fn report_batch_feedback(
+        &mut self,
+        batch_id: usize,
+        execution_duration: Duration,
+        completed: bool,
+    ) {
+        if let Some(feedback) = self.batch_feedback.remove(&batch_id) {
+            feedback.handle.report(BatchExecutionReport {
+                execution_time: duration_as_u64_nanos(execution_duration),
+                overhead_time: duration_as_u64_nanos(feedback.overhead),
+                completed,
+            });
+        }
+        // Drop any leftover preparation stats for this batch so the map does not
+        // leak entries past block end (metrics-only; `None` when metrics off).
+        if let Some(batch_preparations) = self.batch_preparations.as_mut() {
+            batch_preparations.remove(&batch_id);
+        }
+    }
+
     fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
+        // Per-batch executor timing at microsecond precision, so the real
+        // per-batch OVERHEAD (everything that is not VM work: dispatch gap +
+        // storage-view setup + result extraction) can be measured and fed to
+        // the validation scheduler as its `batch_overhead`. Millisecond
+        // rounding in the block summary hides setup/extract entirely.
+        tracing::debug!(
+            target: "parallel_executor::batch_timing",
+            batch_id = res.batch_id,
+            n = res.txs.len(),
+            used_gas = res.used_gas,
+            spawn_gap_us = res.spawn_gap.as_micros() as u64,
+            setup_us = res.setup_duration.as_micros() as u64,
+            vm_us = res.vm_duration.as_micros() as u64,
+            extract_us = res.extract_duration.as_micros() as u64,
+            // Busy interval on the run loop's clock, plus the moment this
+            // result got PROCESSED — (t_report_us - t_end_us) is the return
+            // path: the finished result waiting for the run loop's attention
+            // before its dependents could be released and re-dispatched.
+            t_start_us = res.start_since_epoch.as_micros() as u64,
+            t_end_us = res.end_since_epoch.as_micros() as u64,
+            t_report_us = self
+                .run_epoch
+                .map(|epoch| epoch.elapsed().as_micros() as u64)
+                .unwrap_or(0),
+        );
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
         }
 
+        // Merge side of the per-contract `Changes` handoff: re-insert this
+        // batch's per-contract changes into the shared map. Measured here so the
+        // cost can be attributed to this batch's overhead before we report.
+        let merge_start = Instant::now();
         for (contract_id, changes) in res.changes_per_contract {
             debug_assert!(!self.contracts_changes.contains_key(&contract_id));
             self.contracts_changes.insert(contract_id, changes);
         }
+        let merge_handoff_duration = merge_start.elapsed();
+        if self.config.metrics {
+            parallel_executor_metrics::record_contract_handoff_merge(
+                merge_handoff_duration,
+            );
+            self.time_accounting.handoff = self
+                .time_accounting
+                .handoff
+                .saturating_add(merge_handoff_duration);
+            // Worker occupancy: this batch's inner execution time is worker-seconds
+            // spent. Covers the main-loop and drain paths (both route here).
+            self.time_accounting.worker_busy = self
+                .time_accounting
+                .worker_busy
+                .saturating_add(res.execution_duration);
+            self.time_accounting.worker_setup = self
+                .time_accounting
+                .worker_setup
+                .saturating_add(res.setup_duration);
+            self.time_accounting.worker_vm = self
+                .time_accounting
+                .worker_vm
+                .saturating_add(res.vm_duration);
+            self.time_accounting.worker_extract = self
+                .time_accounting
+                .worker_extract
+                .saturating_add(res.extract_duration);
+            self.time_accounting.worker_spawn_gap = self
+                .time_accounting
+                .worker_spawn_gap
+                .saturating_add(res.spawn_gap);
+        }
+        if let Some(pending) = self.batch_feedback.get_mut(&res.batch_id) {
+            pending.overhead = pending.overhead.saturating_add(merge_handoff_duration);
+        }
+
+        // Report this completed batch's measured timings back to the producer
+        // (the txpool lane scheduler). `execution_time` is the inner batch work;
+        // `overhead_time` is the batch's full parallelization overhead — batch
+        // preparation + the split + merge per-contract handoff (accumulated into
+        // the pending feedback at each of those sites). `completed: true` — this
+        // batch's results are kept.
+        self.report_batch_feedback(res.batch_id, res.execution_duration, true);
 
         self.state = SchedulerState::TransactionsReadyForPickup;
 
@@ -1008,8 +1798,14 @@ where
         );
     }
 
-    // returns `true` if exceeded deadline
-    async fn wait_all_execution_tasks(&mut self) -> Result<bool, SchedulerError> {
+    // Returns `(exceeded_deadline, fallback_next_start_idx)`. The second element
+    // is `Some(next_idx)` if a fallback ran during the drain (so the caller can
+    // reset its block-tx counter for the blob stage / metrics), else `None`.
+    async fn wait_all_execution_tasks(
+        &mut self,
+        storage_with_da: Arc<StorageTransaction<View>>,
+    ) -> Result<(bool, Option<u32>), SchedulerError> {
+        let mut fallback_next_start_idx = None;
         // We have reached the deadline
         // We need to merge the states of all the workers
         while !self.current_execution_tasks.is_empty() {
@@ -1018,33 +1814,40 @@ where
                     let res = res?;
                     if !res.skipped_tx.is_empty() {
                         drop(res.worker_id);
-                        self.sequential_fallback(
-                            res.batch_id,
-                            res.txs,
-                            res.coins_used,
-                            res.coins_created,
-                            res.message_nonces_used,
-                        )
-                        .await?;
+                        let next_start_idx = self
+                            .sequential_fallback(
+                                res.batch_id,
+                                res.txs,
+                                res.coins_used,
+                                res.coins_created,
+                                res.message_nonces_used,
+                                res.execution_duration,
+                                storage_with_da.clone(),
+                            )
+                            .await?;
+                        fallback_next_start_idx = Some(next_start_idx);
                         break;
                     } else {
-                        self.execution_results.insert(
-                            res.batch_id,
-                            WorkSessionSavedData {
-                                changes: res.changes,
-                                coins_created: res.coins_created,
-                                coins_used: res.coins_used,
-                                message_nonces_used: res.message_nonces_used,
-                                txs: res.txs,
-                                message_ids: res.message_ids,
-                                events: res.events,
-                                tx_statuses: res.tx_statuses,
-                                skipped_tx: res.skipped_tx,
-                                used_gas: res.used_gas,
-                                used_size: res.used_size,
-                                coinbase: res.coinbase,
-                            },
-                        );
+                        // End-of-block drain: this batch completed cleanly and
+                        // its results are kept. Route through the SAME
+                        // registration as the main loop so nothing is dropped.
+                        //
+                        // FIX 1 (consensus bug): this path used to insert only the
+                        // batch's non-contract `Changes` into `execution_results`
+                        // and NEVER re-inserted its `changes_per_contract` into the
+                        // shared `contracts_changes` map (which `execute_batch`
+                        // removed at dispatch). The final
+                        // `verify_coherency_and_merge_results` merge folds
+                        // `contracts_changes`, so a batch completing here silently
+                        // dropped ALL its per-contract writes (e.g.
+                        // `ContractsLatestUtxo`) from the block — a producer/
+                        // validator state split. `register_execution_result`
+                        // re-inserts the per-contract changes (and also reports
+                        // `completed: true`, records the merge-handoff metric, and
+                        // frees the batch's contracts + gas), so delegating to it
+                        // fixes the drop and removes the divergence from the main
+                        // loop.
+                        self.register_execution_result(res);
                     }
                 }
                 Some(Err(_)) => {
@@ -1067,15 +1870,34 @@ where
             );
             exceeded_deadline = true;
         }
-        Ok(exceeded_deadline)
+        Ok((exceeded_deadline, fallback_next_start_idx))
     }
 
+    /// Verify cross-batch coherency (coins/nonces) and merge the per-batch
+    /// results in batch-id order.
+    ///
+    /// Besides the merged [`SchedulerExecutionResult`], returns:
+    /// * the FINAL block-relative index of every merged transaction (same
+    ///   order as `result.transactions`): the running execution counter in
+    ///   production, the batch's explicit indices in validation — exactly the
+    ///   numbering the executed txs' `TxPointer`/`ContractsLatestUtxo` writes
+    ///   used;
+    /// * the stored `tx_pointer` of every spent DATABASE coin the verifier
+    ///   loaded, for the coin-input `TxPointer` normalization (no re-reads).
+    #[allow(clippy::type_complexity)]
     fn verify_coherency_and_merge_results(
         &mut self,
         nb_batch: usize,
         l1_execution_data: L1ExecutionData,
         block_transaction: Arc<StorageTransaction<View>>,
-    ) -> Result<SchedulerExecutionResult, SchedulerError> {
+    ) -> Result<
+        (
+            SchedulerExecutionResult,
+            Vec<u32>,
+            FxHashMap<UtxoId, TxPointer>,
+        ),
+        SchedulerError,
+    > {
         let L1ExecutionData {
             coinbase,
             used_gas,
@@ -1084,7 +1906,7 @@ where
             transactions_status,
             events,
             skipped_txs,
-            ..
+            tx_count: l1_tx_count,
         } = l1_execution_data;
         let mut exec_result = SchedulerExecutionResult {
             header: self.header_to_produce,
@@ -1099,14 +1921,79 @@ where
             coinbase,
         };
         let mut storage_changes = vec![];
-        let mut compiled_created_coins = CoinDependencyChainVerifier::new();
+        let mut compiled_created_coins =
+            CoinDependencyChainVerifier::new(self.config.utxo_validation);
         let mut nonce_used = HashSet::new();
+        // Final block index of every merged transaction, in merge order.
+        let mut final_tx_indices: Vec<u32> = Vec::new();
+        let mut next_contiguous_index = l1_tx_count;
+
+        // PRE-PASS: take every batch's results and assign its transactions'
+        // final BLOCK indices, then register every coin the block creates —
+        // all of it before the first use is verified.
+        //
+        // A coin child may now be dispatched into an EARLIER batch than its
+        // parent (validation drops the coin-parent scheduling edge), so
+        // "was this coin created in the block?" can no longer be answered from
+        // the batches merged so far, and "is the creation ordered before the
+        // use?" can no longer be decided from batch ids. Both are answered
+        // from the block indices, which the block fixes upfront.
+        let mut batches: Vec<WorkSessionSavedData> = Vec::with_capacity(nb_batch);
+        let mut block_indices_per_batch: Vec<Vec<u32>> = Vec::with_capacity(nb_batch);
         for batch_id in 0..nb_batch {
-            if let Some(changes) = self.execution_results.remove(&batch_id) {
-                compiled_created_coins
-                    .register_coins_created(batch_id, changes.coins_created);
+            let changes = self.execution_results.remove(&batch_id).ok_or_else(|| {
+                SchedulerError::InternalError(format!(
+                    "Batch {batch_id} not found in the execution results"
+                ))
+            })?;
+            let batch_tx_count = changes.txs.len();
+            // Explicit (validation) or the running execution counter
+            // (production — batches merge in batch-id order, which IS dispatch
+            // order, so the counter reproduces each tx's `start_idx_txs`-based
+            // execution index, including after a fallback collapse).
+            let indices = if let Some(explicit) =
+                self.dispatched_explicit_indices.remove(&batch_id)
+            {
+                if explicit.len() != batch_tx_count {
+                    return Err(SchedulerError::InternalError(format!(
+                        "batch {batch_id} committed {batch_tx_count} \
+                         transaction(s) but carried {} explicit indices",
+                        explicit.len()
+                    )));
+                }
+                explicit
+            } else {
+                let mut indices = Vec::with_capacity(batch_tx_count);
+                for _ in 0..batch_tx_count {
+                    indices.push(next_contiguous_index);
+                    next_contiguous_index =
+                        next_contiguous_index.checked_add(1).ok_or_else(|| {
+                            SchedulerError::InternalError(
+                                "Transaction count overflow".to_string(),
+                            )
+                        })?;
+                }
+                indices
+            };
+            batches.push(changes);
+            block_indices_per_batch.push(indices);
+        }
+        for (batch_id, (batch, block_indices)) in
+            batches.iter_mut().zip(&block_indices_per_batch).enumerate()
+        {
+            compiled_created_coins.register_coins_created(
+                batch_id,
+                block_indices,
+                core::mem::take(&mut batch.coins_created),
+            )?;
+        }
+
+        for (batch_id, changes) in batches.into_iter().enumerate() {
+            {
+                let block_indices = &block_indices_per_batch[batch_id];
                 compiled_created_coins.verify_coins_used(
                     batch_id,
+                    block_indices,
                     changes.coins_used.iter(),
                     &block_transaction,
                 )?;
@@ -1122,6 +2009,8 @@ where
                 exec_result.message_ids.extend(changes.message_ids);
                 exec_result.skipped_txs.extend(changes.skipped_tx);
                 exec_result.transactions_status.extend(changes.tx_statuses);
+                // Block indices for this batch were assigned in the pre-pass.
+                final_tx_indices.extend_from_slice(block_indices);
                 exec_result.transactions.extend(changes.txs);
                 exec_result.used_gas = exec_result
                     .used_gas
@@ -1147,16 +2036,79 @@ where
                             "coinbase has overflowed u64".to_string(),
                         )
                     })?;
-            } else {
-                return Err(SchedulerError::InternalError(format!(
-                    "Batch {batch_id} not found in the execution results"
-                )));
             }
         }
+        // NET-OUT: cancel the create/spend pair of every coin whose creating
+        // batch merges AFTER its spending batch.
+        //
+        // A coin created and spent inside the block must be ABSENT from the
+        // final state. Sequentially that is automatic — the creating insert is
+        // applied before the spending remove. The merge applies whole batches
+        // in batch-id order, and validation no longer gates a coin child on its
+        // parent, so the spending remove can land FIRST. That order is not
+        // merely wrong-looking, it is rejected outright: the conflict-checked
+        // fold refuses `Remove` followed by `Insert`.
+        //
+        // The fix drops the creating INSERT and keeps the spending REMOVE.
+        // That is what sequential execution leaves behind: it inserts the coin
+        // and then removes it, and the fold collapses that pair to `Remove`.
+        // Dropping both writes instead reaches the same STATE — such a coin's
+        // `UtxoId` is derived from the creating transaction, so it cannot
+        // pre-exist and "absent" is right — but it emits a different change
+        // set than the sequential executor, and the block's changes are
+        // compared, not just its resulting state.
+        //
+        // Reordering the batches is not an option: two batches can each create
+        // a coin the other spends, so no merge order satisfies every pair.
+        //
+        // Only INVERTED pairs are touched; an in-order pair keeps its natural
+        // insert-then-remove.
+        let netted_coins = compiled_created_coins.coins_needing_net_out();
+        if !netted_coins.is_empty() {
+            // Derive the affected storage keys through the table's own codec
+            // rather than re-implementing the encoding here.
+            let mut probe = StorageTransaction::transaction(
+                &block_transaction,
+                ConflictPolicy::Overwrite,
+                Changes::default(),
+            );
+            for utxo_id in &netted_coins {
+                probe
+                    .storage_as_mut::<Coins>()
+                    .remove(utxo_id)
+                    .map_err(|e| {
+                        SchedulerError::InternalError(format!(
+                            "failed to derive the storage key of in-block coin \
+                         {utxo_id}: {e}"
+                        ))
+                    })?;
+            }
+            for (column, keys) in probe.into_changes() {
+                for key in keys.into_keys() {
+                    for changes in storage_changes.iter_mut() {
+                        if let Some(column_changes) = changes.get_mut(&column) {
+                            // Only the creating insert goes; the spending
+                            // remove is what sequential execution leaves.
+                            if matches!(
+                                column_changes.get(&key),
+                                Some(WriteOperation::Insert(_))
+                            ) {
+                                column_changes.remove(&key);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         let contract_changes = core::mem::take(&mut self.contracts_changes);
         storage_changes.extend(contract_changes.into_values());
         exec_result.changes = StorageChanges::ChangesList(storage_changes);
-        Ok(exec_result)
+        Ok((
+            exec_result,
+            final_tx_indices,
+            compiled_created_coins.into_db_coin_pointers(),
+        ))
     }
 
     async fn execute_blob_transactions<D>(
@@ -1181,7 +2133,7 @@ where
                     gas_price: self.gas_price,
                 },
                 &mut storage,
-                start_idx_txs,
+                TxIndices::Contiguous(start_idx_txs),
                 memory_instance.as_mut(),
             )
             .await?;
@@ -1190,16 +2142,43 @@ where
         Ok((execution_data, transactions))
     }
 
-    // Wait for all the workers to finish gather all theirs transactions
-    // re-execute them in one worker without skipped one. We also need to
-    // fetch all the possible executed and stored batch after the lowest batch_id we gonna
-    // re-execute.
+    // Wait for all the workers to finish, gather all their transactions and
+    // re-execute the affected contiguous batch-id range on a single worker
+    // without the skipped transaction. We also fetch every already-executed
+    // batch inside that range so the replay covers the whole `[lower, higher]`
+    // window in committed order.
+    //
+    // Correctness of the replay hinges on the STARTING view. The re-execution
+    // must observe exactly the state left by the KEPT earlier batches (id
+    // `< lower`) — otherwise a range tx that reads a contract mutated by a kept
+    // batch, or spends a coin/message it created, would replay against stale
+    // state and diverge from the sequential (validation) executor, which is a
+    // consensus split. We therefore seed the replay with:
+    //   * `storage_with_da` — the pre-block view PLUS the DA-import changes
+    //     (previously the replay used a bare `latest_view()`, dropping DA), and
+    //   * the per-contract state as of `lower`, rebuilt from
+    //     `dispatched_contract_seeds` (the seed each in-range batch was handed;
+    //     the lowest-id toucher of a contract carries its as-of-`lower` state).
+    // Coins/messages created by kept batches need no seeding: the executor runs
+    // with `forbid_fake_utxo: false`, so a spend of a not-yet-committed
+    // input succeeds and the post-hoc `CoinDependencyChainVerifier` / nonce
+    // dedup validate it, and the canonical fold nets create-then-spend to a
+    // `Remove` (matching the sequential map). Contract state has no such
+    // post-hoc check, which is why it must be seeded.
+    //
+    // The replay runs through `InMemoryTransactionWithContracts` (as normal
+    // batches do), so its contract writes are split back out per contract and
+    // merged into `contracts_changes` (one entry per contract, preserving the
+    // canonical-fold invariant); only the non-contract (coin/message) writes go
+    // into this batch's `ChangesList` entry.
+    //
     // Tell the TransactionSource that this transaction is skipped
     // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
     //
     // Can be replaced by a mechanism that replace the skipped_tx by a dummy transaction to not shift everything
     // TODO: Rework this function to continue the execution from the batch that got conflict
-    //  and use the state of the contracts before execution of that batch.
+    //  instead of re-executing the whole `[lower, higher]` range.
+    #[allow(clippy::too_many_arguments)]
     async fn sequential_fallback(
         &mut self,
         batch_id: usize,
@@ -1207,8 +2186,38 @@ where
         coins_used: Vec<CoinInBatch>,
         coins_created: Vec<CoinInBatch>,
         message_nonces_used: Vec<Nonce>,
-    ) -> Result<(), SchedulerError> {
+        execution_duration: Duration,
+        storage_with_da: Arc<StorageTransaction<View>>,
+    ) -> Result<u32, SchedulerError> {
+        // VALIDATION: the fallback drops the skipped transactions and replays
+        // the affected range at shifted indices — that silently corrupts the
+        // received block's transaction positions (`TxPointer`s) instead of
+        // rejecting the block. A transaction skipped while re-executing a
+        // received block means the block is invalid (or the validator's state
+        // diverged), so fail loudly and let the caller report a validation
+        // error.
+        if self.validation_mode {
+            return Err(SchedulerError::InternalError(
+                "a transaction was skipped during parallel block validation; \
+                 the sequential fallback is not available in validation mode"
+                    .to_string(),
+            ));
+        }
+        let fallback_start = Instant::now();
         let block_height = *self.header_to_produce.height();
+        // This batch's parallel results are discarded and re-executed
+        // sequentially below. Report its feedback as `completed: false` — the
+        // measured overhead/exec time still feeds the lane scheduler's overhead
+        // EMA, but the batch did not commit, so it must not signal completion.
+        // Also clears its `batch_feedback` / `batch_preparations` bookkeeping.
+        self.report_batch_feedback(batch_id, execution_duration, false);
+        if self.config.metrics {
+            // The discarded work still consumed worker-seconds.
+            self.time_accounting.worker_busy = self
+                .time_accounting
+                .worker_busy
+                .saturating_add(execution_duration);
+        }
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
@@ -1221,6 +2230,20 @@ where
             match future.await {
                 Ok(res) => {
                     let res = res?;
+                    // Every other in-flight batch is also consumed and
+                    // re-executed here, so it is discarded too: same
+                    // `completed: false` semantics + bookkeeping cleanup.
+                    self.report_batch_feedback(
+                        res.batch_id,
+                        res.execution_duration,
+                        false,
+                    );
+                    if self.config.metrics {
+                        self.time_accounting.worker_busy = self
+                            .time_accounting
+                            .worker_busy
+                            .saturating_add(res.execution_duration);
+                    }
                     all_txs_by_batch_id.insert(
                         res.batch_id,
                         (
@@ -1294,11 +2317,45 @@ where
             }
         }
 
+        // Rebuild the per-contract state as of `lower_batch_id`. For each
+        // contract touched anywhere in the range, take the seed handed to the
+        // LOWEST-id in-range batch that touched it: that batch saw exactly the
+        // state left by the kept batches (< lower), because any earlier in-range
+        // batch that did not touch the contract left it unchanged. Higher-id
+        // seeds also fold in earlier in-range writes, which the replay itself
+        // recomputes — so first-writer-wins per contract is precisely the
+        // as-of-`lower` state. Contracts first created/touched inside the range
+        // have no seed here and correctly start from the base view.
+        let mut contract_seed: FxHashMap<ContractId, Changes> = FxHashMap::default();
+        for id in lower_batch_id..=higher_batch_id {
+            if let Some(seed) = self.dispatched_contract_seeds.remove(&id) {
+                for (contract_id, changes) in seed {
+                    contract_seed.entry(contract_id).or_insert(changes);
+                }
+            }
+        }
+
+        // Replay the range starting at the block index the lowest-id batch in
+        // the range originally used, so the replayed txs keep their true block
+        // positions (their `TxPointer` must match the sequential executor's, or
+        // e.g. `ContractsLatestUtxo` diverges). All batches before `lower` are
+        // kept and committed, so this equals the count of block txs before the
+        // range.
+        let start_idx_txs = self
+            .dispatched_start_idx
+            .get(&lower_batch_id)
+            .copied()
+            .unwrap_or(0);
+
         let executor = self.executor.clone();
-        // Get a memory instance for the blob transactions execution
+        // Get a memory instance for the re-execution
         let mut memory_instance = self.memory_pool.take_raw();
-        let view = self.storage.latest_view()?;
-        let mut storage_tx = view.read_transaction();
+        // Replay over the pre-block view + DA changes, seeded with the
+        // as-of-`lower` per-contract state, using the same
+        // contract-splitting transaction the parallel batches use.
+        let memory_tx =
+            InMemoryTransactionWithContracts::new(storage_with_da, contract_seed);
+        let mut storage_tx = StructuredStorage::new(memory_tx);
         let (transactions, mut execution_data) = executor
             .execute_l2_transactions(
                 Components {
@@ -1308,11 +2365,41 @@ where
                     gas_price: self.gas_price,
                 },
                 &mut storage_tx,
-                0,
+                TxIndices::Contiguous(start_idx_txs),
                 memory_instance.as_mut(),
             )
             .await?;
-        execution_data.changes = storage_tx.into_changes();
+        // Split the replay's writes: contract state → merged back into
+        // `contracts_changes` (one entry per contract), everything else →
+        // this batch's `ChangesList` entry.
+        let (changes, changes_per_contract) = storage_tx.into_storage().into_changes();
+        execution_data.changes = changes;
+        for (contract_id, contract_changes) in changes_per_contract {
+            // The range's contracts were removed from `contracts_changes` when
+            // the in-range batches picked them up, so there is normally no
+            // existing entry. Fold defensively if one is present so we never
+            // emit two `ChangesList` entries for a single contract (which the
+            // strict canonical fold would reject).
+            if let Some(existing) = self.contracts_changes.remove(&contract_id) {
+                let merged =
+                    fold_changes_in_canonical_order(vec![existing, contract_changes])?;
+                self.contracts_changes.insert(contract_id, merged);
+            } else {
+                self.contracts_changes.insert(contract_id, contract_changes);
+            }
+        }
+        if !execution_data.skipped_transactions.is_empty() {
+            let skipped = execution_data
+                .skipped_transactions
+                .iter()
+                .map(|(tx_id, error)| format!("{tx_id}: {error}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            eprintln!(
+                "parallel executor sequential fallback skipped {} tx(s): {skipped}",
+                execution_data.skipped_transactions.len()
+            );
+        }
 
         // Save execution results for all batch id with empty data
         // to not break the batch chain
@@ -1320,6 +2407,26 @@ where
             self.execution_results
                 .insert(id, WorkSessionSavedData::default());
         }
+        // The number of block txs committed through the end of this range: the
+        // range's starting index plus what the replay actually committed. The
+        // caller resets its running tx counter to this so subsequent batches
+        // (and the blob stage) get contiguous `start_idx_txs` matching the
+        // sequential validator — the fallback dropped the range's skipped txs,
+        // which the dispatch-time counter had already counted.
+        let committed_in_range = u32::try_from(transactions.len()).map_err(|_| {
+            SchedulerError::InternalError("Too many transactions".to_string())
+        })?;
+        let next_start_idx_txs = start_idx_txs.saturating_add(committed_in_range);
+
+        if self.config.metrics {
+            let fallback_duration = fallback_start.elapsed();
+            parallel_executor_metrics::record_sequential_fallback(fallback_duration);
+            self.time_accounting.fallback = self
+                .time_accounting
+                .fallback
+                .saturating_add(fallback_duration);
+        }
+
         // Save the execution results for the current batch
         self.execution_results.insert(
             batch_id,
@@ -1332,23 +2439,217 @@ where
                 message_ids: execution_data.message_ids,
                 events: execution_data.events,
                 tx_statuses: execution_data.tx_status,
-                skipped_tx: vec![],
+                skipped_tx: execution_data.skipped_transactions,
                 used_gas: execution_data.used_gas,
                 used_size: execution_data.used_size,
                 coinbase: execution_data.coinbase,
             },
         );
 
-        Ok(())
+        Ok(next_start_idx_txs)
     }
+}
+
+/// Fold a canonically-ordered list of [`Changes`] into a single [`Changes`],
+/// coalescing per-key operations that the parallel executor split across
+/// separate list entries.
+///
+/// The caller MUST pass the entries in canonical block order — DA-import
+/// changes first (conceptually applied before batch 0), then each batch's
+/// changes in batch-id order, then the per-contract changes. Applied in this
+/// order the fold reproduces exactly what the SEQUENTIAL executor's single
+/// coalescing map would compute for the same block, which is what keeps the
+/// parallel *producer* and the sequential *validator* accepting the same
+/// blocks.
+///
+/// ## Legal cross-entry sequences for a key (and the net op emitted)
+/// * `[Insert]`         → `Insert`  — a coin/message/slot created (or a
+///   pre-existing value overwritten) by a single entry.
+/// * `[Remove]`         → `Remove`  — a pre-existing coin/message spent by a
+///   single entry.
+/// * `[Insert, Remove]` → `Remove`  — created *and* consumed inside this block:
+///   a coin created in batch `i` and spent in batch `j > i`, or a DA-imported
+///   message (`Insert` in `da_changes`, folded first) consumed by its one
+///   in-block spender. The sequential map stores `Remove` for such a key
+///   (`Insert` then `take`), so we emit `Remove`, not omission.
+///
+/// ## Genuine conflicts (rejected — the ordering does NOT legitimize them)
+/// * `[Insert, Insert]` — two creations of the same key (e.g. two coins sharing
+///   a `UtxoId`); impossible in a valid block.
+/// * `[Remove, Remove]` — double spend of the same key.
+/// * `[Remove, Insert]` — spend-before-create ordering.
+/// * any longer sequence.
+///
+/// ## Why this stays correct for contract state
+/// Per-contract state never reaches this fold split across entries: the
+/// scheduler serialises every write to a given contract into that contract's
+/// single `contracts_changes[c]` entry (guarded by
+/// `current_executing_contracts`), so a slot written by several txs is already
+/// coalesced *within one entry* and never appears here as a cross-entry
+/// `[Insert, Insert]`. The one legitimate cross-entry contract overwrite — the
+/// coinbase contract's UTXO/balance, re-written by the mint tx — is folded
+/// separately and later (the mint runs last, against the merged view, with
+/// `Overwrite`), so it is intentionally out of scope for this strict fold.
+pub(crate) fn fold_changes_in_canonical_order(
+    list: Vec<Changes>,
+) -> Result<Changes, SchedulerError> {
+    let mut acc = Changes::default();
+    for changes in list {
+        for (column, ops) in changes {
+            let acc_column = acc.entry(column).or_default();
+            for (key, op) in ops {
+                match acc_column.entry(key) {
+                    btree_map::Entry::Vacant(vacant) => {
+                        vacant.insert(op);
+                    }
+                    btree_map::Entry::Occupied(mut occupied) => {
+                        // The only legal collision is create-then-spend
+                        // (`Insert` already recorded, now superseded by a
+                        // `Remove`): net `Remove`, matching the sequential map.
+                        let legal = matches!(
+                            (occupied.get(), &op),
+                            (WriteOperation::Insert(_), WriteOperation::Remove)
+                        );
+                        if legal {
+                            occupied.insert(WriteOperation::Remove);
+                        } else {
+                            return Err(SchedulerError::InternalError(format!(
+                                "Conflicting storage writes for column {column} key \
+                                 {:?}: existing {:?} cannot be followed by {:?}",
+                                occupied.key(),
+                                occupied.get(),
+                                op,
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(acc)
+}
+
+/// Set every CoinSigned/CoinPredicate input's `tx_pointer` to the spent coin's
+/// TRUE pointer — the value the sequential executor computes via
+/// `get_coin_or_default` when `forbid_fake_utxo` is on:
+/// * coin created EARLIER IN THIS BLOCK → `TxPointer(block_height,
+///   creator's final block index)` — the same numbering the creator's stored
+///   coin output was persisted with (`persist_output_utxos`);
+/// * coin from the pre-block database → the stored coin's pointer (taken from
+///   `db_coin_pointers` — the coins the coherency verifier already loaded — or
+///   read from the pre-block view for inputs the bookkeeping did not cover,
+///   e.g. blob transactions);
+/// * neither in the database nor created in-block → left untouched (zeroed):
+///   with `utxo_validation` ON the coherency verifier has already rejected the
+///   block before this runs; the caller skips normalization entirely when the
+///   flag is OFF (sequential fabricates zeroed pointers in that mode).
+///
+/// `transactions`, `tx_ids` and `final_indices` are parallel slices in merge
+/// order. Message inputs carry no `tx_pointer`; contract inputs are already
+/// filled correctly during execution (`compute_inputs` reads
+/// `ContractsLatestUtxo` regardless of `forbid_fake_utxo`); the mint is not
+/// part of this list (it is produced/validated by the sequential machinery
+/// afterwards).
+fn normalize_coin_input_tx_pointers<T>(
+    transactions: &mut [Transaction],
+    tx_ids: &[TxId],
+    final_indices: &[u32],
+    block_height: BlockHeight,
+    db_coin_pointers: &FxHashMap<UtxoId, TxPointer>,
+    view: &StorageTransaction<T>,
+) -> Result<(), SchedulerError>
+where
+    T: KeyValueInspect<Column = Column>,
+{
+    // Every coin-producing output of this block, mapped to its creator's final
+    // block index.
+    let mut created_in_block: FxHashMap<UtxoId, u32> = FxHashMap::default();
+    for ((tx, tx_id), final_index) in transactions.iter().zip(tx_ids).zip(final_indices) {
+        for (output_index, output) in tx.outputs().iter().enumerate() {
+            if matches!(
+                output,
+                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. }
+            ) {
+                let output_index = u16::try_from(output_index).map_err(|_| {
+                    SchedulerError::InternalError("Too many outputs".to_string())
+                })?;
+                created_in_block.insert(UtxoId::new(*tx_id, output_index), *final_index);
+            }
+        }
+    }
+
+    for tx in transactions.iter_mut() {
+        let inputs = match tx {
+            Transaction::Script(tx) => tx.inputs_mut(),
+            Transaction::Create(tx) => tx.inputs_mut(),
+            Transaction::Upgrade(tx) => tx.inputs_mut(),
+            Transaction::Upload(tx) => tx.inputs_mut(),
+            Transaction::Blob(tx) => tx.inputs_mut(),
+            Transaction::Mint(_) => continue,
+        };
+        for input in inputs.iter_mut() {
+            let (utxo_id, tx_pointer) = match input {
+                fuel_core_types::fuel_tx::Input::CoinSigned(CoinSigned {
+                    utxo_id,
+                    tx_pointer,
+                    ..
+                })
+                | fuel_core_types::fuel_tx::Input::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    tx_pointer,
+                    ..
+                }) => (utxo_id, tx_pointer),
+                _ => continue,
+            };
+            if let Some(creator_index) = created_in_block.get(utxo_id) {
+                *tx_pointer = TxPointer::new(block_height, *creator_index);
+            } else if let Some(pointer) = db_coin_pointers.get(utxo_id) {
+                *tx_pointer = *pointer;
+            } else if let Some(coin) = view.storage::<Coins>().get(utxo_id)? {
+                *tx_pointer = *coin.tx_pointer();
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Convert a [`Duration`] into `u64` nanoseconds, saturating (durations that
+/// large do not occur in block production; this only guards the cast).
+fn duration_as_u64_nanos(duration: Duration) -> u64 {
+    u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX)
 }
 
 #[allow(clippy::type_complexity)]
 fn prepare_transactions_batch(
     consensus_params: &ConsensusParameters,
     batch: Vec<MaybeCheckedTransaction>,
+    execution_indices: Option<Vec<u32>>,
 ) -> Result<PreparedBatch, SchedulerError> {
     let mut prepared_batch = PreparedBatch::default();
+
+    // Explicit indices (validation) map 1:1 onto the batch's transactions.
+    // Blob transactions are split out below and executed at a different block
+    // position, which would silently misalign the mapping — validation batches
+    // never contain blobs (guarded in `Executor::validate`), so fail loudly if
+    // that invariant is ever broken.
+    if let Some(indices) = execution_indices.as_ref() {
+        if indices.len() != batch.len() {
+            return Err(SchedulerError::InternalError(format!(
+                "execution indices count ({}) does not match batch transaction \
+                 count ({})",
+                indices.len(),
+                batch.len()
+            )));
+        }
+        if batch.iter().any(|tx| tx.is_blob()) {
+            return Err(SchedulerError::InternalError(
+                "explicit execution indices are not supported for batches \
+                 containing blob transactions"
+                    .to_string(),
+            ));
+        }
+    }
+    prepared_batch.execution_indices = execution_indices;
 
     for (idx, tx) in batch.into_iter().enumerate() {
         let tx_id = tx.id(&consensus_params.chain_id());
@@ -1472,4 +2773,11 @@ fn get_coins_outputs<'a>(
         }
     }
     coins
+}
+
+fn format_tx_ids(txs: impl IntoIterator<Item = TxId>) -> String {
+    txs.into_iter()
+        .map(|tx_id| tx_id.to_string())
+        .collect::<Vec<_>>()
+        .join(",")
 }

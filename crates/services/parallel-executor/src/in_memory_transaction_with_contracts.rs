@@ -174,7 +174,6 @@ where
             self.storage.get(key, column)
         }
     }
-
 }
 
 impl<S> KeyValueMutate for InMemoryTransactionWithContracts<S>

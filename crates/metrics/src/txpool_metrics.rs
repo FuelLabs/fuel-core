@@ -6,12 +6,25 @@ use crate::{
     global_registry,
 };
 use prometheus_client::metrics::{
+    counter::Counter,
     gauge::Gauge,
     histogram::Histogram,
 };
 use std::sync::OnceLock;
 
 pub struct TxPoolMetrics {
+    /// Number of lane-scheduler extraction requests answered.
+    pub lane_ask_count: Counter,
+    /// Cumulative in-pool time answering lane asks, microseconds.
+    pub lane_ask_total_us: Counter,
+    /// Cumulative lane-scheduler `next_batches` compute, microseconds.
+    pub lane_ask_scheduler_us: Counter,
+    /// Cumulative storage graph-removal time within lane asks, microseconds.
+    pub lane_ask_removal_us: Counter,
+    /// Cumulative cache-bookkeeping time within lane asks, microseconds.
+    pub lane_ask_caches_us: Counter,
+    /// Cumulative transactions extracted by lane asks.
+    pub lane_ask_extracted: Counter,
     /// Size of transactions in the txpool in bytes
     pub tx_size: Histogram,
     /// Number of transactions in the txpool
@@ -43,6 +56,12 @@ impl Default for TxPoolMetrics {
         let number_of_executable_transactions = Gauge::default();
 
         let metrics = TxPoolMetrics {
+            lane_ask_count: Counter::default(),
+            lane_ask_total_us: Counter::default(),
+            lane_ask_scheduler_us: Counter::default(),
+            lane_ask_removal_us: Counter::default(),
+            lane_ask_caches_us: Counter::default(),
+            lane_ask_extracted: Counter::default(),
             tx_size,
             number_of_transactions,
             number_of_transactions_pending_verification,
@@ -87,6 +106,37 @@ impl Default for TxPoolMetrics {
             "txpool_select_transactions_time_microseconds",
             "The time it took to select transactions for inclusion in a block in microseconds",
             metrics.select_transactions_time_microseconds.clone(),
+        );
+
+        registry.register(
+            "txpool_lane_ask_count",
+            "Number of lane-scheduler extraction requests answered",
+            metrics.lane_ask_count.clone(),
+        );
+        registry.register(
+            "txpool_lane_ask_total_us",
+            "Cumulative in-pool time answering lane asks (microseconds)",
+            metrics.lane_ask_total_us.clone(),
+        );
+        registry.register(
+            "txpool_lane_ask_scheduler_us",
+            "Cumulative lane-scheduler next_batches compute (microseconds)",
+            metrics.lane_ask_scheduler_us.clone(),
+        );
+        registry.register(
+            "txpool_lane_ask_removal_us",
+            "Cumulative storage graph-removal time within lane asks (microseconds)",
+            metrics.lane_ask_removal_us.clone(),
+        );
+        registry.register(
+            "txpool_lane_ask_caches_us",
+            "Cumulative cache-bookkeeping time within lane asks (microseconds)",
+            metrics.lane_ask_caches_us.clone(),
+        );
+        registry.register(
+            "txpool_lane_ask_extracted",
+            "Cumulative transactions extracted by lane asks",
+            metrics.lane_ask_extracted.clone(),
         );
 
         registry.register(

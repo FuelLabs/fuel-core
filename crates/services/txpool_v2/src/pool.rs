@@ -45,6 +45,12 @@ use crate::{
         InsertionErrorType,
     },
     extracted_outputs::ExtractedOutputs,
+    lane_integration::{
+        BatchFeedback,
+        BatchId,
+        LaneSchedulerState,
+        RemovalReason,
+    },
     ports::{
         TxPoolPersistentStorage,
         TxStatusManager as TxStatusManagerTrait,
@@ -74,6 +80,26 @@ pub struct TxPoolStats {
     pub total_gas: u64,
 }
 
+/// One extracted, ready-to-execute batch answered for a block-extraction ask.
+///
+/// The classic (`ratio_tip_gas`) path always answers with at most ONE batch
+/// (`batch_id: None`). With the lane scheduler enabled one ask covers all the
+/// executor's free workers and is answered with up to one batch PER WORKER;
+/// each carries the scheduler-assigned [`BatchId`] so the executor can
+/// round-trip completion feedback for exactly that batch. Batches are
+/// conflict-free by construction and must be executed as-is (no re-packing).
+#[derive(Debug)]
+pub struct ExtractedBatch {
+    /// The selected transactions in the scheduler's proposed (parent-first)
+    /// order.
+    pub txs: Vec<ArcPoolTx>,
+    /// The contract ids the batch's transactions touch (classic path: the
+    /// selection's anchor contracts).
+    pub contracts: Vec<fuel_core_types::fuel_tx::ContractId>,
+    /// The lane scheduler's id for this batch (`None` on the classic path).
+    pub batch_id: Option<BatchId>,
+}
+
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
 pub struct Pool<S, SI, CM, SA, TxStatusManager> {
@@ -89,6 +115,10 @@ pub struct Pool<S, SI, CM, SA, TxStatusManager> {
     pub(crate) tx_id_to_storage_id: HashMap<TxId, SI>,
     /// All sent outputs when transactions are extracted. Clear when processing a block.
     pub(crate) extracted_outputs: ExtractedOutputs,
+    /// Scheduler share (µs) of the most recent extraction, for the worker's
+    /// per-ask checkpoint response (single-threaded worker: read right after
+    /// the extraction call).
+    pub(crate) last_lane_ask_scheduler_us: u64,
     /// The spent inputs cache.
     pub(crate) spent_inputs: SpentInputs,
     /// Current pool gas stored.
@@ -101,6 +131,10 @@ pub struct Pool<S, SI, CM, SA, TxStatusManager> {
     pub(crate) new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     /// Transaction status manager.
     pub(crate) tx_status_manager: Arc<TxStatusManager>,
+    /// Event-driven lane scheduler. `Some` only when
+    /// [`Config::lane_scheduler`] is enabled; `None` keeps the classic
+    /// selection path byte-for-byte unchanged.
+    pub(crate) lane_scheduler: Option<LaneSchedulerState>,
 }
 
 impl<S, SI, CM, SA, TxStatusManager> Pool<S, SI, CM, SA, TxStatusManager> {
@@ -117,6 +151,9 @@ impl<S, SI, CM, SA, TxStatusManager> Pool<S, SI, CM, SA, TxStatusManager> {
         let capacity = NonZeroUsize::new(config.pool_limits.max_txs.saturating_add(1))
             .expect("Max txs is greater than 0");
         let spent_inputs = SpentInputs::new(capacity);
+        let lane_scheduler = config
+            .lane_scheduler
+            .then(|| LaneSchedulerState::new(config.pool_limits.max_gas));
         Pool {
             storage,
             collision_manager,
@@ -124,12 +161,14 @@ impl<S, SI, CM, SA, TxStatusManager> Pool<S, SI, CM, SA, TxStatusManager> {
             config,
             tx_id_to_storage_id: HashMap::new(),
             extracted_outputs: ExtractedOutputs::new(),
+            last_lane_ask_scheduler_us: 0,
             spent_inputs,
             current_gas: 0,
             current_bytes_size: 0,
             pool_stats_sender,
             new_executable_txs_notifier,
             tx_status_manager,
+            lane_scheduler,
         }
     }
 
@@ -184,9 +223,26 @@ where
 
         let has_dependencies = !checked_transaction.all_dependencies().is_empty();
 
+        // Capture the in-pool parent tx ids for the lane scheduler before the
+        // checked transaction is consumed by `store_transaction`. These are the
+        // dependency storage nodes (already stored) mapped back to their tx ids.
+        // Only computed when the lane scheduler is active.
+        let lane_parents: Vec<TxId> = if self.lane_scheduler.is_some() {
+            checked_transaction
+                .all_dependencies()
+                .iter()
+                .filter_map(|dep| {
+                    Storage::get(&self.storage, dep).map(|data| data.transaction.id())
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         let mut removed_transactions = vec![];
         for tx in transactions_to_remove {
             let removed = self.storage.remove_transaction_and_dependents_subtree(tx);
+            self.lane_on_removed(removed.iter(), RemovalReason::Dropped);
             self.update_components_and_caches_on_removal(removed.iter());
             removed_transactions.extend(removed);
         }
@@ -195,6 +251,7 @@ where
             let removed = self
                 .storage
                 .remove_transaction_and_dependents_subtree(*collided_tx);
+            self.lane_on_removed(removed.iter(), RemovalReason::Replaced);
             self.update_components_and_caches_on_removal(removed.iter());
 
             removed_transactions.extend(removed);
@@ -239,6 +296,12 @@ where
             self.selection_algorithm
                 .new_executable_transaction(storage_id, tx);
             self.new_executable_txs_notifier.send_replace(());
+        }
+
+        // Feed the lane scheduler every pooled transaction (ready or waiting on
+        // parents); it tracks readiness itself from the parent edges.
+        if let Some(lane) = self.lane_scheduler.as_mut() {
+            lane.on_transaction(tx.transaction.clone(), lane_parents);
         }
 
         let removed_transactions = removed_transactions
@@ -373,12 +436,20 @@ where
     }
 
     /// Extract transactions for a block.
-    /// Returns a list of transactions that were selected for the block
-    /// based on the constraints given in the configuration and the selection algorithm used.
+    /// Returns the batches of transactions selected for the block based on the
+    /// given constraints and the selection algorithm used: at most one batch on
+    /// the classic path, up to one batch per free executor worker with the lane
+    /// scheduler enabled (see [`ExtractedBatch`]).
     pub fn extract_transactions_for_block_with_anchors(
         &mut self,
         constraints: &Constraints,
-    ) -> (Vec<ArcPoolTx>, Vec<fuel_core_types::fuel_tx::ContractId>) {
+    ) -> Vec<ExtractedBatch> {
+        // When the lane scheduler is enabled it answers extraction instead of
+        // the classic `ratio_tip_gas` selection. Off (default) → unchanged.
+        if self.lane_scheduler.is_some() {
+            return self.extract_transactions_for_block_lane(constraints);
+        }
+
         let metrics = self.config.metrics;
         let maybe_start = metrics.then(std::time::Instant::now);
         let select_start = Instant::now();
@@ -390,6 +461,7 @@ where
             .gather_best_txs(constraints, &mut self.storage);
         let selected_anchors = self.selection_algorithm.last_selection_anchors().to_vec();
         let select_elapsed = select_start.elapsed();
+        self.last_lane_ask_scheduler_us = select_elapsed.as_micros() as u64;
 
         if let Some(start) = maybe_start {
             Self::record_select_transaction_time(start)
@@ -432,7 +504,32 @@ where
             "txpool_v2 selection summary"
         );
 
-        (txs, selected_anchors)
+        // Classic path: a single batch with no lane-scheduler batch id (an
+        // empty selection answers with no batch at all).
+        if txs.is_empty() {
+            Vec::new()
+        } else {
+            vec![ExtractedBatch {
+                txs,
+                contracts: selected_anchors,
+                batch_id: None,
+            }]
+        }
+    }
+
+    /// Extract transactions for a block, returning only the selected
+    /// transactions (flattening the batches in order). Thin wrapper over
+    /// [`Self::extract_transactions_for_block_with_anchors`], used only by the
+    /// crate's own tests.
+    #[cfg(test)]
+    pub fn extract_transactions_for_block(
+        &mut self,
+        constraints: &Constraints,
+    ) -> Vec<ArcPoolTx> {
+        self.extract_transactions_for_block_with_anchors(constraints)
+            .into_iter()
+            .flat_map(|batch| batch.txs)
+            .collect()
     }
 
     pub fn get(&self, tx_id: &TxId) -> Option<&StorageData> {
@@ -453,6 +550,17 @@ where
     pub fn process_committed_transactions(&mut self, tx_ids: impl Iterator<Item = TxId>) {
         let mut transactions_to_promote = vec![];
         for tx_id in tx_ids {
+            // Notify the lane scheduler that this tx committed on-chain — BEFORE
+            // (and independent of) the `tx_id_to_storage_id` lookup below. A tx
+            // produced by THIS node was already extracted (removed from the pool)
+            // at block-production time, so that lookup misses; but the lane
+            // scheduler still tracks the tx's in-pool CHILDREN as waiting on it.
+            // Completing it here is a feedback-independent completion path: it
+            // unblocks those children even when the dispatched batch's feedback
+            // handle was dropped (executor crash / shutdown / any missed report).
+            // Idempotent with feedback and with the imported-block removal below.
+            self.lane_on_committed(&tx_id);
+
             self.spent_inputs.spend_inputs_by_tx_id(tx_id);
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
@@ -469,6 +577,10 @@ where
                     .new_extracted_transaction(&transaction.transaction);
                 self.spent_inputs
                     .spend_inputs(tx_id, transaction.transaction.inputs());
+                // The lane scheduler was already told this tx committed via
+                // `lane_on_committed` at the top of the loop (which both completes
+                // its children and de-indexes it), so here we only clean the
+                // classic pool components.
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
 
                 for dependent in dependents {
@@ -643,12 +755,20 @@ where
     where
         I: IntoIterator<Item = TxId>,
     {
+        // Map the removal error to a scheduler removal reason for the lane
+        // scheduler (used only when it is enabled).
+        let lane_reason = match &error {
+            Error::Removed(RemovedReason::Ttl) => RemovalReason::Expired,
+            Error::SkippedTransaction(_) => RemovalReason::SkippedByExecutor,
+            _ => RemovalReason::Dropped,
+        };
         let mut removed_transactions = vec![];
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let removed = self
                     .storage
                     .remove_transaction_and_dependents_subtree(storage_id);
+                self.lane_on_removed(removed.iter(), lane_reason);
                 self.update_components_and_caches_on_removal(removed.iter());
                 removed_transactions.extend(removed.into_iter().map(|data| {
                     let tx_id = data.transaction.id();
@@ -682,6 +802,7 @@ where
                 let removed = self
                     .storage
                     .remove_transaction_and_dependents_subtree(dependent);
+                self.lane_on_removed(removed.iter(), RemovalReason::SkippedByExecutor);
                 self.update_components_and_caches_on_removal(removed.iter());
                 // It's unnecessary to inform the status manager about the skipped transaction herself
                 // because he gives the information, but we need to inform him about the dependents
@@ -740,6 +861,205 @@ where
                 .on_removed_transaction(storage_entry);
         }
         self.register_transaction_counts();
+    }
+
+    /// Notify the lane scheduler that transactions genuinely left the pool
+    /// (eviction / replacement / ttl / skipped / committed). No-op when the lane
+    /// scheduler is disabled. This is deliberately kept separate from
+    /// [`Self::update_components_and_caches_on_removal`] (which is also used by
+    /// the extraction/dispatch path) so extraction is reported via
+    /// `on_dispatched`, not `on_removal`.
+    fn lane_on_removed<'a>(
+        &mut self,
+        removed: impl Iterator<Item = &'a StorageData>,
+        reason: RemovalReason,
+    ) {
+        if let Some(lane) = self.lane_scheduler.as_mut() {
+            for storage_entry in removed {
+                lane.on_removal(&storage_entry.transaction.id(), reason);
+            }
+        }
+    }
+
+    /// Notify the lane scheduler that `tx_id` committed on-chain, by tx id alone
+    /// (the tx may already have left the pool via extraction, so no
+    /// [`StorageData`] is available). This is the feedback-independent completion
+    /// path: it marks the tx complete in the scheduler and promotes its in-pool
+    /// children to ready. No-op when the lane scheduler is disabled.
+    fn lane_on_committed(&mut self, tx_id: &TxId) {
+        if let Some(lane) = self.lane_scheduler.as_mut() {
+            lane.on_removal(tx_id, RemovalReason::Committed);
+        }
+    }
+
+    /// Feed a batch-completion feedback into the lane scheduler (buffered onto
+    /// the next request). No-op when the lane scheduler is disabled.
+    pub fn lane_scheduler_feedback(&mut self, feedback: BatchFeedback) {
+        if let Some(lane) = self.lane_scheduler.as_mut() {
+            lane.queue_feedback(feedback);
+        }
+    }
+
+    /// Answer a block-extraction request from the lane scheduler instead of the
+    /// classic `ratio_tip_gas` selection. One ask covers ALL the executor's
+    /// free workers (`Constraints::execution_worker_count`): the scheduler
+    /// answers with up to one proposal per worker and the pool extracts exactly
+    /// those transactions — the complete worker assignment for this dispatch
+    /// round.
+    ///
+    /// Only the proposed transactions that are currently dependency-free in the
+    /// pool graph are actually extracted (a defensive invariant: we never remove
+    /// a graph node that still has parents). The subset actually taken is
+    /// reported back via `on_dispatched` per batch.
+    ///
+    /// The block-level budgets (`total_gas`, `maximum_txs`,
+    /// `maximum_block_size`) are enforced CUMULATIVELY across the returned
+    /// batches: the scheduler's per-worker budgets alone could sum above them.
+    /// On the first transaction that would overflow a budget the whole
+    /// extraction stops (tail truncation — proposals are parent-ordered, so
+    /// stopping keeps parents-before-children; everything untaken simply stays
+    /// pooled and schedulable).
+    fn extract_transactions_for_block_lane(
+        &mut self,
+        constraints: &Constraints,
+    ) -> Vec<ExtractedBatch> {
+        let ask_start = Instant::now();
+        let pool_depth = self.tx_count();
+        let worker_count = constraints.free_worker_count.max(1);
+        let maximum_txs = constraints.maximum_txs as u64;
+        let per_worker_gas = constraints.max_gas;
+        // Admission/extraction gas cap for the whole ask: never more than the
+        // block's remaining budget, never more than the workers can hold.
+        let total_gas_cap = constraints
+            .total_gas
+            .min(per_worker_gas.saturating_mul(worker_count as u64));
+        let proposals = {
+            let lane = self
+                .lane_scheduler
+                .as_mut()
+                .expect("lane scheduler is enabled; qed");
+            lane.next_batches(
+                worker_count,
+                per_worker_gas,
+                total_gas_cap,
+                maximum_txs,
+                constraints.maximum_block_size,
+                &constraints.excluded_contracts,
+            )
+        };
+        let scheduler_elapsed = ask_start.elapsed();
+        self.last_lane_ask_scheduler_us = scheduler_elapsed.as_micros() as u64;
+        // Fine-grained per-tx timers only when metrics are on: two clock reads
+        // per extracted tx are measurable at thousands of txs per ask.
+        let fine_timing = self.config.metrics;
+        let mut removal_elapsed = std::time::Duration::ZERO;
+        let mut caches_elapsed = std::time::Duration::ZERO;
+
+        let mut gas_left = total_gas_cap;
+        let mut txs_left = maximum_txs;
+        let mut size_left = constraints.maximum_block_size;
+        let mut budget_exhausted = false;
+        let mut batches = Vec::with_capacity(proposals.len());
+        for proposal in proposals {
+            if budget_exhausted {
+                // Untaken proposals are never `on_dispatched`: their txs stay
+                // indexed in the scheduler and remain proposable next ask.
+                break;
+            }
+            let batch_id = proposal.batch_id;
+            let mut taken = Vec::with_capacity(proposal.txs.len());
+            let mut txs = Vec::with_capacity(proposal.txs.len());
+            let mut contracts_used = Vec::new();
+            for tx_id in proposal.txs {
+                let Some(storage_id) = self.tx_id_to_storage_id.get(&tx_id).copied()
+                else {
+                    continue;
+                };
+                // Defensive: only extract graph-ready txs. A proposed child whose
+                // parent is earlier in this same proposal becomes ready once the
+                // parent is removed below (proposals are parent-ordered by the
+                // scheduler's coin promotion).
+                if self.storage.has_dependencies(&storage_id) {
+                    continue;
+                }
+                // Cumulative block-budget guard, checked BEFORE removal.
+                let Some(entry) = Storage::get(&self.storage, &storage_id) else {
+                    continue;
+                };
+                let tx_gas = entry.transaction.max_gas();
+                let tx_size = entry.transaction.metered_bytes_size() as u64;
+                if txs_left == 0 || tx_gas > gas_left || tx_size > size_left {
+                    budget_exhausted = true;
+                    break;
+                }
+                let removal_start = fine_timing.then(Instant::now);
+                let Some(storage_entry) = self.storage.remove_transaction(storage_id)
+                else {
+                    continue;
+                };
+                if let Some(start) = removal_start {
+                    removal_elapsed += start.elapsed();
+                }
+                gas_left = gas_left.saturating_sub(tx_gas);
+                size_left = size_left.saturating_sub(tx_size);
+                txs_left = txs_left.saturating_sub(1);
+                for (contract, _access) in
+                    crate::lane_integration::derive_contract_accesses(
+                        &storage_entry.transaction,
+                    )
+                {
+                    if !contracts_used.contains(&contract) {
+                        contracts_used.push(contract);
+                    }
+                }
+                let caches_start = fine_timing.then(Instant::now);
+                self.extracted_outputs
+                    .new_extracted_transaction(&storage_entry.transaction);
+                self.spent_inputs.maybe_spend_inputs(
+                    storage_entry.transaction.id(),
+                    storage_entry.transaction.inputs(),
+                );
+                self.update_components_and_caches_on_removal(iter::once(&storage_entry));
+                if let Some(start) = caches_start {
+                    caches_elapsed += start.elapsed();
+                }
+                taken.push(tx_id);
+                txs.push(storage_entry.transaction);
+            }
+
+            if !taken.is_empty() {
+                if let Some(lane) = self.lane_scheduler.as_mut() {
+                    lane.on_dispatched(batch_id, &taken);
+                }
+                batches.push(ExtractedBatch {
+                    txs,
+                    contracts: contracts_used,
+                    batch_id: Some(batch_id),
+                });
+            }
+        }
+
+        self.update_stats();
+        // Ask-cost breakdown: in-memory atomic counters only (a per-ask log
+        // line at thousands of asks/block measurably loads the pool worker's
+        // hot path). Scrape the txpool_lane_ask_* counters and diff across a
+        // run; executor-side pool_ask minus total = channel + queueing.
+        let _ = pool_depth;
+        if self.config.metrics {
+            let m = fuel_core_metrics::txpool_metrics::txpool_metrics();
+            let extracted: usize = batches.iter().map(|b| b.txs.len()).sum();
+            m.lane_ask_count.inc();
+            m.lane_ask_total_us
+                .inc_by(ask_start.elapsed().as_micros() as u64);
+            m.lane_ask_scheduler_us
+                .inc_by(scheduler_elapsed.as_micros() as u64);
+            m.lane_ask_removal_us
+                .inc_by(removal_elapsed.as_micros() as u64);
+            m.lane_ask_caches_us
+                .inc_by(caches_elapsed.as_micros() as u64);
+            m.lane_ask_extracted.inc_by(extracted as u64);
+        }
+        batches
     }
 
     #[cfg(test)]

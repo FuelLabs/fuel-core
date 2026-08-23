@@ -197,6 +197,12 @@ impl RunnableService for GraphqlService {
         let server = axum::Server::from_tcp(listener)
             .unwrap()
             .executor(executor)
+            // Multiplexed clients hold EVERY in-flight request — including
+            // long-lived `submitAndAwaitStatus` streams — as h2 streams on one
+            // connection; hyper's default max-concurrent-streams (~200) would
+            // silently gate a high-frequency submitter far below the node's
+            // configured concurrency limits.
+            .http2_max_concurrent_streams(Some(16384))
             .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
                 state

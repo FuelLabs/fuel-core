@@ -627,7 +627,19 @@ impl Command {
             tx_max_pending_write_requests,
             tx_pending_pool_ttl,
             tx_pending_pool_size_percentage,
+            lane_scheduler,
         } = tx_pool;
+
+        // The lane scheduler is the parallel executor's selection path: unset,
+        // it defaults ON when the executor runs in parallel mode and OFF
+        // otherwise. `--lane-scheduler false` is the explicit off-switch.
+        #[cfg(feature = "parallel-executor")]
+        let lane_scheduler = lane_scheduler.unwrap_or(matches!(
+            executor_mode,
+            fuel_core::service::config::ExecutorMode::Parallel
+        ));
+        #[cfg(not(feature = "parallel-executor"))]
+        let lane_scheduler = lane_scheduler.unwrap_or(false);
 
         let TxStatusManagerArgs {
             tx_number_active_subscriptions,
@@ -774,6 +786,10 @@ impl Command {
                 max_pending_pool_size_percentage: tx_pending_pool_size_percentage,
                 metrics: metrics.is_enabled(Module::TxPool),
                 eagerly_include_tx_dependency_graphs: false,
+                // Event-driven rw-lanes scheduler; defaults to the executor
+                // mode (ON with the parallel executor), overridable with
+                // `--lane-scheduler <true|false>` (env `LANE_SCHEDULER`).
+                lane_scheduler,
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,

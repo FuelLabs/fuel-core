@@ -420,6 +420,13 @@ pub(crate) enum ParallelExecutorAdapterInner {
         executor: Arc<
             Mutex<ParallelExecutor<Database, Database<Relayer>, PreconfirmationSender>>,
         >,
+        /// A sequential (upgradable) executor over the same databases, used for
+        /// the operations the parallel executor does not implement — dry-run,
+        /// storage-read replay, validation — so those RPC/consensus paths run
+        /// correctly instead of panicking the node. Parallelism only matters for
+        /// block production; these paths are correctness/availability paths and
+        /// have no need for it.
+        native: ExecutorAdapter,
     },
     Native(ExecutorAdapter),
 }
@@ -436,8 +443,20 @@ impl ParallelExecutorAdapter {
         database: Database,
         relayer_database: Database<Relayer>,
         config: fuel_core_parallel_executor::config::Config,
+        native_config: fuel_core_upgradable_executor::config::Config,
+        new_txs_watcher: watch::Receiver<()>,
         preconfirmation_sender: PreconfirmationSender,
     ) -> anyhow::Result<Self> {
+        // Sequential fallback for the non-production paths (dry-run, storage-read
+        // replay, validation). Built over the same databases so it observes the
+        // same committed state.
+        let native = ExecutorAdapter::new(
+            database.clone(),
+            relayer_database.clone(),
+            native_config,
+            new_txs_watcher,
+            preconfirmation_sender.clone(),
+        );
         let executor = ParallelExecutor::new(
             database,
             relayer_database,
@@ -447,6 +466,7 @@ impl ParallelExecutorAdapter {
         Ok(Self {
             inner: ParallelExecutorAdapterInner::Parallel {
                 executor: Arc::new(Mutex::new(executor)),
+                native,
             },
         })
     }

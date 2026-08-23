@@ -5,12 +5,13 @@ use crate::{
         Error,
         InsertionErrorType,
     },
+    lane_integration::BatchFeedback,
     pending_pool::PendingPool,
+    pool::ExtractedBatch,
     ports::{
         TxPoolPersistentStorage,
         TxStatusManager as TxStatusManagerTrait,
     },
-    selection_algorithms::SelectionAlgorithm,
     service::{
         TxInfo,
         TxPool,
@@ -58,7 +59,15 @@ use tokio::{
 };
 
 const MAX_PENDING_READ_POOL_REQUESTS: usize = 10_000;
-const MAX_PENDING_INSERT_POOL_REQUESTS: usize = 1_000;
+/// Upper bound on how many queued inserts one worker-loop iteration drains.
+/// Deliberately small: the `tokio::select!` below is `biased` with extraction
+/// polled before inserts, so a block-production extraction waits for AT MOST
+/// one in-flight insert drain. With the previous bound of 1_000 a single drain
+/// could hold the worker for tens of milliseconds under sustained insert load,
+/// and that queueing (not compute) was a measured ~30% of extraction latency.
+/// 128 keeps insert throughput (the channel buffers the rest) while bounding
+/// the extraction's worst-case wait.
+const MAX_PENDING_INSERT_POOL_REQUESTS: usize = 128;
 const MAX_PENDING_REMOVE_POOL_REQUESTS: usize = 1_000;
 
 const SIZE_EXTRACT_BLOCK_TRANSACTIONS_CHANNEL: usize = 100_000;
@@ -207,17 +216,47 @@ pub(super) enum PoolInsertRequest {
     },
 }
 
+/// Per-ask lifecycle checkpoints measured pool-side, returned with every
+/// extraction answer so the executor can attribute the full round-trip:
+/// `sent -> worker start` (queue), `worker start -> response sent` (in-pool,
+/// with the scheduler share split out), and — via `responded_at` — the return
+/// hop measured at the receiver.
+#[derive(Clone, Copy, Debug)]
+pub struct AskTimings {
+    /// Executor send -> pool worker began processing (channel + queueing).
+    pub queue_us: u64,
+    /// Pool worker processing wall time (scheduler + extraction + response prep).
+    pub in_pool_us: u64,
+    /// Lane-scheduler `next_batches` share of `in_pool_us`.
+    pub scheduler_us: u64,
+    /// Taken right before the response is sent; `responded_at.elapsed()` at the
+    /// receiver is the return hop.
+    pub responded_at: std::time::Instant,
+}
+
 pub(super) enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
+        sent_at: std::time::Instant,
         transactions:
-            oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>)>,
+            oneshot::Sender<(Vec<ExtractedBatch>, HashSet<ContractId>, AskTimings)>,
     },
 }
 
 pub(super) enum PoolUpdateRequest {
-    ProcessBlock { block_result: SharedImportResult },
-    ExpiredTransactions { expired_txs: Vec<TxId> },
+    ProcessBlock {
+        block_result: SharedImportResult,
+    },
+    ExpiredTransactions {
+        expired_txs: Vec<TxId>,
+    },
+    /// Batch-completion feedback for the lane scheduler (measured overhead /
+    /// execution time / completion). Ignored when the lane scheduler is off.
+    /// Constructed by [`crate::SharedState::report_lane_scheduler_feedback`]
+    /// after the executor finishes a batch.
+    LaneSchedulerFeedback {
+        feedback: Vec<BatchFeedback>,
+    },
 }
 pub(super) enum PoolReadRequest {
     NonExistingTxs {
@@ -297,8 +336,8 @@ where
             }
             extract = self.extract_block_transactions_receiver.recv() => {
                 match extract {
-                    Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, transactions }) => {
-                        self.extract_block_transactions(constraints, transactions);
+                    Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, sent_at, transactions }) => {
+                        self.extract_block_transactions(constraints, sent_at, transactions);
                     }
                     None => {
                         return TaskNextAction::Stop
@@ -318,12 +357,18 @@ where
                     return TaskNextAction::Stop;
                 }
                 for update in update_buffer {
+                    self.serve_pending_extractions();
                     match update {
                         PoolUpdateRequest::ProcessBlock { block_result } => {
                             self.process_block(block_result);
                         }
                         PoolUpdateRequest::ExpiredTransactions { expired_txs } => {
                             self.remove_expired_transactions(expired_txs);
+                        }
+                        PoolUpdateRequest::LaneSchedulerFeedback { feedback } => {
+                            for fb in feedback {
+                                self.pool.lane_scheduler_feedback(fb);
+                            }
                         }
                     }
                 }
@@ -333,6 +378,7 @@ where
                     return TaskNextAction::Stop;
                 }
                 for read in read_buffer {
+                    self.serve_pending_extractions();
                     match read {
                         PoolReadRequest::TxIds { max_txs, response_channel } => {
                             self.get_tx_ids(max_txs, response_channel);
@@ -354,6 +400,7 @@ where
                     return TaskNextAction::Stop;
                 }
                 for insert in insert_buffer {
+                    self.serve_pending_extractions();
                     let PoolInsertRequest::Insert {
                         tx,
                         source,
@@ -497,32 +544,47 @@ where
         }
     }
 
+    /// Serve any executor asks that arrived while the worker is draining a
+    /// buffered arm (inserts, reads, updates). The `biased` select only
+    /// prioritizes extraction BETWEEN drains; without this, an ask landing
+    /// mid-drain waits for the whole buffer (up to 128 inserts / 10k reads —
+    /// multi-millisecond queue tail). Serving between items is sound: the
+    /// pool is in a consistent state after every item, and an ask served
+    /// mid-drain simply doesn't see the not-yet-processed remainder, exactly
+    /// as if it had arrived before those requests. `try_recv` on an empty
+    /// channel is a single atomic load, so the no-ask cost is negligible.
+    fn serve_pending_extractions(&mut self) {
+        while let Ok(extract) = self.extract_block_transactions_receiver.try_recv() {
+            let PoolExtractBlockTransactions::ExtractBlockTransactions {
+                constraints,
+                sent_at,
+                transactions,
+            } = extract;
+            self.extract_block_transactions(constraints, sent_at, transactions);
+        }
+    }
+
     fn extract_block_transactions(
         &mut self,
         constraints: Constraints,
-        blocks: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>)>,
+        sent_at: std::time::Instant,
+        blocks: oneshot::Sender<(Vec<ExtractedBatch>, HashSet<ContractId>, AskTimings)>,
     ) {
-        tracing::warn!(
-            max_gas = constraints.max_gas,
-            max_txs = constraints.maximum_txs,
-            max_block_size = constraints.maximum_block_size,
-            excluded_contracts = constraints.excluded_contracts.len(),
-            tx_count = self.pool.tx_count(),
-            executable_count = self
-                .pool
-                .selection_algorithm
-                .number_of_executable_transactions(),
-            "txpool_v2 extract_block_transactions start"
-        );
-        let (txs, selected_anchors) =
-            self.pool.extract_transactions_for_block_with_anchors(&constraints);
-        tracing::warn!(
-            result_size = txs.len(),
-            selected_anchor_count = selected_anchors.len(),
-            "txpool_v2 extract_block_transactions result"
-        );
+        // Checkpointed, log-free (per-ask logs at thousands of asks/block load
+        // this hot loop; see AskTimings + txpool_lane_ask_* counters instead).
+        let started = std::time::Instant::now();
+        let queue_us = started.duration_since(sent_at).as_micros() as u64;
+        let batches = self
+            .pool
+            .extract_transactions_for_block_with_anchors(&constraints);
+        let timings = AskTimings {
+            queue_us,
+            in_pool_us: started.elapsed().as_micros() as u64,
+            scheduler_us: self.pool.last_lane_ask_scheduler_us,
+            responded_at: std::time::Instant::now(),
+        };
         if blocks
-            .send((txs, constraints.excluded_contracts, selected_anchors))
+            .send((batches, constraints.excluded_contracts, timings))
             .is_err()
         {
             tracing::error!("Failed to send block transactions");
@@ -591,10 +653,13 @@ where
                 return;
             }
         };
-        // All of this can be useful in case that we didn't know about the transaction
-        let resolved = self
-            .pending_pool
-            .new_known_tx(outputs.iter().map(|(utxo_id, output)| (*utxo_id, output)));
+        // All of this can be useful in case that we didn't know about the transaction.
+        // The pre-confirmation outputs are RESOLVED by execution, so
+        // `Change`/`Variable` outputs are real coins and must complete pending
+        // spenders too.
+        let resolved = self.pending_pool.new_known_resolved_tx(
+            outputs.iter().map(|(utxo_id, output)| (*utxo_id, output)),
+        );
         // First insert the outputs in the pool to be able to insert the resolved transactions
         self.pool
             .extracted_outputs

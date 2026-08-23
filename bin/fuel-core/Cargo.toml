@@ -40,7 +40,7 @@ production = [
     "rpc",
 ]
 jemalloc = ["dep:tikv-jemallocator"]
-parallel-executor = ["fuel-core/parallel-executor"]
+parallel-executor = ["fuel-core/parallel-executor", "dep:fuel-core-executor"]
 fault-proving = [
     "fuel-core-storage/fault-proving",
     "fuel-core-types/fault-proving",
@@ -59,7 +59,10 @@ dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, default-features = false, features = ["wasm-executor"] }
 fuel-core-block-aggregator-api = { workspace = true }
 fuel-core-chain-config = { workspace = true }
+fuel-core-executor = { workspace = true, optional = true }
+fuel-core-importer = { workspace = true }
 fuel-core-metrics = { workspace = true }
+fuel-core-storage = { workspace = true }
 fuel-core-poa = { workspace = true, optional = true }
 fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-types = { workspace = true, features = ["std"] }

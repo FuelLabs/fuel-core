@@ -22,6 +22,9 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
 futures = { workspace = true, features = ["std"] }
 fxhash = { version = "0.2.1", default-features = false }
+# Conflict planner used to build conflict-free validation batches from a
+# received block (same crate the txpool uses for production batch building).
+lane-scheduler = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true, features = [
   "rt-multi-thread",

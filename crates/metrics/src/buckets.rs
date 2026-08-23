@@ -12,6 +12,9 @@ pub(crate) enum Buckets {
     ParallelExecutorBatchTimeMs,
     ParallelExecutorBatchTimeMicrosecondsPerTx,
     ParallelExecutorBatchTimeNanosecondsPerKGas,
+    ParallelExecutorHandoffTimeMicroseconds,
+    ParallelExecutorContractsPerBatch,
+    ParallelExecutorHandoffChangesetKeys,
     TransactionSize,
     TransactionInsertionTimeInThreadPool,
     SelectTransactionsTime,
@@ -92,6 +95,59 @@ fn initialize_buckets() -> HashMap<Buckets, Vec<f64>> {
                 300.0,
                 500.0,
                 1000.0,
+            ],
+        ),
+        (
+            // Per-contract `Changes` handoff (split take / merge re-insert) —
+            // microsecond scale, sub-millisecond in the common case.
+            Buckets::ParallelExecutorHandoffTimeMicroseconds,
+            vec![
+                    1.0,
+                    5.0,
+                   10.0,
+                   25.0,
+                   50.0,
+                  100.0,
+                  250.0,
+                  500.0,
+                 1000.0,
+                 2500.0,
+                 5000.0,
+                10000.0,
+            ],
+        ),
+        (
+            // Number of distinct contracts handed off in one batch.
+            Buckets::ParallelExecutorContractsPerBatch,
+            vec![
+                  1.0,
+                  2.0,
+                  3.0,
+                  4.0,
+                  5.0,
+                  8.0,
+                 12.0,
+                 20.0,
+                 50.0,
+                100.0,
+            ],
+        ),
+        (
+            // Number of storage keys in a batch's handed-off per-contract change
+            // set (a proxy for handoff/merge cost).
+            Buckets::ParallelExecutorHandoffChangesetKeys,
+            vec![
+                    1.0,
+                    5.0,
+                   10.0,
+                   25.0,
+                   50.0,
+                  100.0,
+                  250.0,
+                  500.0,
+                 1000.0,
+                 5000.0,
+                10000.0,
             ],
         ),
         (

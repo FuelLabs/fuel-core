@@ -33,6 +33,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         Transaction,
+        UniqueIdentifier,
         field::MintGasPrice,
     },
     fuel_types::{
@@ -53,6 +54,7 @@ use fuel_core_types::{
     },
 };
 use std::{
+    collections::HashMap,
     ops::Deref,
     sync::Arc,
     time::{
@@ -419,15 +421,30 @@ where
         #[cfg(feature = "test-helpers")]
         let changes_clone = changes.clone();
 
+        // Per-transaction actual gas used, in block-transaction order, written
+        // as a non-consensus scheduling hint for the parallel validator (see
+        // `TransactionsGasUsage`). Both the local and network commit paths
+        // reach here with `result.tx_status` populated, so this is the single
+        // place both are covered. The value is disjoint from every other
+        // committed column, so it merges into the same atomic `commit_changes`.
+        let gas_changes = {
+            let gas_used = Self::transactions_gas_used(&self.chain_id, &result);
+            let mut transaction = self.database.storage_transaction();
+            transaction.store_transactions_gas_usage(&actual_next_height, &gas_used)?;
+            transaction.into_changes()
+        };
+
         let combined_changes = match changes {
             StorageChanges::Changes(inner) => {
                 let mut combined = block_changes.extract_list_of_changes();
                 combined.push(inner);
+                combined.push(gas_changes);
                 StorageChanges::ChangesList(combined)
             }
             StorageChanges::ChangesList(list) => {
                 let mut combined = block_changes.extract_list_of_changes();
                 combined.extend(list);
+                combined.push(gas_changes);
                 StorageChanges::ChangesList(combined)
             }
         };
@@ -517,6 +534,27 @@ where
         importer_metrics()
             .transactions_per_block
             .set(total_transactions.try_into().unwrap_or(i64::MAX));
+    }
+
+    /// The block's per-transaction actual gas used, indexed by each
+    /// transaction's position in the block (so index `i` is the block's
+    /// `i`-th transaction, mint included). Built from the execution
+    /// `tx_status` keyed by transaction id, so it is robust to the status
+    /// ordering; a transaction with no recorded status contributes `0`
+    /// (only positions the validator does not read, e.g. the trailing mint).
+    fn transactions_gas_used(chain_id: &ChainId, result: &ImportResult) -> Vec<u64> {
+        let by_id: HashMap<_, u64> = result
+            .tx_status
+            .iter()
+            .map(|status| (status.id, *status.result.total_gas()))
+            .collect();
+        result
+            .sealed_block
+            .entity
+            .transactions()
+            .iter()
+            .map(|tx| by_id.get(&tx.id(chain_id)).copied().unwrap_or(0))
+            .collect()
     }
 }
 

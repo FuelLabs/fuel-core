@@ -147,12 +147,24 @@ impl PendingPool {
         &mut self,
         utxo_id: UtxoId,
         output: &Output,
+        outputs_are_resolved: bool,
         resolved_txs: &mut Vec<(ArcPoolTx, InsertionSource)>,
     ) {
         let missing_input = match output {
             Output::Coin { .. } => MissingInput::Utxo(utxo_id),
             Output::ContractCreated { contract_id, .. } => {
                 MissingInput::Contract(*contract_id)
+            }
+            // `Change`/`Variable` outputs only carry a real amount once the
+            // creating transaction has been executed: a committed block or a
+            // pre-confirmation with resolved outputs. At that point they are
+            // spendable coins and must complete pending spenders — otherwise a
+            // dependent transaction waiting on them is never promoted and rots
+            // in the pending pool until its TTL squeezes it out. While the
+            // creating transaction is merely known to the pool (submitted, not
+            // executed), they resolve nothing: their amounts are still unknown.
+            Output::Change { .. } | Output::Variable { .. } if outputs_are_resolved => {
+                MissingInput::Utxo(utxo_id)
             }
             Output::Contract { .. } | Output::Change { .. } | Output::Variable { .. } => {
                 return;
@@ -228,16 +240,33 @@ impl PendingPool {
     }
 
     // We expect it to be called a lot (every new tx in the pool).
+    // The outputs come from a transaction that is only KNOWN (inserted in the
+    // pool), not executed: `Change`/`Variable` outputs resolve nothing here.
     pub fn new_known_tx<'a>(
         &mut self,
         new_known_tx_outputs: impl Iterator<Item = (UtxoId, &'a Output)>,
     ) -> Vec<(ArcPoolTx, InsertionSource)> {
         let mut res = Vec::new();
-        self.new_known_tx_inner(new_known_tx_outputs, &mut res);
+        self.new_known_tx_inner(new_known_tx_outputs, false, &mut res);
         res
     }
 
-    // We expect it to be called a lot (every new block).
+    /// Same as [`Self::new_known_tx`], but for outputs whose values were
+    /// already resolved by execution (e.g. pre-confirmation resolved outputs):
+    /// `Change`/`Variable` outputs are real coins here and resolve pending
+    /// spenders.
+    pub fn new_known_resolved_tx<'a>(
+        &mut self,
+        new_known_tx_outputs: impl Iterator<Item = (UtxoId, &'a Output)>,
+    ) -> Vec<(ArcPoolTx, InsertionSource)> {
+        let mut res = Vec::new();
+        self.new_known_tx_inner(new_known_tx_outputs, true, &mut res);
+        res
+    }
+
+    // We expect it to be called a lot (every new block). Block transactions
+    // are executed, so all their outputs (including `Change`/`Variable`) are
+    // resolved coins.
     pub fn new_known_txs<'a>(
         &mut self,
         new_known_txs: impl Iterator<Item = (&'a Transaction, TxId)>,
@@ -247,7 +276,7 @@ impl PendingPool {
         for (tx, tx_id) in new_known_txs {
             let outputs = tx.outputs();
             let iter = utxo_ids_with_outputs(outputs.iter(), tx_id);
-            self.new_known_tx_inner(iter, &mut res);
+            self.new_known_tx_inner(iter, true, &mut res);
         }
         res
     }
@@ -255,10 +284,16 @@ impl PendingPool {
     fn new_known_tx_inner<'a>(
         &mut self,
         new_known_outputs: impl Iterator<Item = (UtxoId, &'a Output)>,
+        outputs_are_resolved: bool,
         resolved_txs: &mut Vec<(ArcPoolTx, InsertionSource)>,
     ) {
         for (utxo_id, output) in new_known_outputs {
-            self.new_known_input_from_output(utxo_id, output, resolved_txs);
+            self.new_known_input_from_output(
+                utxo_id,
+                output,
+                outputs_are_resolved,
+                resolved_txs,
+            );
         }
     }
 
@@ -573,6 +608,121 @@ mod tests {
         assert_eq!(resolved_txs.len(), 1);
         assert_eq!(resolved_txs[0].0.id(), dependent_tx.id());
         assert!(pending_pool.is_empty());
+    }
+
+    #[test]
+    fn new_known_txs__resolves_tx_pending_on_change_output_of_committed_tx() {
+        // Regression test for the "lost dependent transaction" stall: a child
+        // that spends the CHANGE output of its parent goes to the pending pool
+        // (change amounts are unknown while the parent is unexecuted). When the
+        // parent commits in a block, its executed outputs — including `Change`
+        // — are resolved coins, so the pending child MUST be resolved and
+        // re-inserted. Before the fix it was silently skipped and rotted in the
+        // pending pool until its TTL squeezed it out.
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let mut pending_pool = PendingPool::new(Duration::from_secs(1));
+
+        // Given: a committed (executed) parent tx whose output 0 is a resolved
+        // change output, and a child pending on that UTXO.
+        let committed_parent: Transaction = create_tx(
+            vec![],
+            vec![Output::change(Address::default(), 100, AssetId::default())],
+            &mut rng,
+        );
+        let parent_tx_id = fuel_core_types::fuel_tx::UniqueIdentifier::id(
+            &committed_parent,
+            &Default::default(),
+        );
+        let change_utxo = UtxoId::new(parent_tx_id, 0);
+        let child =
+            create_pool_tx(vec![MissingInput::Utxo(change_utxo)], vec![], &mut rng);
+        pending_pool.insert_transaction(
+            child.clone(),
+            InsertionSource::RPC {
+                response_channel: None,
+            },
+            vec![MissingInput::Utxo(change_utxo)],
+        );
+
+        // When: the parent's block is processed.
+        let resolved_txs = pending_pool
+            .new_known_txs(vec![(&committed_parent, parent_tx_id)].into_iter());
+
+        // Then: the child is resolved (promoted out of the pending pool).
+        assert_eq!(resolved_txs.len(), 1);
+        assert_eq!(resolved_txs[0].0.id(), child.id());
+        assert!(pending_pool.is_empty());
+    }
+
+    #[test]
+    fn new_known_txs__resolves_tx_pending_on_variable_output_of_committed_tx() {
+        // Same as the change-output regression, for `Variable` outputs.
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let mut pending_pool = PendingPool::new(Duration::from_secs(1));
+
+        let committed_parent: Transaction = create_tx(
+            vec![],
+            vec![Output::variable(
+                Address::default(),
+                100,
+                AssetId::default(),
+            )],
+            &mut rng,
+        );
+        let parent_tx_id = fuel_core_types::fuel_tx::UniqueIdentifier::id(
+            &committed_parent,
+            &Default::default(),
+        );
+        let variable_utxo = UtxoId::new(parent_tx_id, 0);
+        let child =
+            create_pool_tx(vec![MissingInput::Utxo(variable_utxo)], vec![], &mut rng);
+        pending_pool.insert_transaction(
+            child.clone(),
+            InsertionSource::RPC {
+                response_channel: None,
+            },
+            vec![MissingInput::Utxo(variable_utxo)],
+        );
+
+        let resolved_txs = pending_pool
+            .new_known_txs(vec![(&committed_parent, parent_tx_id)].into_iter());
+
+        assert_eq!(resolved_txs.len(), 1);
+        assert_eq!(resolved_txs[0].0.id(), child.id());
+        assert!(pending_pool.is_empty());
+    }
+
+    #[test]
+    fn new_known_tx__does_not_resolve_change_output_of_merely_pooled_tx() {
+        // Guard for the intended asymmetry: when the parent is only INSERTED
+        // into the pool (not executed), its change amount is still unknown, so
+        // a child pending on the change UTXO must stay pending.
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let mut pending_pool = PendingPool::new(Duration::from_secs(1));
+
+        let pooled_parent = create_pool_tx(
+            vec![],
+            vec![Output::change(Address::default(), 0, AssetId::default())],
+            &mut rng,
+        );
+        let change_utxo = UtxoId::new(pooled_parent.id(), 0);
+        let child =
+            create_pool_tx(vec![MissingInput::Utxo(change_utxo)], vec![], &mut rng);
+        pending_pool.insert_transaction(
+            child.clone(),
+            InsertionSource::RPC {
+                response_channel: None,
+            },
+            vec![MissingInput::Utxo(change_utxo)],
+        );
+
+        // When: the parent becomes known via pool insertion (unexecuted).
+        let resolved_txs =
+            pending_pool.new_known_tx(pooled_parent.utxo_ids_with_outputs());
+
+        // Then: the child stays pending — only execution resolves change.
+        assert_eq!(resolved_txs.len(), 0);
+        assert!(!pending_pool.is_empty());
     }
 
     #[test]

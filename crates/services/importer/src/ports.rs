@@ -7,6 +7,7 @@ use fuel_core_storage::{
         FuelBlocks,
         SealedBlockConsensus,
         Transactions,
+        TransactionsGasUsage,
     },
     transactional::{
         Changes,
@@ -79,6 +80,16 @@ pub trait DatabaseTransaction {
         block: &SealedBlock,
     ) -> StorageResult<bool>;
 
+    /// Stores the per-transaction actual gas used for the block at `height`,
+    /// in block-transaction order. This is a NON-CONSENSUS scheduling hint
+    /// consumed by the parallel validator (see
+    /// [`TransactionsGasUsage`](fuel_core_storage::tables::TransactionsGasUsage)).
+    fn store_transactions_gas_usage(
+        &mut self,
+        height: &BlockHeight,
+        gas_used: &[u64],
+    ) -> StorageResult<()>;
+
     /// Returns the changes of the transaction.
     fn into_changes(self) -> Changes;
 }
@@ -145,6 +156,19 @@ where
         }
         storage.commit()?;
         Ok(!found)
+    }
+
+    fn store_transactions_gas_usage(
+        &mut self,
+        height: &BlockHeight,
+        gas_used: &[u64],
+    ) -> StorageResult<()> {
+        let mut storage = self.write_transaction();
+        storage
+            .storage_as_mut::<TransactionsGasUsage>()
+            .insert(height, gas_used)?;
+        storage.commit()?;
+        Ok(())
     }
 
     fn into_changes(self) -> Changes {

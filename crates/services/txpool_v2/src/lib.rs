@@ -45,6 +45,7 @@ mod collision_manager;
 pub mod config;
 pub mod error;
 mod extracted_outputs;
+pub mod lane_integration;
 mod pending_pool;
 mod pool;
 mod pool_worker;
@@ -63,7 +64,14 @@ mod tests;
 fuel_core_trace::enable_tracing!();
 
 use fuel_core_types::fuel_asm::Word;
-pub use pool::TxPoolStats;
+/// The lane-scheduler batch identifier, surfaced so the executor can round-trip
+/// batch-completion feedback (see [`SharedState::report_lane_scheduler_feedback`]).
+pub use lane_integration::BatchId;
+pub use pool::{
+    ExtractedBatch,
+    TxPoolStats,
+};
+pub use pool_worker::AskTimings;
 pub use selection_algorithms::Constraints;
 pub use service::{
     Service,

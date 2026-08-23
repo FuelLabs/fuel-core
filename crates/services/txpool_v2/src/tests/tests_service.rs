@@ -495,10 +495,12 @@ async fn insert__tx_depends_one_extracted_and_one_pool_tx() {
         .extract_transactions_for_block(Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         })
         .unwrap();
 
@@ -511,10 +513,12 @@ async fn insert__tx_depends_one_extracted_and_one_pool_tx() {
         .extract_transactions_for_block(Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         })
         .unwrap();
 
@@ -552,10 +556,12 @@ async fn pending_pool__returns_error_for_transaction_that_spends_already_spent_u
         .extract_transactions_for_block(Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         })
         .unwrap();
 
@@ -601,10 +607,12 @@ async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_u
         .extract_transactions_for_block(Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u32::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         })
         .unwrap();
 
