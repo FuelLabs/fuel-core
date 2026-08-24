@@ -337,22 +337,15 @@ impl RunnableTask for SyncTask {
                             };
                             self.update_sync_state(SyncState::Synced(Arc::new(block_info.block_header)));
                         } else {
-                            // Network tip moved ahead of us while we were Synced.
-                            // Publish NotSynced first, then re-evaluate the height gap —
-                            // calling on_sufficient_peers_activity before NotSynced can
-                            // publish Synced (time_until_synced=0) and leave the watch
-                            // channel stuck on NotSynced while inner_state is Synced.
-                            if *has_sufficient_peers {
-                                self.inner_state = InnerSyncState::SufficientPeers(
-                                    block_info.block_header,
-                                );
-                            } else {
-                                self.inner_state = InnerSyncState::InsufficientPeers(
-                                    block_info.block_header,
-                                );
-                            }
-                            self.update_sync_state(SyncState::NotSynced);
-                            self.on_sufficient_peers_activity().await;
+                            // A network import does not itself mean the node is lagging.
+                            // The live height-gap check below decides whether to leave Synced.
+                            self.inner_state = InnerSyncState::Synced {
+                                block_header: block_info.block_header.clone(),
+                                has_sufficient_peers: *has_sufficient_peers,
+                            };
+                            self.update_sync_state(SyncState::Synced(Arc::new(
+                                block_info.block_header,
+                            )));
                         }
                     }
                     _ => {}
@@ -1159,6 +1152,66 @@ mod tests {
         assert!(
             published_synced,
             "With time_until_synced=0 and gap still ok after import, must re-enter Synced"
+        );
+
+        drop(tx);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sync_task_network_block_within_height_gap_does_not_restart_debounce() {
+        let connections_stream = MockStream::new(vec![5]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let mut p2p = MockP2pPort::new();
+        p2p.expect_reserved_peer_network_height()
+            .returning(|| Box::pin(async { Some(BlockHeight::from(6u32)) }));
+
+        let mut block_importer = MockBlockImporter::new();
+        block_importer
+            .expect_latest_block_height()
+            .returning(|| Ok(Some(BlockHeight::from(6u32))));
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+        let debounce = Duration::from_secs(2);
+
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            5,
+            debounce,
+            1,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            Arc::new(AtomicU32::new(0)),
+            Arc::new(p2p),
+            Arc::new(block_importer),
+        );
+
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(sync_task.debounce_armed);
+
+        tokio::time::advance(debounce).await;
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+        assert!(!sync_task.debounce_armed);
+
+        sync_task.block_stream =
+            MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
+        let _ = sync_task.run(&mut watcher).await;
+
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "A network import within the allowed height gap must stay Synced"
+        );
+        assert!(
+            !sync_task.debounce_armed,
+            "Staying within the height gap must not restart the debounce"
         );
 
         drop(tx);
