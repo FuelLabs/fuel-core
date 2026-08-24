@@ -648,9 +648,9 @@ mod tests {
         ));
     }
 
-    // SyncTask is in Synced state and receives a block with a height greater than its current block height from the network.
+    // SyncTask stays Synced when a network block does not violate the live height gap.
     #[tokio::test]
-    async fn sync_task_synced_to_greater_block_height_from_network() {
+    async fn sync_task_network_block_within_height_gap_stays_synced() {
         // given the following config
         let min_connected_reserved_peers = 5;
         let biggest_block = 5;
@@ -725,23 +725,8 @@ mod tests {
         // when we run the task again
         let _ = sync_task.run(&mut watcher).await;
 
-        // then the state should be SufficientPeers
-        // since we have sufficient peers and the block height is greater than the current one
-        assert!(matches!(
-            sync_task.inner_state,
-            InnerSyncState::SufficientPeers(_)
-        ));
-        // with latest block height
-        assert_eq!(
-            sync_task.inner_state.block_height(),
-            &BlockHeight::from(latest_block_height)
-        );
-        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
-
-        // given now that we run the task again
-        let _ = sync_task.run(&mut watcher).await;
-
-        // we should be in Synced state again
+        // The network source alone does not imply lag. The live network and local
+        // heights still satisfy the configured gap, so readiness remains stable.
         assert!(matches!(
             sync_task.inner_state,
             InnerSyncState::Synced {
@@ -749,12 +734,14 @@ mod tests {
                 ..
             }
         ));
-        // with latest block height
         assert_eq!(
             sync_task.inner_state.block_height(),
             &BlockHeight::from(latest_block_height)
         );
-        matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_));
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
 
         // given new stream of peer connection updates
         let new_connections_stream = MockStream::new(vec![1]).into_boxed();
