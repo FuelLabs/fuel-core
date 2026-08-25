@@ -10,7 +10,11 @@ pub struct Config {
     pub signer: SignMode,
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
+    /// Quiet window after the height gap is within `--max-sync-height-diff`
+    /// before declaring Synced. Zero transitions immediately once the gap is ok.
     pub time_until_synced: Duration,
+    /// Largest reserved-peer Height Gap that still counts as Ready.
+    pub max_sync_height_diff: u32,
     pub production_timeout: Duration,
     pub chain_id: ChainId,
 }
@@ -24,6 +28,7 @@ impl Default for Config {
             metrics: false,
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
+            max_sync_height_diff: 1,
             production_timeout: Duration::from_secs(20),
             chain_id: ChainId::default(),
         }

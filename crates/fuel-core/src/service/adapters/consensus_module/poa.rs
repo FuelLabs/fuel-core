@@ -30,11 +30,19 @@ use fuel_core_poa::{
     },
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::Changes;
+use fuel_core_storage::{
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
+    tables::FuelBlocks,
+    transactional::Changes,
+};
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
         block::Block,
+        header::BlockHeader,
         primitives::BlockId,
     },
     fuel_types::BlockHeight,
@@ -1722,12 +1730,28 @@ impl P2pPort for P2PAdapter {
             Box::pin(tokio_stream::pending())
         }
     }
+
+    fn reserved_peer_network_height(
+        &self,
+    ) -> fuel_core_services::stream::BoxFuture<'static, Option<BlockHeight>> {
+        let service = self.service.clone();
+        Box::pin(async move {
+            let service = service?;
+            service.reserved_peer_network_height().await.ok().flatten()
+        })
+    }
 }
 
 #[cfg(not(feature = "p2p"))]
 impl P2pPort for P2PAdapter {
     fn reserved_peers_count(&self) -> BoxStream<usize> {
         Box::pin(tokio_stream::pending())
+    }
+
+    fn reserved_peer_network_height(
+        &self,
+    ) -> fuel_core_services::stream::BoxFuture<'static, Option<BlockHeight>> {
+        Box::pin(async { None })
     }
 }
 
@@ -1835,6 +1859,18 @@ impl BlockImporter for BlockImporterAdapter {
 
     fn latest_block_height(&self) -> anyhow::Result<Option<BlockHeight>> {
         self.database.latest_block_height().map_err(Into::into)
+    }
+
+    fn latest_block_header(&self) -> anyhow::Result<Option<BlockHeader>> {
+        // Same FuelBlocks reverse-scan as `ImporterDatabase::latest_block_height`
+        // — `maybe_latest_height` / `latest_block` are only on
+        // `OnChainIterableKeyValueView`, not on `Database` itself.
+        Ok(self
+            .database
+            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()?
+            .map(|(_, block)| block.header().clone()))
     }
 }
 

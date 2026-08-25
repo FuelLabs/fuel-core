@@ -1,4 +1,7 @@
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{
+    BoxFuture,
+    BoxStream,
+};
 use fuel_core_storage::{
     Result as StorageResult,
     transactional::Changes,
@@ -71,6 +74,11 @@ pub trait BlockImporter: Send + Sync {
 
     /// Returns the latest committed block height from the database.
     fn latest_block_height(&self) -> anyhow::Result<Option<BlockHeight>>;
+
+    /// Returns the latest committed block header from the database.
+    /// Prefer this over [`Self::latest_block_height`] when refreshing production
+    /// tip state so height and timestamp stay consistent.
+    fn latest_block_header(&self) -> anyhow::Result<Option<BlockHeader>>;
 }
 
 #[async_trait::async_trait]
@@ -107,6 +115,10 @@ pub trait RelayerPort {
 pub trait P2pPort: Send + Sync + 'static {
     /// Subscribe to reserved peers connection updates.
     fn reserved_peers_count(&self) -> BoxStream<usize>;
+
+    /// Snapshot: max heartbeat height among currently connected reserved peers.
+    /// `None` if no reserved peer has reported a height yet.
+    fn reserved_peer_network_height(&self) -> BoxFuture<'static, Option<BlockHeight>>;
 }
 
 #[async_trait::async_trait]

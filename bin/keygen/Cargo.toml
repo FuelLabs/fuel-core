@@ -13,6 +13,7 @@ description = "Command line utilities for fuel-core key management"
 [[bin]]
 name = "fuel-core-keygen"
 path = "src/main.rs"
+doc = false
 
 [dependencies]
 anyhow = { workspace = true }

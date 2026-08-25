@@ -26,6 +26,23 @@ async fn health() {
     assert!(health);
 }
 
+#[tokio::test]
+async fn ready_endpoint_reports_ready_once_started_and_synced() {
+    let srv = FuelService::from_database(Database::default(), Config::local_node())
+        .await
+        .unwrap();
+
+    let url = format!("http://{}/v1/ready", srv.bound_address);
+    let response = reqwest::Client::new().get(url).send().await.unwrap();
+
+    assert_eq!(response.status(), 200);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["ready"], true);
+    assert_eq!(body["services_started"], true);
+    assert_eq!(body["poa_enabled"], true);
+    assert_eq!(body["synced"], true);
+}
+
 #[cfg(feature = "default")]
 #[tokio::test]
 async fn can_restart_node() {

@@ -61,6 +61,7 @@ async fn never_trigger_never_produces_blocks() {
     importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    importer.expect_latest_block_header().returning(|| Ok(None));
     ctx_builder.with_importer(importer);
     let ctx = ctx_builder.build().await;
     new_txs_notifier.send_replace(());
@@ -108,6 +109,7 @@ impl DefaultContext {
         importer
             .expect_latest_block_height()
             .returning(|| Ok(Some(BlockHeight::from(0u32))));
+        importer.expect_latest_block_header().returning(|| Ok(None));
 
         let mut block_producer = MockBlockProducer::default();
         block_producer
@@ -284,6 +286,7 @@ async fn service__if_commit_result_fails_then_retry_commit_result_after_one_seco
     importer
         .expect_latest_block_height()
         .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    importer.expect_latest_block_header().returning(|| Ok(None));
     ctx_builder.with_importer(importer);
     let test_ctx = ctx_builder.build().await;
 
