@@ -76,6 +76,11 @@ use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
 use hyper::rt::Executor;
+use hyper_util::{
+    rt::TokioIo,
+    server::conn::auto::Builder as ConnectionBuilder,
+    service::TowerToHyperService,
+};
 use serde_json::json;
 use std::{
     future::Future,
@@ -136,7 +141,7 @@ pub struct ServerParams {
 }
 
 pub struct Task {
-    server: tokio::task::JoinHandle<hyper::Result<()>>,
+    server: tokio::task::JoinHandle<anyhow::Result<()>>,
     /// Handle to the inner `AsyncProcessor`'s task tracker. Kept here so
     /// `Task::shutdown` can `await processor.drain()` and wait for every
     /// hyper request future to complete before the surrounding service
@@ -225,26 +230,32 @@ impl RunnableService for GraphqlService {
             processor: processor.clone(),
             state: state.clone(),
         };
-
-        let server = axum::Server::from_tcp(listener)
-            .unwrap()
-            .executor(executor)
-            .serve(router.into_make_service())
-            .with_graceful_shutdown(async move {
-                // Wait for an actual stop signal. Using `while_started` here would
-                // resolve immediately while the state is still `Starting`, racing
-                // with the runner setting the state to `Started`. When the race
-                // is lost, the spawned server task aborts before it ever serves
-                // a request — which then cascades into a full FuelService
-                // shutdown via `select_all(await_stop)` in `service.rs::run`.
-                //
-                // A `wait_stopping_or_stopped` error means the watcher's sender
-                // was already dropped (the `ServiceRunner` is being torn down).
-                // That is *also* a stop signal — we want graceful shutdown to
-                // fire — so swallow the error rather than panicking, which would
-                // crash the spawned server task and leak the listener.
-                let _ = state.wait_stopping_or_stopped().await;
-            });
+        listener.set_nonblocking(true)?;
+        let listener = tokio::net::TcpListener::from_std(listener)?;
+        let server = async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        let (stream, _) = result?;
+                        let io = TokioIo::new(stream);
+                        let service = TowerToHyperService::new(router.clone());
+                        let connection_executor = executor.clone();
+                        executor.execute(async move {
+                            let builder = ConnectionBuilder::new(connection_executor);
+                            if let Err(err) = builder
+                                .serve_connection_with_upgrades(io, service)
+                                .await
+                            {
+                                tracing::debug!(
+                                    "GraphQL connection closed with error: {err}"
+                                );
+                            }
+                        });
+                    }
+                    _ = state.wait_stopping_or_stopped() => return Ok(()),
+                }
+            }
+        };
 
         Ok(Task {
             server: tokio::spawn(server),
@@ -300,7 +311,7 @@ impl RunnableTask for Task {
 }
 
 fn map_server_result(
-    result: Result<hyper::Result<()>, tokio::task::JoinError>,
+    result: Result<anyhow::Result<()>, tokio::task::JoinError>,
 ) -> TaskNextAction {
     match result {
         Ok(Ok(())) => {
@@ -435,7 +446,10 @@ where
         .layer(Extension(readiness))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
-        .layer(TimeoutLayer::new(request_timeout))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            request_timeout,
+        ))
         .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_ORIGIN,
             HeaderValue::from_static("*"),
@@ -547,7 +561,7 @@ async fn graphql_handler(
 async fn graphql_subscription_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
+) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
     let stream = schema.execute_stream(req.0).map(|response| {
         let response = unify_response(response);
         Event::default().json_data(response)

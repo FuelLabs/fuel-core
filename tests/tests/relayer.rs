@@ -8,6 +8,19 @@ use alloy_rpc_types_eth::{
     Log,
     SyncStatus,
 };
+use axum::{
+    Router,
+    body::{
+        Body,
+        to_bytes,
+    },
+    extract::State,
+    http::{
+        Request,
+        Response,
+    },
+    routing::post,
+};
 use clap::Parser;
 use fuel_core::{
     chain_config::Randomize,
@@ -64,16 +77,6 @@ use fuel_core_types::{
         Nonce,
     },
 };
-use hyper::{
-    Body,
-    Request,
-    Response,
-    Server,
-    service::{
-        make_service_fn,
-        service_fn,
-    },
-};
 use rand::{
     Rng,
     SeedableRng,
@@ -81,7 +84,6 @@ use rand::{
 };
 use serde_json::json;
 use std::{
-    convert::Infallible,
     net::{
         Ipv4Addr,
         SocketAddr,
@@ -429,32 +431,19 @@ fn make_message_event(
 }
 
 async fn spawn_eth_node(eth_node: Arc<MockProvider>) -> EthNodeHandle {
-    // Construct our SocketAddr to listen on...
-    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
-
-    // And a MakeService to handle each connection...
-    let make_service = make_service_fn(move |_conn| {
-        let eth_node = eth_node.clone();
-        async move {
-            Ok::<_, Infallible>(service_fn({
-                let eth_node = eth_node.clone();
-                move |req| handle(eth_node.clone(), req)
-            }))
-        }
-    });
-
-    // Then bind and serve...
-    let server = Server::bind(&addr).serve(make_service);
-    let addr = server.local_addr();
-
+    let listener =
+        tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+            .await
+            .unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = Router::new().fallback(post(handle)).with_state(eth_node);
     let (shutdown, rx) = tokio::sync::oneshot::channel();
 
     tokio::spawn(async move {
-        let graceful = server.with_graceful_shutdown(async {
+        let server = axum::serve(listener, app).with_graceful_shutdown(async {
             rx.await.ok();
         });
-        // And run forever...
-        if let Err(e) = graceful.await {
+        if let Err(e) = server.await {
             eprintln!("server error: {e}");
         }
     });
@@ -471,10 +460,10 @@ pub(crate) struct EthNodeHandle {
 
 use alloy_provider::Provider;
 async fn handle(
-    mock: Arc<MockProvider>,
+    State(mock): State<Arc<MockProvider>>,
     req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
-    let body = hyper::body::to_bytes(req).await.unwrap();
+) -> Response<Body> {
+    let body = to_bytes(req.into_body(), usize::MAX).await.unwrap();
 
     let v: serde_json::Value = serde_json::from_slice(body.as_ref()).unwrap();
     let mut o = match v {
@@ -517,7 +506,7 @@ async fn handle(
 
     let r = serde_json::to_vec(&r).unwrap();
 
-    Ok(Response::new(Body::from(r)))
+    Response::new(Body::from(r))
 }
 
 trait ToStdErrorString {

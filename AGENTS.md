@@ -22,7 +22,7 @@ Keep `RUST_VERSION_FMT` in sync with `.github/workflows/ci.yml` (`env.RUST_VERSI
 
 ### Hard rules
 
-- **Never** run `cargo fmt` / `cargo fmt --all` on the **stable / 1.93.0** toolchain from `rust-toolchain.toml`. `.rustfmt.toml` uses nightly-only options (`imports_layout`, `imports_granularity`, `normalize_comments`, `trailing_semicolon`). Stable ignores them and can rewrite hundreds of files with compact import layout.
+- **Never** run `cargo fmt` / `cargo fmt --all` on the **stable / 1.94.1** toolchain from `rust-toolchain.toml`. `.rustfmt.toml` uses nightly-only options (`imports_layout`, `imports_granularity`, `normalize_comments`, `trailing_semicolon`). Stable ignores them and can rewrite hundreds of files with compact import layout.
 - Prefer formatting the whole workspace with the CI nightly (`cargo +nightly-2025-09-28 fmt --all`) so the PR matches CI. If you must format a subset, still use that nightly + this repo's `.rustfmt.toml`.
 - Also run `cargo clippy` (stable pin) with `-D warnings` on touched crates when practical; CI enforces warnings as errors.
 

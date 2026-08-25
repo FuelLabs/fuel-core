@@ -510,7 +510,7 @@ where
     // We tested commit part in the `commit_result_and_execute_and_commit_poa` so setup the
     // databases to always pass the committing part.
     let expected_height: u32 = (*sealed_block.entity.header().height()).into();
-    let previous_height = expected_height.checked_sub(1).unwrap_or_default();
+    let previous_height = expected_height.saturating_sub(1);
     let mut db = underlying_db(ok(Some(previous_height)), commits)();
     db.expect_storage_transaction()
         .returning(move |_| db_transaction(ok(Some(previous_height)), ok(true))());

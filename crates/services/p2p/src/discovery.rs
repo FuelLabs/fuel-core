@@ -283,7 +283,7 @@ mod tests {
 
         let listen_addr: Multiaddr = Protocol::Memory(rand::random::<u64>()).into();
 
-        let mut swarm = Swarm::new_ephemeral(behaviour_fn);
+        let mut swarm = Swarm::new_ephemeral_tokio(behaviour_fn);
 
         swarm
             .listen_on(listen_addr.clone())

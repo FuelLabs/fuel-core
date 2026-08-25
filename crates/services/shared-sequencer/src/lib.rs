@@ -20,14 +20,12 @@ use cosmrs::{
     },
 };
 use error::PostBlobError;
-use fuel_sequencer_proto::protos::fuelsequencer::sequencing::v1::MsgPostBlob;
 use http_api::{
     AccountMetadata,
     TopicInfo,
 };
 use ports::Signer;
 use prost::Message;
-use tendermint_rpc::Client as _;
 
 // Re-exports
 pub use config::{
@@ -42,6 +40,18 @@ mod http_api;
 pub mod ports;
 pub mod service;
 
+#[derive(Clone, PartialEq, prost::Message)]
+struct MsgPostBlob {
+    #[prost(string, tag = "1")]
+    from: String,
+    #[prost(bytes = "bytes", tag = "2")]
+    topic: Bytes,
+    #[prost(string, tag = "3")]
+    order: String,
+    #[prost(bytes = "bytes", tag = "4")]
+    data: Bytes,
+}
+
 /// Shared sequencer client
 pub struct Client {
     endpoints: Endpoints,
@@ -51,7 +61,6 @@ pub struct Client {
     coin_denom: Denom,
     account_prefix: String,
     http: reqwest::Client,
-    request_timeout: core::time::Duration,
 }
 
 impl Client {
@@ -96,7 +105,6 @@ impl Client {
             ss_chain_id,
             gas_price,
             http,
-            request_timeout,
         })
     }
 
@@ -110,21 +118,11 @@ impl Client {
         Ok(sender_account_id)
     }
 
-    fn tendermint(&self) -> anyhow::Result<tendermint_rpc::HttpClient> {
-        Ok(tendermint_rpc::HttpClient::new(
-            &*self.endpoints.tendermint_rpc_api,
-        )?)
-    }
-
     /// Retrieve latest block height
     pub async fn latest_block_height(&self) -> anyhow::Result<u32> {
-        let info =
-            tokio::time::timeout(self.request_timeout, self.tendermint()?.abci_info())
-                .await
-                .map_err(|_| {
-                    anyhow!("Timeout fetching latest block height from tendermint")
-                })??;
-        Ok(info.last_block_height.value().try_into()?)
+        http_api::latest_block_height(&self.http, &self.endpoints.tendermint_rpc_api)
+            .await
+            .map_err(|err| anyhow!("Failed to fetch latest block height: {err}"))
     }
 
     /// Retrieve account metadata by its ID
@@ -225,14 +223,17 @@ impl Client {
             .make_payload(timeout_height, fee, signer, account, order, topic, data)
             .await?;
 
-        let r = tokio::time::timeout(
-            self.request_timeout,
-            self.tendermint()?.broadcast_tx_sync(payload),
+        let response = http_api::broadcast_tx_sync(
+            &self.http,
+            &self.endpoints.tendermint_rpc_api,
+            payload,
         )
-        .await
-        .map_err(|_| anyhow!("Timeout broadcasting tx to tendermint"))??;
-        if r.code.is_err() {
-            return Err(PostBlobError { message: r.log }.into());
+        .await?;
+        if response.code != 0 {
+            return Err(PostBlobError {
+                message: response.log,
+            }
+            .into());
         }
         Ok(())
     }

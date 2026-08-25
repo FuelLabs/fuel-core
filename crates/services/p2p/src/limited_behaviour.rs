@@ -214,7 +214,7 @@ where
         event: THandlerOutEvent<Self>,
     ) {
         match event {
-            Either::Left(event) => void::unreachable(event),
+            Either::Left(event) => match event {},
             Either::Right(event) => {
                 self.behaviour
                     .on_connection_handler_event(id, connection_id, event)

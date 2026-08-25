@@ -67,6 +67,78 @@ mod api_types {
     pub struct Config {
         pub minimum_gas_price: String,
     }
+    #[derive(Debug, Deserialize)]
+    pub struct RpcResponse<T> {
+        pub result: Option<T>,
+        pub error: Option<serde_json::Value>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct AbciInfoResponse {
+        pub response: AbciInfo,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct AbciInfo {
+        pub last_block_height: String,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct BroadcastTxResponse {
+        pub code: u32,
+        pub log: String,
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RpcRequest<P> {
+    jsonrpc: &'static str,
+    id: u64,
+    method: &'static str,
+    params: P,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct EmptyParams {}
+
+#[derive(Debug, serde::Serialize)]
+struct BroadcastTxParams {
+    tx: String,
+}
+
+async fn rpc<T, P>(
+    http: &reqwest::Client,
+    api_url: &str,
+    method: &'static str,
+    params: P,
+) -> anyhow::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+    P: serde::Serialize,
+{
+    let request = RpcRequest {
+        jsonrpc: "2.0",
+        id: 1,
+        method,
+        params,
+    };
+    let response = http
+        .post(api_url)
+        .json(&request)
+        .send()
+        .await?
+        .error_for_status()?;
+    let text = response.text().await?;
+    let response: api_types::RpcResponse<T> =
+        serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
+
+    if let Some(error) = response.error {
+        anyhow::bail!("Tendermint RPC error: {error}");
+    }
+
+    response
+        .result
+        .ok_or_else(|| anyhow::anyhow!("Tendermint RPC response has no result"))
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -144,6 +216,24 @@ pub async fn coin_denom(http: &reqwest::Client, api_url: &str) -> anyhow::Result
     Ok(resp.params.bond_denom)
 }
 
+pub async fn latest_block_height(
+    http: &reqwest::Client,
+    api_url: &str,
+) -> anyhow::Result<u32> {
+    let response: api_types::AbciInfoResponse =
+        rpc(http, api_url, "abci_info", EmptyParams {}).await?;
+    Ok(response.response.last_block_height.parse()?)
+}
+
+pub async fn broadcast_tx_sync(
+    http: &reqwest::Client,
+    api_url: &str,
+    tx_bytes: Vec<u8>,
+) -> anyhow::Result<api_types::BroadcastTxResponse> {
+    let tx = BASE64_STANDARD.encode(tx_bytes);
+    rpc(http, api_url, "broadcast_tx_sync", BroadcastTxParams { tx }).await
+}
+
 pub async fn get_account(
     http: &reqwest::Client,
     api_url: &str,
@@ -203,4 +293,63 @@ pub async fn get_topic(
         .parse()
         .map_err(|_| anyhow::anyhow!("Invalid order"))?;
     Ok(Some(TopicInfo { owner, order }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockito::Matcher;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn latest_block_height_uses_tendermint_json_rpc_shape() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/")
+            .match_body(Matcher::Json(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "abci_info",
+                "params": {},
+            })))
+            .with_status(200)
+            .with_body(
+                r#"{"jsonrpc":"2.0","id":1,"result":{"response":{"last_block_height":"154"}}}"#,
+            )
+            .create_async()
+            .await;
+
+        let height = latest_block_height(&reqwest::Client::new(), &server.url())
+            .await
+            .unwrap();
+
+        assert_eq!(height, 154);
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn broadcast_tx_sync_base64_encodes_transaction_bytes() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/")
+            .match_body(Matcher::Json(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "broadcast_tx_sync",
+                "params": {"tx": "AQID"},
+            })))
+            .with_status(200)
+            .with_body(r#"{"jsonrpc":"2.0","id":1,"result":{"code":0,"log":""}}"#)
+            .create_async()
+            .await;
+
+        let response =
+            broadcast_tx_sync(&reqwest::Client::new(), &server.url(), vec![1, 2, 3])
+                .await
+                .unwrap();
+
+        assert_eq!(response.code, 0);
+        assert!(response.log.is_empty());
+        mock.assert_async().await;
+    }
 }
