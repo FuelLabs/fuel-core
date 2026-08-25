@@ -124,6 +124,13 @@ impl TaskP2PService for FakeP2PService {
         todo!()
     }
 
+    fn reserved_peer_network_height(&self) -> Option<BlockHeight> {
+        self.peer_info
+            .iter()
+            .filter_map(|(_, info)| info.heartbeat_data.block_height)
+            .max()
+    }
+
     fn next_event(&mut self) -> BoxFuture<'_, Option<FuelP2PEvent>> {
         self.next_event_stream.next().boxed()
     }

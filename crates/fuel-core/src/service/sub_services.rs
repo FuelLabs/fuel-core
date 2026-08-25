@@ -52,7 +52,6 @@ use crate::{
             TxPoolAdapter,
             UniversalGasPriceProvider,
             VerifierAdapter,
-            block_importer::BlockReconciliationWriteAdapter,
             chain_state_info_provider,
             consensus_module::poa::{
                 InDirectoryPredefinedBlocks,
@@ -63,7 +62,10 @@ use crate::{
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
-            ready_signal::ReadySignal,
+            ready_signal::{
+                Readiness,
+                ReadySignal,
+            },
             tx_status_manager::ConsensusConfigProtocolPublicKey,
         },
     },
@@ -232,7 +234,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     );
 
-    let redis_reconciliation_adapter = config
+    let mut redis_reconciliation_adapter = config
         .leader_lock
         .as_ref()
         .map(|leader_lock| {
@@ -259,11 +261,6 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         executor.clone(),
         verifier.clone(),
-        redis_reconciliation_adapter
-            .as_ref()
-            .cloned()
-            .map(BlockReconciliationWriteAdapter::Redis)
-            .unwrap_or_else(|| BlockReconciliationWriteAdapter::Noop(Default::default())),
     );
 
     let chain_state_info_provider_service = chain_state_info_provider::new_service(
@@ -420,11 +417,11 @@ pub fn init_sub_services(
         })
         .transpose()?;
 
+    let ready_signal_for_graphql = block_production_ready_signal.clone();
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
             let reconciliation_port = redis_reconciliation_adapter
-                .as_ref()
-                .cloned()
+                .take()
                 .map(ReconciliationAdapter::Redis)
                 .unwrap_or_else(|| {
                     ReconciliationAdapter::Noop(NoopReconciliationAdapter)
@@ -446,6 +443,10 @@ pub fn init_sub_services(
         })
         .transpose()?;
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
+    let readiness = Readiness::new(
+        ready_signal_for_graphql,
+        poa.as_ref().map(|service| service.shared.clone()),
+    );
 
     #[cfg(feature = "p2p")]
     let sync = fuel_core_sync::service::new_service(
@@ -539,6 +540,7 @@ pub fn init_sub_services(
         Box::new(tx_status_manager_adapter.clone()),
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
+        readiness,
         Box::new(p2p_adapter),
         Box::new(universal_gas_price_provider),
         Box::new(chain_state_info_provider),

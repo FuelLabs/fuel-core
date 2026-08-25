@@ -134,6 +134,9 @@ pub enum TaskRequest {
     GetAllPeerInfo {
         channel: oneshot::Sender<Vec<(PeerId, PeerInfo)>>,
     },
+    GetReservedPeerNetworkHeight {
+        channel: oneshot::Sender<Option<BlockHeight>>,
+    },
     GetSealedHeaders {
         block_height_range: Range<u32>,
         channel: OnResponseWithPeerSelection<
@@ -221,6 +224,9 @@ impl Debug for TaskRequest {
             TaskRequest::GetAllPeerInfo { .. } => {
                 write!(f, "TaskRequest::GetPeerInfo")
             }
+            TaskRequest::GetReservedPeerNetworkHeight { .. } => {
+                write!(f, "TaskRequest::GetReservedPeerNetworkHeight")
+            }
             TaskRequest::DatabaseTransactionsLookUp { .. } => {
                 write!(f, "TaskRequest::DatabaseTransactionsLookUp")
             }
@@ -246,6 +252,7 @@ pub enum HeartBeatPeerReportReason {
 pub trait TaskP2PService: Send {
     fn get_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)>;
     fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId>;
+    fn reserved_peer_network_height(&self) -> Option<BlockHeight>;
 
     fn next_event(&mut self) -> BoxFuture<'_, Option<FuelP2PEvent>>;
 
@@ -301,6 +308,10 @@ impl TaskP2PService for FuelP2PService {
 
     fn get_peer_id_with_height(&self, height: &BlockHeight) -> Option<PeerId> {
         self.peer_manager().get_peer_id_with_height(height)
+    }
+
+    fn reserved_peer_network_height(&self) -> Option<BlockHeight> {
+        self.peer_manager().reserved_peer_network_height()
     }
 
     fn next_event(&mut self) -> BoxFuture<'_, Option<FuelP2PEvent>> {
@@ -1024,6 +1035,10 @@ where
                             .collect::<Vec<_>>();
                         let _ = channel.send(peers);
                     }
+                    Some(TaskRequest::GetReservedPeerNetworkHeight { channel }) => {
+                        let height = self.p2p_service.reserved_peer_network_height();
+                        let _ = channel.send(height);
+                    }
                     Some(TaskRequest::DatabaseTransactionsLookUp { response, request_id }) => {
                         let _ = self.p2p_service.send_response_msg(request_id, V2ResponseMessage::Transactions(response));
                     }
@@ -1340,6 +1355,18 @@ impl SharedState {
 
         self.request_sender
             .send(TaskRequest::GetAllPeerInfo { channel: sender })
+            .await?;
+
+        receiver.await.map_err(|e| anyhow!("{}", e))
+    }
+
+    pub async fn reserved_peer_network_height(
+        &self,
+    ) -> anyhow::Result<Option<BlockHeight>> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.request_sender
+            .send(TaskRequest::GetReservedPeerNetworkHeight { channel: sender })
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))

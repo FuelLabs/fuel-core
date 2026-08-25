@@ -191,7 +191,7 @@ impl PeerManager {
 
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
         if self.reserved_peers.contains(peer_id) {
-            return self.reserved_connected_peers.get(peer_id)
+            return self.reserved_connected_peers.get(peer_id);
         }
         self.non_reserved_connected_peers.get(peer_id)
     }
@@ -200,6 +200,14 @@ impl PeerManager {
         self.non_reserved_connected_peers
             .iter()
             .chain(self.reserved_connected_peers.iter())
+    }
+
+    /// Max heartbeat height among currently connected reserved peers.
+    pub fn reserved_peer_network_height(&self) -> Option<BlockHeight> {
+        self.reserved_connected_peers
+            .values()
+            .filter_map(|info| info.heartbeat_data.block_height)
+            .max()
     }
 
     /// Handles on peer's last connection getting disconnected
@@ -263,7 +271,7 @@ impl PeerManager {
             // check if all the slots are already taken
             if non_reserved_peers_connected >= self.max_non_reserved_peers {
                 // Too many peers already connected, disconnect the Peer
-                return true
+                return true;
             }
 
             if non_reserved_peers_connected.saturating_add(1)

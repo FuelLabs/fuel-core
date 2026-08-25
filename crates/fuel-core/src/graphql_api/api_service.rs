@@ -47,6 +47,7 @@ use axum::{
     },
     http::{
         HeaderValue,
+        StatusCode,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
@@ -331,6 +332,7 @@ pub fn new_service<OnChain, OffChain>(
     tx_status_manager: DynTxStatusManager,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
+    readiness: crate::service::adapters::ready_signal::Readiness,
     p2p_service: P2pService,
     gas_price_provider: GasPriceProvider,
     chain_state_info_provider: ChainInfoProvider,
@@ -429,6 +431,8 @@ where
         .route("/v1/metrics", get(metrics))
         .route("/v1/health", get(health))
         .route("/health", get(health))
+        .route("/v1/ready", get(ready))
+        .layer(Extension(readiness))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(request_timeout))
@@ -502,6 +506,32 @@ async fn render_graphql_playground(
 
 async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
+}
+
+/// `/v1/ready` — distinct from `/v1/health` (liveness, always dumb-up).
+/// `ready = services_started && (poa disabled || poa.is_ready())`.
+/// Leader-lock status is deliberately excluded: readiness is not leadership.
+async fn ready(
+    Extension(r): Extension<crate::service::adapters::ready_signal::Readiness>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let services_started = r.services_started();
+    let poa_enabled = r.poa_enabled();
+    let synced = r.poa_ready().await;
+    let ready = services_started && synced;
+    let code = if ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (
+        code,
+        Json(json!({
+            "ready": ready,
+            "services_started": services_started,
+            "poa_enabled": poa_enabled,
+            "synced": synced,
+        })),
+    )
 }
 
 async fn graphql_handler(

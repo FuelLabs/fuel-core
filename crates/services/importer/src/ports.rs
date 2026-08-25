@@ -110,10 +110,6 @@ pub trait BlockVerifier: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
-pub trait BlockReconciliationWritePort: Send + Sync {
-    fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()>;
-}
-
 impl<S> Transactional for S
 where
     S: KeyValueInspect<Column = Column>,

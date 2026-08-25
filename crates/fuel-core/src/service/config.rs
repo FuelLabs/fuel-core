@@ -122,8 +122,11 @@ pub struct Config {
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
     /// The number of reserved peers to connect to before starting to sync.
     pub min_connected_reserved_peers: usize,
-    /// Time to wait after receiving the latest block before considered to be Synced.
+    /// Quiet window after the height gap is within `--max-sync-height-diff`
+    /// before PoA declares Ready. Zero means immediate once the gap is ok.
     pub time_until_synced: Duration,
+    /// Largest reserved-peer Height Gap that still counts as Ready.
+    pub max_sync_height_diff: u32,
     /// The timeout after which block production is considered failed.
     pub production_timeout: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
@@ -293,6 +296,7 @@ impl Config {
             relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
+            max_sync_height_diff: 1,
             production_timeout: Duration::from_secs(20),
             memory_pool_size: 4,
             #[cfg(feature = "rpc")]
@@ -341,6 +345,7 @@ impl From<&Config> for fuel_core_poa::Config {
             metrics: false,
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
+            max_sync_height_diff: config.max_sync_height_diff,
             production_timeout: config.production_timeout,
             chain_id: config
                 .snapshot_reader
