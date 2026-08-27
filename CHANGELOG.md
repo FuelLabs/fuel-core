@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.48.3]
+
+### Added
+- [3320](https://github.com/FuelLabs/fuel-core/pull/3320): Add `/v1/ready` HTTP endpoint reporting whether the node has finished startup and is p2p-synced, for use as a Kubernetes readiness/startup probe distinct from the process-only `/v1/health` liveness check.
+
+### Changed
+- [3280](https://github.com/FuelLabs/fuel-core/pull/3280): Move the PoA redis-publish path out of the importer and into the PoA service itself, running natively on tokio with parallel per-node fan-out, cached connections, and split quorum-latency/lock-held metrics.
+- [3320](https://github.com/FuelLabs/fuel-core/pull/3320): PoA readiness now combines a live reserved-peer height-gap check (network height vs. local DB height, default max diff 1) with the existing time-until-synced debounce; `/v1/health` is unchanged.
+
+### Fixed
+- [3323](https://github.com/FuelLabs/fuel-core/pull/3323): Fix the `cargo-audit` and `version-compatibility` CI checks.
+- [3324](https://github.com/FuelLabs/fuel-core/pull/3324): Fix the `cargo-test-kms` CI job by mocking AWS KMS with LocalStack instead of a live AWS account.
+- [3326](https://github.com/FuelLabs/fuel-core/pull/3326): Penalize peers that fail request/response requests and prefer reserved peers for block fetching, so a single misbehaving peer can no longer stall block synchronization.
+
 ## [Version 0.48.2]
 
 ### Fixed

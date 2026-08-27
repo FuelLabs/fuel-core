@@ -1,1 +1,0 @@
-PoA Ready combines a live reserved-peer height-gap check (`network height − local DB height ≤ --max-sync-height-diff`, default 1) with the existing `--time-until-synced` debounce once the gap is ok (immediate when zero). Isolated/dev (`--min-connected-reserved-peers=0`) skips the comparison. `/v1/health` is unchanged.
