@@ -122,9 +122,20 @@ impl StaticGasPrice {
 mod universal_gas_price_provider_tests {
     #![allow(non_snake_case)]
 
-    use proptest::proptest;
+    use proptest::{
+        prop_oneof,
+        proptest,
+    };
 
     use super::*;
+
+    // `cumulative_percentage_change` only consults its lookup table when *both* the block
+    // horizon and the percentage are small, and the table's bounds are 25 x 25. Sampling
+    // the horizon out of `0..10_000` and the percentage out of the whole of `u16` lands
+    // in that region so rarely that a bug confined to it is effectively invisible, so mix
+    // in a strategy that stays inside it -- and reaches past its boundary.
+    const NARROW_HORIZON: std::ops::Range<u32> = 0..50;
+    const NARROW_PERCENTAGE: std::ops::Range<u16> = 0..50;
 
     fn _worst_case__correctly_calculates_value(
         gas_price: u64,
@@ -157,8 +168,8 @@ mod universal_gas_price_provider_tests {
         fn worst_case_gas_price__correctly_calculates_value(
             gas_price: u64,
             starting_height: u32,
-            block_horizon in 0..10_000u32,
-            percentage: u16,
+            block_horizon in prop_oneof![NARROW_HORIZON, 0..10_000u32],
+            percentage in prop_oneof![NARROW_PERCENTAGE, 0..=u16::MAX],
         ) {
             _worst_case__correctly_calculates_value(
                 gas_price,
@@ -174,8 +185,8 @@ mod universal_gas_price_provider_tests {
         fn worst_case_gas_price__never_overflows(
             gas_price: u64,
             starting_height: u32,
-            block_horizon in 0..10_000u32,
-            percentage: u16
+            block_horizon in prop_oneof![NARROW_HORIZON, 0..10_000u32],
+            percentage in prop_oneof![NARROW_PERCENTAGE, 0..=u16::MAX],
         ) {
             // given
             let subject = UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
