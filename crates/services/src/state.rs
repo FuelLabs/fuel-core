@@ -120,16 +120,42 @@ impl StateWatcher {
 
     /// Future that resolves once the state is `State::Stopped`.
     pub async fn wait_stopping_or_stopped(&mut self) -> anyhow::Result<()> {
-        let state = self.borrow().clone();
-        while !(state.stopped() || state.stopping()) {
+        loop {
+            let state = self.borrow().clone();
+            if state.stopped() || state.stopping() {
+                return Ok(())
+            }
+
             self.changed().await?;
         }
-        Ok(())
     }
 }
 
 impl From<watch::Receiver<State>> for StateWatcher {
     fn from(receiver: watch::Receiver<State>) -> Self {
         Self(receiver)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn wait_stopping_or_stopped_observes_state_changes() {
+        let (sender, receiver) = watch::channel(State::Started);
+        let mut watcher = StateWatcher(receiver);
+        let mut waiting = Box::pin(watcher.wait_stopping_or_stopped());
+        assert!(matches!(
+            futures::poll!(&mut waiting),
+            std::task::Poll::Pending
+        ));
+
+        sender.send(State::Stopping).unwrap();
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), waiting)
+            .await
+            .expect("state wait should complete")
+            .unwrap();
     }
 }

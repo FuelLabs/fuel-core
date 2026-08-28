@@ -89,7 +89,7 @@ fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
-hyper-util = { version = "0.1", features = ["server", "server-auto", "service", "tokio"] }
+hyper-util = { version = "0.1", features = ["server", "server-auto", "server-graceful", "service", "tokio"] }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
 libc = { version = "0.2.177" }
