@@ -69,6 +69,8 @@ mod api_types {
     }
     #[derive(Debug, Deserialize)]
     pub struct RpcResponse<T> {
+        pub jsonrpc: String,
+        pub id: u64,
         pub result: Option<T>,
         pub error: Option<serde_json::Value>,
     }
@@ -122,15 +124,30 @@ where
         method,
         params,
     };
-    let response = http
-        .post(api_url)
-        .json(&request)
-        .send()
-        .await?
-        .error_for_status()?;
+    let response = http.post(api_url).json(&request).send().await?;
+    if response.status() != reqwest::StatusCode::OK {
+        anyhow::bail!(
+            "Tendermint RPC request failed with HTTP status {}",
+            response.status()
+        );
+    }
     let text = response.text().await?;
     let response: api_types::RpcResponse<T> =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
+
+    if response.jsonrpc != request.jsonrpc {
+        anyhow::bail!(
+            "Tendermint RPC response uses unsupported JSON-RPC version {}",
+            response.jsonrpc
+        );
+    }
+    if response.id != request.id {
+        anyhow::bail!(
+            "Tendermint RPC response ID {} does not match request ID {}",
+            response.id,
+            request.id
+        );
+    }
 
     if let Some(error) = response.error {
         anyhow::bail!("Tendermint RPC error: {error}");
@@ -350,6 +367,65 @@ mod tests {
 
         assert_eq!(response.code, 0);
         assert!(response.log.is_empty());
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn latest_block_height_rejects_mismatched_response_id() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_body(
+                r#"{"jsonrpc":"2.0","id":2,"result":{"response":{"last_block_height":"154"}}}"#,
+            )
+            .create_async()
+            .await;
+
+        let err = latest_block_height(&reqwest::Client::new(), &server.url())
+            .await
+            .expect_err("mismatched response ID should fail");
+
+        assert!(err.to_string().contains("does not match request ID"));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn latest_block_height_rejects_unsupported_json_rpc_version() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_body(
+                r#"{"jsonrpc":"1.0","id":1,"result":{"response":{"last_block_height":"154"}}}"#,
+            )
+            .create_async()
+            .await;
+
+        let err = latest_block_height(&reqwest::Client::new(), &server.url())
+            .await
+            .expect_err("unsupported JSON-RPC version should fail");
+
+        assert!(err.to_string().contains("unsupported JSON-RPC version"));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn broadcast_tx_sync_requires_http_ok() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/")
+            .with_status(201)
+            .with_body(r#"{"jsonrpc":"2.0","id":1,"result":{"code":0,"log":""}}"#)
+            .create_async()
+            .await;
+
+        let err =
+            broadcast_tx_sync(&reqwest::Client::new(), &server.url(), vec![1, 2, 3])
+                .await
+                .expect_err("non-200 JSON-RPC response should fail");
+
+        assert!(err.to_string().contains("HTTP status 201"));
         mock.assert_async().await;
     }
 }

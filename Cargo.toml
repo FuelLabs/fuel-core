@@ -142,7 +142,7 @@ pin-project-lite = "0.2"
 postcard = "1.0"
 pretty_assertions = "1.4.0"
 primitive-types = { version = "0.12", default-features = false }
-prometheus-client = "0.23.1"
+prometheus-client = "0.22.3"
 proptest = "1.1"
 prost = "0.14.1"
 rand = "0.8"

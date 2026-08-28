@@ -1,5 +1,5 @@
 [advisories]
 ignore = [
-    "RUSTSEC-2026-0118", # hickory-proto 0.25.2 via libp2p 0.56; advisory has no fixed release
-    "RUSTSEC-2026-0119", # https://github.com/FuelLabs/fuel-core/issues/3296 — libp2p-dns 0.44 pins hickory-proto 0.25
+    "RUSTSEC-2026-0118", # hickory-proto 0.25 via libp2p-dns 0.43; advisory has no fixed release
+    "RUSTSEC-2026-0119", # https://github.com/FuelLabs/fuel-core/issues/3296 — libp2p-dns 0.43 pins hickory-proto 0.25
 ]

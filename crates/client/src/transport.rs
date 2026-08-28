@@ -84,6 +84,8 @@ impl launchdarkly_sdk_transport::HttpTransport for ReqwestSseTransport {
 #[derive(Debug)]
 pub struct FailoverTransport {
     client: reqwest::Client,
+    #[cfg(feature = "subscriptions")]
+    sse_client: reqwest::Client,
     urls: Box<[Url]>,
     default_url_index: AtomicUsize,
 }
@@ -92,6 +94,8 @@ impl Clone for FailoverTransport {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
+            #[cfg(feature = "subscriptions")]
+            sse_client: self.sse_client.clone(),
             urls: self.urls.clone(),
             default_url_index: AtomicUsize::new(
                 self.default_url_index.load(Ordering::Relaxed),
@@ -105,10 +109,17 @@ impl FailoverTransport {
         #[cfg(feature = "subscriptions")]
         {
             let cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
-            let client = reqwest::Client::builder().cookie_provider(cookie).build()?;
+            let client = reqwest::Client::builder()
+                .cookie_provider(cookie.clone())
+                .build()?;
+            let sse_client = reqwest::Client::builder()
+                .cookie_provider(cookie)
+                .redirect(reqwest::redirect::Policy::none())
+                .build()?;
             Ok(Self {
                 urls: urls.into_boxed_slice(),
                 client,
+                sse_client,
                 default_url_index: AtomicUsize::new(0),
             })
         }
@@ -275,9 +286,11 @@ impl FailoverTransport {
                 })?;
         }
 
-        // Reuse the pooled reqwest client for every subscription.
-        let client =
-            client_builder.build_with_transport(ReqwestSseTransport(self.client.clone()));
+        // Reuse a pooled, no-redirect reqwest client for every subscription.
+        // EventSource owns redirect handling so it can preserve the POST body
+        // and authorization headers according to its redirect policy.
+        let client = client_builder
+            .build_with_transport(ReqwestSseTransport(self.sse_client.clone()));
 
         enum Event<ResponseData> {
             Connected,
@@ -364,4 +377,41 @@ where
     let mut cloned = Operation::new(op.query.clone(), op.variables.clone());
     cloned.operation_name = op.operation_name.clone();
     cloned
+}
+
+#[cfg(all(test, feature = "subscriptions"))]
+mod tests {
+    use super::*;
+    use launchdarkly_sdk_transport::HttpTransport;
+
+    #[tokio::test]
+    async fn sse_transport_does_not_follow_redirects() {
+        let mut server = mockito::Server::new_async().await;
+        let redirect = server
+            .mock("POST", "/")
+            .with_status(302)
+            .with_header("location", "/redirected")
+            .expect(1)
+            .create_async()
+            .await;
+        let redirected = server
+            .mock("GET", "/redirected")
+            .with_status(200)
+            .expect(0)
+            .create_async()
+            .await;
+        let transport =
+            FailoverTransport::new(vec![Url::parse(&server.url()).unwrap()]).unwrap();
+        let sse_transport = ReqwestSseTransport(transport.sse_client);
+        let request =
+            launchdarkly_sdk_transport::Request::post(format!("{}/", server.url()))
+                .body(None)
+                .unwrap();
+
+        let response = sse_transport.request(request).await.unwrap();
+
+        assert_eq!(response.status(), reqwest::StatusCode::FOUND);
+        redirect.assert_async().await;
+        redirected.assert_async().await;
+    }
 }

@@ -155,6 +155,36 @@ pub struct Task {
 }
 
 const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
+const GRAPHQL_ACCEPT_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
+
+async fn accept_with_retry<T, A, F>(mut accept: A, retry_delay: Duration) -> T
+where
+    A: FnMut() -> F,
+    F: Future<Output = std::io::Result<T>>,
+{
+    loop {
+        match accept().await {
+            Ok(connection) => return connection,
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    std::io::ErrorKind::ConnectionRefused
+                        | std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::ConnectionReset
+                ) =>
+            {
+                tracing::debug!("Accepted GraphQL connection already errored: {err}");
+            }
+            Err(err) => {
+                tracing::error!(
+                    retry_delay_secs = retry_delay.as_secs(),
+                    "GraphQL accept error: {err}; retrying"
+                );
+                tokio::time::sleep(retry_delay).await;
+            }
+        }
+    }
+}
 
 #[derive(Clone)]
 struct ExecutorWithMetrics {
@@ -235,8 +265,11 @@ impl RunnableService for GraphqlService {
         let server = async move {
             loop {
                 tokio::select! {
-                    result = listener.accept() => {
-                        let (stream, _) = result?;
+                    connection = accept_with_retry(
+                        || listener.accept(),
+                        GRAPHQL_ACCEPT_ERROR_RETRY_DELAY,
+                    ) => {
+                        let (stream, _) = connection;
                         let io = TokioIo::new(stream);
                         let service = TowerToHyperService::new(router.clone());
                         let connection_executor = executor.clone();
@@ -295,8 +328,8 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // The `axum::Server` has already gracefully stopped accepting new
-        // requests, but some hyper request futures may still be running on
+        // The GraphQL accept loop has already stopped accepting new requests,
+        // but some hyper request futures may still be running on
         // the inner `AsyncProcessor` runtime — connection-drain tasks and
         // any handler whose response was mid-flight when the stop signal
         // arrived. We must wait for them to complete here, because
@@ -315,8 +348,7 @@ fn map_server_result(
 ) -> TaskNextAction {
     match result {
         Ok(Ok(())) => {
-            // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
-            // error or stop signal.
+            // The accept loop only returns `Ok` after observing service shutdown.
             TaskNextAction::Stop
         }
         Ok(Err(err)) => {
@@ -572,4 +604,30 @@ async fn graphql_subscription_handler(
 
 async fn ok() -> anyhow::Result<(), ()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn accept_retries_after_resource_error() {
+        let mut results = std::collections::VecDeque::from([
+            Err(std::io::Error::other("too many open files")),
+            Ok(42),
+        ]);
+
+        let connection = accept_with_retry(
+            || {
+                std::future::ready(
+                    results.pop_front().expect("unexpected accept attempt"),
+                )
+            },
+            Duration::ZERO,
+        )
+        .await;
+
+        assert_eq!(connection, 42);
+        assert!(results.is_empty());
+    }
 }
