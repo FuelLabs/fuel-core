@@ -416,6 +416,29 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     );
 }
 
+#[tokio::test]
+async fn estimate_gas_price__answers_at_the_lookup_table_boundary() {
+    // given
+    // `cumulative_percentage_change` indexes a 25 x 25 table of precomputed exponentials,
+    // and the block horizon is the first index. A horizon of exactly 25 used to be routed
+    // into the table instead of to the closed form, and read one element past its end --
+    // while 24 and 26 both answered normally, which is what made it easy to miss.
+    let node_config = Config::local_node();
+    let srv = FuelService::new_node(node_config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    for block_horizon in [24u32, 25, 26] {
+        // when
+        let result = client.estimate_gas_price(block_horizon).await;
+
+        // then
+        assert!(
+            result.is_ok(),
+            "estimate_gas_price({block_horizon}) failed: {result:?}"
+        );
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     // given
