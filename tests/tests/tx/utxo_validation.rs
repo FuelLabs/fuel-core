@@ -129,10 +129,13 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
 
     assert!(result.is_err());
     let error = result.err().unwrap().to_string();
+    // The test node runs with `exec_gas_price_change_percent = 0` (`GasPriceConfig::local_node`),
+    // so the next block's gas price is the starting price unchanged. This used to read `11`
+    // because the tx pool applied a hardcoded 10% per block regardless of configuration.
     assert!(
         error.contains(
             "The provided max fee can't cover the transaction cost. \
-            The minimal gas price should be 11, while it is 0"
+            The minimal gas price should be 10, while it is 0"
         ),
         "{}",
         error
