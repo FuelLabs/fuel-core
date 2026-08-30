@@ -580,3 +580,57 @@ async fn assemble_transaction__adds_automatically_contracts__the_same_contract_t
         status
     );
 }
+
+#[tokio::test]
+async fn assemble_transaction__if_change_output_included_in_tx_then_not_added_by_assembly()
+ {
+    let mut state_config = StateConfig::local_testnet();
+    let chain_config = ChainConfig::local_testnet();
+    let arb_asset_id = AssetId::from([2; 32]);
+    let secret: SecretKey = TESTNET_WALLET_SECRETS[1].parse().unwrap();
+    let account = default_signing_wallet();
+    state_config.coins[1].asset_id = arb_asset_id;
+    state_config.coins[1].amount = 100_000_000;
+    state_config.coins[1].owner = account.owner().into();
+
+    let config = Config::local_node_with_configs(chain_config, state_config);
+    let base_asset_id = config.base_asset_id();
+    let service = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(service.bound_address);
+
+    let CoinType::Coin(coin) = client
+        .coins_to_spend(&account.owner(), vec![(arb_asset_id, 100, None)], None)
+        .await
+        .unwrap()[0][0]
+    else {
+        panic!("Expected a coin");
+    };
+
+    // Given
+    let tx: Transaction =
+        TransactionBuilder::script(vec![op::ret(1)].into_iter().collect(), vec![])
+            .add_unsigned_coin_input(
+                secret,
+                coin.utxo_id,
+                coin.amount,
+                coin.asset_id,
+                TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
+            )
+            .add_output(Output::change(account.owner(), 0, arb_asset_id))
+            .finalize_as_transaction();
+
+    let required_balance = RequiredBalance {
+        asset_id: base_asset_id,
+        amount: 0,
+        account: account.clone().into_account(),
+        change_policy: ChangePolicy::Change(account.owner()),
+    };
+
+    // When
+    let resp = client
+        .assemble_transaction(&tx.into(), account.clone(), vec![required_balance])
+        .await;
+
+    // Then
+    assert!(resp.is_ok());
+}
