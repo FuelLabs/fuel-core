@@ -11,6 +11,7 @@ query TransactionQuery($id: TransactionId!) {
         time
       }
       ... on SuccessStatus {
+        transactionId
         blockHeight
         time
         programState {
@@ -49,9 +50,40 @@ query TransactionQuery($id: TransactionId!) {
         }
         totalGas
         totalFee
+        resolvedOutputs {
+          utxoId
+          output {
+            __typename
+            ... on CoinOutput {
+              to
+              amount
+              assetId
+            }
+            ... on ContractOutput {
+              inputIndex
+              balanceRoot
+              stateRoot
+            }
+            ... on ChangeOutput {
+              to
+              amount
+              assetId
+            }
+            ... on VariableOutput {
+              to
+              amount
+              assetId
+            }
+            ... on ContractCreated {
+              contract
+              stateRoot
+            }
+          }
+        }
       }
       ... on PreconfirmationSuccessStatus {
         txPointer
+        time
         transactionId
         totalFee
         totalGas
@@ -120,6 +152,7 @@ query TransactionQuery($id: TransactionId!) {
         reason
       }
       ... on FailureStatus {
+        transactionId
         blockHeight
         time
         reason
@@ -159,9 +192,40 @@ query TransactionQuery($id: TransactionId!) {
         }
         totalGas
         totalFee
+        resolvedOutputs {
+          utxoId
+          output {
+            __typename
+            ... on CoinOutput {
+              to
+              amount
+              assetId
+            }
+            ... on ContractOutput {
+              inputIndex
+              balanceRoot
+              stateRoot
+            }
+            ... on ChangeOutput {
+              to
+              amount
+              assetId
+            }
+            ... on VariableOutput {
+              to
+              amount
+              assetId
+            }
+            ... on ContractCreated {
+              contract
+              stateRoot
+            }
+          }
+        }
       }
       ... on PreconfirmationFailureStatus {
         txPointer
+        time
         transactionId
         totalFee
         totalGas
