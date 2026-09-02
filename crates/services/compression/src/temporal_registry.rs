@@ -340,6 +340,84 @@ impl<CS> UtxoIdToPointer for CompressionContext<'_, CS> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_storage::{
+        merkle::column::MerkleizedColumn,
+        structured_storage::test::InMemoryStorage,
+        transactional::IntoTransaction,
+    };
+    use fuel_core_types::{
+        blockchain::{
+            block::Block,
+            header::PartialBlockHeader,
+        },
+        fuel_tx::{
+            Output,
+            TransactionBuilder,
+        },
+    };
+
+    type TestStorage =
+        InMemoryStorage<MerkleizedColumn<storage::column::CompressionColumn>>;
+
+    #[test]
+    fn compression_context_indexes_coin_change_and_variable_outputs() {
+        let chain_id = ChainId::default();
+        let transaction = TransactionBuilder::script(vec![], vec![])
+            .add_output(Output::coin(
+                Address::new([1; 32]),
+                10,
+                AssetId::new([2; 32]),
+            ))
+            .add_output(Output::change(
+                Address::new([3; 32]),
+                20,
+                AssetId::new([4; 32]),
+            ))
+            .add_output(Output::variable(
+                Address::new([5; 32]),
+                30,
+                AssetId::new([6; 32]),
+            ))
+            .finalize_as_transaction();
+        let transaction_id = transaction.id(&chain_id);
+
+        #[cfg(feature = "fault-proving")]
+        let block = Block::new(
+            PartialBlockHeader::default(),
+            vec![transaction],
+            &[],
+            Default::default(),
+            &chain_id,
+        )
+        .unwrap();
+
+        #[cfg(not(feature = "fault-proving"))]
+        let block = Block::new(
+            PartialBlockHeader::default(),
+            vec![transaction],
+            &[],
+            Default::default(),
+        )
+        .unwrap();
+
+        let mut storage_tx = TestStorage::default().into_transaction();
+        let ctx =
+            CompressionContext::create_from_block(&mut storage_tx, &block, chain_id)
+                .unwrap();
+        let expected_tx_pointer = TxPointer::new(*block.header().height(), 0);
+
+        for output_index in 0..=2 {
+            let utxo_id = UtxoId::new(transaction_id, output_index);
+            let compressed = ctx.lookup(utxo_id).unwrap();
+            assert_eq!(compressed.tx_pointer, expected_tx_pointer);
+            assert_eq!(compressed.output_index, output_index);
+        }
+    }
+}
+
 impl<CS, Onchain> HistoryLookup for DecompressionContext<'_, CS, Onchain>
 where
     Onchain: StorageInspect<Coins, Error = fuel_core_storage::Error>
