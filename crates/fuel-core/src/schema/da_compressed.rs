@@ -24,8 +24,8 @@ impl From<Vec<u8>> for DaCompressedBlock {
 
 #[Object]
 impl DaCompressedBlock {
-    async fn bytes(&self) -> HexString {
-        HexString(self.bytes.clone())
+    async fn bytes(&self) -> HexString<'_> {
+        HexString(self.bytes.as_slice().into())
     }
 }
 
