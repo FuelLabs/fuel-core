@@ -315,9 +315,17 @@ pub fn init_sub_services(
         latest_gas_price,
         ..
     } = gas_price_service_v1.shared.clone();
+    // The worst-case estimate compounds the *combined* (exec + DA) gas price at a single
+    // percentage, so it has to use the larger of the two configured change percentages to
+    // remain an upper bound. `--gas-price-change-percent` sets both, and defaults to
+    // `DEFAULT_GAS_PRICE_CHANGE_PERCENT`.
+    let gas_price_change_percent = config
+        .gas_price_config
+        .exec_gas_price_change_percent
+        .max(config.gas_price_config.max_da_gas_price_change_percent);
     let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
         latest_gas_price,
-        DEFAULT_GAS_PRICE_CHANGE_PERCENT,
+        gas_price_change_percent,
     );
 
     let producer_gas_price_provider = FuelGasPriceProvider::new(

@@ -671,7 +671,7 @@ pub fn cumulative_percentage_change(
     // we gain around 90%
     // if we have blocks / percentage greater than m x n, we have to compute it
     let multiple =
-        if blocks > BLOCK_COUNT_M as u32 || percentage > PERCENTAGE_COUNT_N as u64 {
+        if blocks >= BLOCK_COUNT_M as u32 || percentage >= PERCENTAGE_COUNT_N as u64 {
             f64::exp(blocks as f64 * (1.0 + percentage as f64 / 100.0).ln())
         } else {
             PRECOMPUTED_EXP[blocks as usize][percentage as usize]
@@ -697,6 +697,10 @@ pub fn cumulative_percentage_change(
 
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
+    #![allow(clippy::arithmetic_side_effects)]
+    #![allow(clippy::cast_possible_truncation)]
+
     use super::*;
     use proptest::prelude::*;
 
@@ -726,13 +730,38 @@ mod tests {
         approx.ceil() as u64
     }
 
+    // `cumulative_percentage_change` with the lookup table taken out of the picture, i.e.
+    // the branch it falls back to once an index leaves the table. Every entry of
+    // `PRECOMPUTED_EXP` is bit-identical to this, so which branch is taken must never
+    // change the answer.
+    fn cumulative_percentage_change_closed_form(
+        new_exec_price: u64,
+        for_height: u32,
+        percentage: u64,
+        height: u32,
+    ) -> u64 {
+        let blocks = height.saturating_sub(for_height);
+        let multiple = f64::exp(blocks as f64 * (1.0 + percentage as f64 / 100.0).ln());
+        let mut approx = new_exec_price as f64 * multiple;
+        const ROUNDING_ERROR_CUTOFF: f64 = 16948547188989277.0;
+        const ROUNDING_ERROR_COMPENSATION: f64 = 2000.0;
+        approx +=
+            ROUNDING_ERROR_COMPENSATION * ((approx > ROUNDING_ERROR_CUTOFF) as u8 as f64);
+        approx.ceil() as u64
+    }
+
     proptest! {
+        // `powf` and `exp(y * ln(x))` are not bit-identical for every percentage -- they
+        // disagree in the last place at 25, 30 and 34, for instance -- so this comparison
+        // stays inside the percentage range where the two forms agree exactly. The block
+        // axis is widened past `BLOCK_COUNT_M` so that leaving the table is covered here
+        // too; the boundary on both axes is pinned by the two tests below.
         #[test]
         fn plain_and_optimized_produce_same_result(
             start_gas_price in 0..10000u64,
             best_height in 0..100000u32,
-            offset in 0..20u32,
-            percentage in 0..20u64,
+            offset in 0..2 * BLOCK_COUNT_M as u32,
+            percentage in 0..PERCENTAGE_COUNT_N as u64,
         ) {
             #[allow(clippy::arithmetic_side_effects)]
             let target_height = best_height + offset;
@@ -741,6 +770,77 @@ mod tests {
             let optimized = cumulative_percentage_change(start_gas_price, best_height, percentage, target_height);
 
             prop_assert_eq!(plain, optimized);
+        }
+    }
+
+    proptest! {
+        // Both `BLOCK_COUNT_M` and `PERCENTAGE_COUNT_N` are strictly inside these ranges,
+        // so this covers the branch boundary on either axis -- including the percentage
+        // axis, which the comparison above cannot reach. The boundary is where the index
+        // used to run off the end of the table.
+        #[test]
+        fn optimized_matches_the_closed_form_across_the_lookup_table_boundary(
+            start_gas_price in 0..10000u64,
+            best_height in 0..100000u32,
+            offset in 0..2 * BLOCK_COUNT_M as u32,
+            percentage in 0..2 * PERCENTAGE_COUNT_N as u64,
+        ) {
+            let target_height = best_height.saturating_add(offset);
+
+            let closed_form = cumulative_percentage_change_closed_form(start_gas_price, best_height, percentage, target_height);
+            let optimized = cumulative_percentage_change(start_gas_price, best_height, percentage, target_height);
+
+            prop_assert_eq!(closed_form, optimized);
+        }
+    }
+
+    // `PRECOMPUTED_EXP` is `BLOCK_COUNT_M` x `PERCENTAGE_COUNT_N`, so the largest valid
+    // index on either axis is one less than the count. An index _equal_ to the count is
+    // the case random sampling is very unlikely to hit, so pin it explicitly.
+    #[test]
+    fn cumulative_percentage_change__is_correct_at_the_lookup_table_boundary() {
+        const START_GAS_PRICE: u64 = 1_000;
+        const BEST_HEIGHT: u32 = 0;
+
+        let m = BLOCK_COUNT_M as u32;
+        let n = PERCENTAGE_COUNT_N as u64;
+
+        let cases = [
+            // both axes exactly at the count
+            (m, n),
+            // the block axis at the count
+            (m, 0),
+            (m, n.saturating_sub(1)),
+            // the percentage axis at the count
+            (0, n),
+            (m.saturating_sub(1), n),
+            // the last in-table index, for contrast
+            (m.saturating_sub(1), n.saturating_sub(1)),
+        ];
+
+        for (blocks, percentage) in cases {
+            // given
+            let target_height = BEST_HEIGHT.saturating_add(blocks);
+
+            // when
+            let optimized = cumulative_percentage_change(
+                START_GAS_PRICE,
+                BEST_HEIGHT,
+                percentage,
+                target_height,
+            );
+
+            // then
+            let plain = cumulative_percentage_change_plain(
+                START_GAS_PRICE,
+                BEST_HEIGHT,
+                percentage,
+                target_height,
+            );
+            assert_eq!(
+                plain, optimized,
+                "mismatch for blocks={blocks}, percentage={percentage}"
+            );
         }
     }
 }

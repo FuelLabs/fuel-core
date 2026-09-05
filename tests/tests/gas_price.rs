@@ -21,6 +21,7 @@ use fuel_core::{
     service::{
         Config,
         FuelService,
+        sub_services::DEFAULT_GAS_PRICE_CHANGE_PERCENT,
     },
 };
 use fuel_core_client::client::{
@@ -414,6 +415,109 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
         estimated,
         real
     );
+}
+
+#[tokio::test]
+async fn estimate_gas_price__answers_at_the_lookup_table_boundary() {
+    // given
+    // `cumulative_percentage_change` indexes a 25 x 25 table of precomputed exponentials,
+    // and the block horizon is the first index. A horizon of exactly 25 used to be routed
+    // into the table instead of to the closed form, and read one element past its end --
+    // while 24 and 26 both answered normally, which is what made it easy to miss.
+    let node_config = Config::local_node();
+    let srv = FuelService::new_node(node_config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    for block_horizon in [24u32, 25, 26] {
+        // when
+        let result = client.estimate_gas_price(block_horizon).await;
+
+        // then
+        assert!(
+            result.is_ok(),
+            "estimate_gas_price({block_horizon}) failed: {result:?}"
+        );
+    }
+}
+
+/// Compounds `price` by `percent` once per block, the way the algorithm actually moves the
+/// gas price. `cumulative_percentage_change` is a rounded-up closed form of this loop, so a
+/// correct estimate is always at least this value.
+fn compound(price: u64, percent: u16, blocks: u32) -> u64 {
+    let mut value = price;
+    for _ in 0..blocks {
+        let change = value.saturating_mul(percent as u64).saturating_div(100);
+        value = value.saturating_add(change);
+    }
+    value
+}
+
+#[tokio::test]
+async fn estimate_gas_price__uses_the_configured_change_percent() {
+    // given
+    // The worst-case estimator behind `estimateGasPrice` used to be built with
+    // `DEFAULT_GAS_PRICE_CHANGE_PERCENT` no matter what the operator configured, which made
+    // `--gas-price-change-percent` inert for this query on every node.
+    let configured_percent = 30;
+    assert_ne!(configured_percent, DEFAULT_GAS_PRICE_CHANGE_PERCENT);
+
+    let mut node_config = Config::local_node();
+    node_config.gas_price_config.starting_exec_gas_price = 1000;
+    node_config.gas_price_config.exec_gas_price_change_percent = configured_percent;
+
+    let srv = FuelService::new_node(node_config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let horizon = 10;
+    // `estimateGasPrice(0)` is the estimator's own latest price with no growth applied, so
+    // it is exactly the base that the horizon-10 answer is compounded from. (`latestGasPrice`
+    // is not: it reads the mint transaction of the latest block, and is 0 before any block
+    // is produced.)
+    let base = u64::from(client.estimate_gas_price(0).await.unwrap().gas_price);
+    assert!(
+        base > 0,
+        "the assertions below are vacuous with a zero base price"
+    );
+
+    // when
+    let estimate = u64::from(client.estimate_gas_price(horizon).await.unwrap().gas_price);
+
+    // then
+    let at_configured = compound(base, configured_percent, horizon);
+    assert!(
+        estimate >= at_configured,
+        "estimate {estimate} is below {configured_percent}% growth from {base} ({at_configured})"
+    );
+    let at_default = compound(base, DEFAULT_GAS_PRICE_CHANGE_PERCENT, horizon);
+    assert!(
+        estimate > at_default,
+        "estimate {estimate} still matches the hardcoded default ({at_default})"
+    );
+}
+
+#[tokio::test]
+async fn estimate_gas_price__answers_at_the_percentage_lookup_table_boundary() {
+    // given
+    // Honouring the configured percentage makes the *percentage* index of
+    // `cumulative_percentage_change`'s 25 x 25 table operator-controlled for the first time.
+    // 25 is the first value that has to be routed to the closed form instead of the table.
+    for percent in [24u16, 25, 26] {
+        let mut node_config = Config::local_node();
+        node_config.gas_price_config.starting_exec_gas_price = 1000;
+        node_config.gas_price_config.exec_gas_price_change_percent = percent;
+
+        let srv = FuelService::new_node(node_config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // when
+        let result = client.estimate_gas_price(10).await;
+
+        // then
+        assert!(
+            result.is_ok(),
+            "estimate_gas_price at {percent}% failed: {result:?}"
+        );
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
