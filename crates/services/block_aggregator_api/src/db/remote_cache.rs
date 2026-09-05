@@ -60,11 +60,42 @@ pub fn public_http_object_url(base: &str, key: &str) -> String {
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests;
+enum S3Client {
+    Aws(Client),
+    #[cfg(test)]
+    Noop,
+}
+
+impl S3Client {
+    async fn put_object(
+        &self,
+        bucket: &str,
+        key: &str,
+        body: ByteStream,
+    ) -> anyhow::Result<()> {
+        match self {
+            Self::Aws(client) => {
+                client
+                    .put_object()
+                    .bucket(bucket)
+                    .key(key)
+                    .body(body)
+                    .content_encoding("gzip")
+                    .content_type("application/grpc-web")
+                    .send()
+                    .await?;
+            }
+            #[cfg(test)]
+            Self::Noop => {}
+        }
+        Ok(())
+    }
+}
 
 pub struct RemoteCache<S> {
     // aws configuration
     s3_bucket: String,
-    client: Client,
+    client: S3Client,
     publishes_blocks: bool,
 
     // track consistency between runs
@@ -80,7 +111,18 @@ impl<S> RemoteCache<S> {
     ) -> RemoteCache<S> {
         RemoteCache {
             s3_bucket: aws_bucket,
-            client,
+            client: S3Client::Aws(client),
+            publishes_blocks: publish,
+            local_persisted,
+        }
+    }
+}
+#[cfg(test)]
+impl<S> RemoteCache<S> {
+    fn new_for_test(aws_bucket: String, local_persisted: S, publish: bool) -> Self {
+        Self {
+            s3_bucket: aws_bucket,
+            client: S3Client::Noop,
             publishes_blocks: publish,
             local_persisted,
         }
@@ -218,21 +260,16 @@ where
         if self.publishes_blocks {
             let zipped = gzip_bytes(block)?;
             let body = ByteStream::from(zipped);
-            let req = self
-                .client
-                .put_object()
-                .bucket(&self.s3_bucket)
-                .key(&key)
-                .body(body)
-                .content_encoding("gzip")
-                .content_type("application/grpc-web");
-            let _ = req.send().await.map_err(|e| {
-                let sdk_error = format!("{:?}", e);
-                Error::DB(anyhow!(e).context(format!(
-                    "While writing to S3 Bucket: {}, key: {}: SdkError {sdk_error}",
-                    self.s3_bucket, key
-                )))
-            })?;
+            self.client
+                .put_object(&self.s3_bucket, &key, body)
+                .await
+                .map_err(|e| {
+                    let client_error = format!("{e:?}");
+                    Error::DB(anyhow!(e).context(format!(
+                        "While writing to S3 Bucket: {}, key: {}: {client_error}",
+                        self.s3_bucket, key
+                    )))
+                })?;
         }
 
         let mut tx = self.local_persisted.write_transaction();

@@ -76,6 +76,14 @@ use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
 use hyper::rt::Executor;
+use hyper_util::{
+    rt::TokioIo,
+    server::{
+        conn::auto::Builder as ConnectionBuilder,
+        graceful::GracefulShutdown,
+    },
+    service::TowerToHyperService,
+};
 use serde_json::json;
 use std::{
     future::Future,
@@ -136,7 +144,7 @@ pub struct ServerParams {
 }
 
 pub struct Task {
-    server: tokio::task::JoinHandle<hyper::Result<()>>,
+    server: tokio::task::JoinHandle<anyhow::Result<()>>,
     /// Handle to the inner `AsyncProcessor`'s task tracker. Kept here so
     /// `Task::shutdown` can `await processor.drain()` and wait for every
     /// hyper request future to complete before the surrounding service
@@ -147,21 +155,48 @@ pub struct Task {
     /// `__run_exit_handlers`, surfacing as SIGABRT/SIGSEGV at process
     /// exit.
     processor: Arc<AsyncProcessor>,
+    force_shutdown: tokio::sync::watch::Sender<bool>,
 }
 
 const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
+const GRAPHQL_ACCEPT_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
+
+async fn accept_with_retry<T, A, F>(mut accept: A, retry_delay: Duration) -> T
+where
+    A: FnMut() -> F,
+    F: Future<Output = std::io::Result<T>>,
+{
+    loop {
+        match accept().await {
+            Ok(connection) => return connection,
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    std::io::ErrorKind::ConnectionRefused
+                        | std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::ConnectionReset
+                ) =>
+            {
+                tracing::debug!("Accepted GraphQL connection already errored: {err}");
+            }
+            Err(err) => {
+                tracing::error!(
+                    retry_delay_secs = retry_delay.as_secs(),
+                    "GraphQL accept error: {err}; retrying"
+                );
+                tokio::time::sleep(retry_delay).await;
+            }
+        }
+    }
+}
 
 #[derive(Clone)]
 struct ExecutorWithMetrics {
     processor: Arc<AsyncProcessor>,
-    /// Watched alongside every spawned request future so that the future
-    /// resolves as soon as the service leaves `Started`. This bounds the
-    /// time `Task::shutdown` has to wait inside `processor.drain()`: even
-    /// a handler stuck in a long-running await terminates at the stop
-    /// signal instead of being detached at the end of
-    /// `Runtime::shutdown_timeout` and racing the rocksdb static
-    /// destructors at process atexit.
-    state: StateWatcher,
+    /// Unlike normal service shutdown, this signal is sent only after the
+    /// graceful connection-drain deadline expires. Until then, Hyper request
+    /// futures remain alive so in-flight responses can finish.
+    force_shutdown: tokio::sync::watch::Receiver<bool>,
 }
 
 impl<F> Executor<F> for ExecutorWithMetrics
@@ -170,15 +205,11 @@ where
     F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
-        let mut state = self.state.clone();
+        let mut force_shutdown = self.force_shutdown.clone();
         let wrapped = async move {
-            // We don't need the future's output (axum/hyper drives the
-            // request lifecycle via I/O on the connection itself), so
-            // dropping it on shutdown is safe — the connection's drop
-            // closes the socket cleanly.
             tokio::select! {
                 _ = fut => {}
-                _ = state.while_started() => {}
+                _ = force_shutdown.wait_for(|shutdown| *shutdown) => {}
             }
         };
         let result = self.processor.try_spawn(wrapped);
@@ -220,35 +251,50 @@ impl RunnableService for GraphqlService {
             number_of_threads,
             tokio::sync::Semaphore::MAX_PERMITS,
         )?);
-
+        let (force_shutdown, force_shutdown_receiver) =
+            tokio::sync::watch::channel(false);
         let executor = ExecutorWithMetrics {
             processor: processor.clone(),
-            state: state.clone(),
+            force_shutdown: force_shutdown_receiver,
         };
-
-        let server = axum::Server::from_tcp(listener)
-            .unwrap()
-            .executor(executor)
-            .serve(router.into_make_service())
-            .with_graceful_shutdown(async move {
-                // Wait for an actual stop signal. Using `while_started` here would
-                // resolve immediately while the state is still `Starting`, racing
-                // with the runner setting the state to `Started`. When the race
-                // is lost, the spawned server task aborts before it ever serves
-                // a request — which then cascades into a full FuelService
-                // shutdown via `select_all(await_stop)` in `service.rs::run`.
-                //
-                // A `wait_stopping_or_stopped` error means the watcher's sender
-                // was already dropped (the `ServiceRunner` is being torn down).
-                // That is *also* a stop signal — we want graceful shutdown to
-                // fire — so swallow the error rather than panicking, which would
-                // crash the spawned server task and leak the listener.
-                let _ = state.wait_stopping_or_stopped().await;
-            });
+        listener.set_nonblocking(true)?;
+        let listener = tokio::net::TcpListener::from_std(listener)?;
+        let server = async move {
+            let graceful = GracefulShutdown::new();
+            loop {
+                tokio::select! {
+                    connection = accept_with_retry(
+                        || listener.accept(),
+                        GRAPHQL_ACCEPT_ERROR_RETRY_DELAY,
+                    ) => {
+                        let (stream, _) = connection;
+                        let io = TokioIo::new(stream);
+                        let service = TowerToHyperService::new(router.clone());
+                        let connection_executor = executor.clone();
+                        let graceful_watcher = graceful.watcher();
+                        executor.execute(async move {
+                            let builder = ConnectionBuilder::new(connection_executor);
+                            let connection =
+                                builder.serve_connection_with_upgrades(io, service);
+                            if let Err(err) = graceful_watcher.watch(connection).await {
+                                tracing::debug!(
+                                    "GraphQL connection closed with error: {err}"
+                                );
+                            }
+                        });
+                    }
+                    _ = state.wait_stopping_or_stopped() => {
+                        graceful.shutdown().await;
+                        return Ok(())
+                    },
+                }
+            }
+        };
 
         Ok(Task {
             server: tokio::spawn(server),
             processor,
+            force_shutdown,
         })
     }
 }
@@ -272,6 +318,7 @@ impl RunnableTask for Task {
                                     timeout_secs = GRAPHQL_SHUTDOWN_TIMEOUT.as_secs(),
                                     "GraphQL shutdown timed out; aborting server task"
                                 );
+                                let _ = self.force_shutdown.send(true);
                                 self.server.abort();
                                 map_server_result((&mut self.server).await)
                             }
@@ -284,8 +331,9 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // The `axum::Server` has already gracefully stopped accepting new
-        // requests, but some hyper request futures may still be running on
+        let _ = self.force_shutdown.send(true);
+        // The GraphQL accept loop has already stopped accepting new requests,
+        // but some hyper request futures may still be running on
         // the inner `AsyncProcessor` runtime — connection-drain tasks and
         // any handler whose response was mid-flight when the stop signal
         // arrived. We must wait for them to complete here, because
@@ -300,12 +348,11 @@ impl RunnableTask for Task {
 }
 
 fn map_server_result(
-    result: Result<hyper::Result<()>, tokio::task::JoinError>,
+    result: Result<anyhow::Result<()>, tokio::task::JoinError>,
 ) -> TaskNextAction {
     match result {
         Ok(Ok(())) => {
-            // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
-            // error or stop signal.
+            // The accept loop only returns `Ok` after observing service shutdown.
             TaskNextAction::Stop
         }
         Ok(Err(err)) => {
@@ -435,7 +482,10 @@ where
         .layer(Extension(readiness))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
-        .layer(TimeoutLayer::new(request_timeout))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            request_timeout,
+        ))
         .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_ORIGIN,
             HeaderValue::from_static("*"),
@@ -547,7 +597,7 @@ async fn graphql_handler(
 async fn graphql_subscription_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
+) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
     let stream = schema.execute_stream(req.0).map(|response| {
         let response = unify_response(response);
         Event::default().json_data(response)
@@ -558,4 +608,98 @@ async fn graphql_subscription_handler(
 
 async fn ok() -> anyhow::Result<(), ()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use fuel_core_services::Service as _;
+    use tokio::io::{
+        AsyncReadExt,
+        AsyncWriteExt,
+    };
+    #[tokio::test]
+    async fn accept_retries_after_resource_error() {
+        let mut results = std::collections::VecDeque::from([
+            Err(std::io::Error::other("too many open files")),
+            Ok(42),
+        ]);
+
+        let connection = accept_with_retry(
+            || {
+                std::future::ready(
+                    results.pop_front().expect("unexpected accept attempt"),
+                )
+            },
+            Duration::ZERO,
+        )
+        .await;
+
+        assert_eq!(connection, 42);
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn shutdown_gracefully_finishes_in_flight_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let bound_address = listener.local_addr().unwrap();
+        let request_started = Arc::new(tokio::sync::Notify::new());
+        let release_request = Arc::new(tokio::sync::Notify::new());
+        let router = Router::new().route(
+            "/slow",
+            get({
+                let request_started = request_started.clone();
+                let release_request = release_request.clone();
+                move || {
+                    let request_started = request_started.clone();
+                    let release_request = release_request.clone();
+                    async move {
+                        request_started.notify_one();
+                        release_request.notified().await;
+                        tokio::task::yield_now().await;
+                        "done"
+                    }
+                }
+            }),
+        );
+        let service = fuel_core_services::ServiceRunner::new_with_params(
+            GraphqlService { bound_address },
+            ServerParams {
+                router,
+                listener,
+                number_of_threads: 1,
+            },
+        );
+        assert!(service.start_and_await().await.unwrap().started());
+
+        let response = tokio::spawn(async move {
+            let mut stream = tokio::net::TcpStream::connect(bound_address).await.unwrap();
+            stream
+                .write_all(
+                    b"GET /slow HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+            let mut response = Vec::new();
+            stream.read_to_end(&mut response).await.unwrap();
+            response
+        });
+        request_started.notified().await;
+        let shutdown_started = tokio::time::Instant::now();
+        assert!(service.stop());
+        assert!(service.state().stopping());
+        release_request.notify_one();
+
+        let (stopped, response) = tokio::join!(service.await_stop(), response);
+        assert!(
+            shutdown_started.elapsed() < GRAPHQL_SHUTDOWN_TIMEOUT,
+            "in-flight request hit the forced shutdown deadline"
+        );
+
+        assert!(stopped.unwrap().stopped());
+        let response = String::from_utf8(response.unwrap()).unwrap();
+        assert!(response.starts_with("HTTP/1.1 200 OK"));
+        assert!(response.ends_with("done"));
+    }
 }

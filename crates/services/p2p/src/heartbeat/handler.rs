@@ -124,11 +124,7 @@ impl ConnectionHandler for HeartbeatHandler {
         &mut self,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<
-        ConnectionHandlerEvent<
-            Self::OutboundProtocol,
-            Self::OutboundOpenInfo,
-            Self::ToBehaviour,
-        >,
+        ConnectionHandlerEvent<Self::OutboundProtocol, (), Self::ToBehaviour>,
     > {
         if let Some(inbound_stream_and_block_height) = self.inbound.as_mut() {
             match inbound_stream_and_block_height.poll_unpin(cx) {
@@ -252,12 +248,7 @@ impl ConnectionHandler for HeartbeatHandler {
 
     fn on_connection_event(
         &mut self,
-        event: ConnectionEvent<
-            Self::InboundProtocol,
-            Self::OutboundProtocol,
-            Self::InboundOpenInfo,
-            Self::OutboundOpenInfo,
-        >,
+        event: ConnectionEvent<Self::InboundProtocol, Self::OutboundProtocol, (), ()>,
     ) {
         match event {
             ConnectionEvent::FullyNegotiatedInbound(FullyNegotiatedInbound {

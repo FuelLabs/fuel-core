@@ -1,5 +1,8 @@
 use anyhow::anyhow;
-use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::{
+    TokioResolver,
+    proto::rr::RData,
+};
 use libp2p::Multiaddr;
 use std::pin::Pin;
 
@@ -10,7 +13,7 @@ const DNSADDR_PREFIX: &str = "_dnsaddr.";
 const MAX_DNS_LOOKUPS: usize = 10;
 
 pub(crate) struct DnsResolver {
-    resolver: TokioAsyncResolver,
+    resolver: TokioResolver,
 }
 
 impl DnsResolver {
@@ -22,7 +25,7 @@ impl DnsResolver {
     }
 
     pub(crate) async fn new() -> anyhow::Result<Box<Self>> {
-        let resolver = TokioAsyncResolver::tokio_from_system_conf()?;
+        let resolver = TokioResolver::builder_tokio()?.build()?;
         Ok(Box::new(Self { resolver }))
     }
 
@@ -43,7 +46,10 @@ impl DnsResolver {
             let dns_lookup_url = format!("{}{}", DNSADDR_PREFIX, addr);
             let txt_records = self.resolver.txt_lookup(dns_lookup_url).await?;
 
-            for record in txt_records {
+            for record in txt_records.answers() {
+                let RData::TXT(record) = &record.data else {
+                    continue;
+                };
                 let parsed = record.to_string();
                 if !parsed.starts_with("dnsaddr") {
                     continue;

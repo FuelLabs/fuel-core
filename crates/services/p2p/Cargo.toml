@@ -29,8 +29,9 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }
 hex = { workspace = true }
-hickory-resolver = "0.24.1"
-libp2p = { version = "0.54.1", default-features = false, features = ["dns", "gossipsub", "identify", "kad", "macros", "mdns", "noise", "request-response", "secp256k1", "tcp", "tokio", "yamux", "websocket", "metrics"] }
+hickory-resolver = "0.26.1"
+libp2p = { version = "0.55.0", default-features = false, features = ["dns", "gossipsub", "identify", "kad", "macros", "mdns", "noise", "request-response", "secp256k1", "tcp", "tokio", "yamux", "websocket", "metrics"] }
+libp2p-gossipsub = "0.48.0"
 parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
 quick_cache = "0.6.9"
@@ -55,4 +56,6 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-attributes = { workspace = true }
 
 [dev-dependencies.libp2p-swarm-test]
-version = "0.4.0"
+version = "0.5.0"
+default-features = false
+features = ["tokio"]

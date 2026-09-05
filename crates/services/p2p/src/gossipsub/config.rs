@@ -11,8 +11,8 @@ use crate::{
     utils::is_dialable,
 };
 use fuel_core_metrics::global_registry;
-use libp2p::gossipsub::{
-    self,
+use libp2p_gossipsub::{
+    self as gossipsub,
     MessageAuthenticity,
     MessageId,
     MetricsConfig,

@@ -54,7 +54,7 @@ homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
-rust-version = "1.93.0"
+rust-version = "1.94.1"
 version = "0.48.3"
 
 [workspace.dependencies]
@@ -75,11 +75,10 @@ async-graphql-value = { version = "7.0.15" }
 async-trait = "0.1"
 
 # Fuel dependencies
-aws-config = { version = "1.8.11", features = ["behavior-version-latest"] }
-aws-sdk-kms = "1.96.0"
-aws-sdk-s3 = "1.119.0"
-aws-smithy-mocks = "0.2.0"
-axum = "0.5"
+aws-config = { version = "1.11.0", features = ["behavior-version-latest"] }
+aws-sdk-kms = { version = "1.116.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-s3 = { version = "1.143.0", default-features = false, features = ["default-https-client", "http-1x", "rt-tokio", "sigv4a"] }
+axum = "0.8"
 bytes = "1.5.0"
 clap = "4.4"
 cynic = { version = "=3.12.0", features = ["http-reqwest"] }
@@ -127,7 +126,7 @@ fuel-gas-price-algorithm = { version = "0.48.3", path = "crates/fuel-gas-price-a
 fuel-vm-private = { version = "0.66.4", package = "fuel-vm", default-features = false }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
-hyper = { version = "0.14" }
+hyper = { version = "1.7", features = ["http1", "http2", "server"] }
 impl-tools = "0.11"
 indicatif = { version = "0.18", default-features = false }
 insta = "1.8"
@@ -143,7 +142,7 @@ pin-project-lite = "0.2"
 postcard = "1.0"
 pretty_assertions = "1.4.0"
 primitive-types = { version = "0.12", default-features = false }
-prometheus-client = "0.22.0"
+prometheus-client = "0.22.3"
 proptest = "1.1"
 prost = "0.14.1"
 rand = "0.8"

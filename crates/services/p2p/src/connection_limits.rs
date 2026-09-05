@@ -409,7 +409,7 @@ impl NetworkBehaviour for Behaviour {
         _: ConnectionId,
         event: THandlerOutEvent<Self>,
     ) {
-        void::unreachable(event)
+        match event {}
     }
 
     fn poll(

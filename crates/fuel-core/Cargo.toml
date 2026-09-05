@@ -89,6 +89,7 @@ fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
+hyper-util = { version = "0.1", features = ["server", "server-auto", "server-graceful", "service", "tokio"] }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
 libc = { version = "0.2.177" }
@@ -110,8 +111,8 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
 tokio-util = { workspace = true }
-tower = { version = "0.4", features = ["limit"] }
-tower-http = { version = "0.4", features = ["set-header", "trace", "timeout"] }
+tower = { version = "0.5", features = ["limit"] }
+tower-http = { version = "0.6", features = ["set-header", "trace", "timeout"] }
 tracing = { workspace = true }
 url = { workspace = true }
 uuid = { version = "1.1", features = ["v4"] }

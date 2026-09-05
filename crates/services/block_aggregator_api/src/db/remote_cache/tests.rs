@@ -13,12 +13,6 @@ use crate::{
         Mode,
     },
 };
-use aws_sdk_s3::operation::put_object::PutObjectOutput;
-use aws_smithy_mocks::{
-    Rule,
-    mock,
-    mock_client,
-};
 use fuel_core_storage::{
     structured_storage::test::InMemoryStorage,
     transactional::{
@@ -39,21 +33,13 @@ fn arb_proto_block_bytes() -> Arc<[u8]> {
     let convertor = ProtobufBlockConverter;
     convertor.convert_block(&block, &[]).unwrap()
 }
-fn put_happy_rule() -> Rule {
-    mock!(Client::put_object)
-        .match_requests(|req| req.bucket() == Some("test-bucket"))
-        .sequence()
-        .output(|| PutObjectOutput::builder().build())
-        .build()
-}
 
 #[tokio::test]
 async fn store_block__happy_path() {
     // given
-    let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_bucket = "test-bucket".to_string();
     let storage = database();
-    let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
+    let mut adapter = RemoteCache::new_for_test(aws_bucket, storage, true);
     let block_height = BlockHeight::new(123);
     let block = arb_proto_block_bytes();
 
@@ -119,10 +105,9 @@ fn public_http_object_url__joins_base_and_key() {
 #[tokio::test]
 async fn get_current_height__returns_highest_continuous_block() {
     // given
-    let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_bucket = "test-bucket".to_string();
     let storage = database();
-    let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
+    let mut adapter = RemoteCache::new_for_test(aws_bucket, storage, true);
 
     let expected = BlockHeight::new(123);
     let block = arb_proto_block_bytes();
@@ -146,9 +131,8 @@ async fn store_block__fails_if_not_contiguous() {
         .insert(&(), &Mode::new_s3(starting_height))
         .unwrap();
     tx.commit().unwrap();
-    let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_bucket = "test-bucket".to_string();
-    let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
+    let mut adapter = RemoteCache::new_for_test(aws_bucket, storage, true);
 
     let expected = BlockHeight::new(3);
     let block = arb_proto_block_bytes();
