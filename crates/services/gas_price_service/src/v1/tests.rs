@@ -77,6 +77,7 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
+    ClampedPercentage,
     blockchain::{
         block::Block,
         header::ConsensusParametersVersion,
@@ -290,7 +291,7 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         new_exec_gas_price: 100,
         min_exec_gas_price: 0,
         exec_gas_price_change_percent: 10,
-        l2_block_fullness_threshold_percent: 0,
+        l2_block_fullness_threshold_percent: ClampedPercentage::new(0),
         gas_price_factor: NonZeroU64::new(100).unwrap(),
         min_da_gas_price: 0,
         max_da_gas_price: 1,
@@ -300,7 +301,7 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         normal_range_size: 0,
         capped_range_size: 0,
         decrease_range_size: 0,
-        block_activity_threshold: 0,
+        block_activity_threshold: ClampedPercentage::new(0),
         da_poll_interval: None,
         starting_recorded_height: None,
         record_metrics: false,
@@ -327,7 +328,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
         new_exec_gas_price: 200,
         min_exec_gas_price: 0,
         exec_gas_price_change_percent: 20,
-        l2_block_fullness_threshold_percent: 0,
+        l2_block_fullness_threshold_percent: ClampedPercentage::new(0),
         gas_price_factor: NonZeroU64::new(100).unwrap(),
         min_da_gas_price: 0,
         max_da_gas_price: 1,
@@ -337,7 +338,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
         normal_range_size: 0,
         capped_range_size: 0,
         decrease_range_size: 0,
-        block_activity_threshold: 0,
+        block_activity_threshold: ClampedPercentage::new(0),
         da_poll_interval: None,
         starting_recorded_height: None,
         record_metrics: false,
@@ -816,7 +817,7 @@ fn algo_updater_override_values_match(
     );
     assert_eq!(
         algo_updater.l2_block_fullness_threshold_percent,
-        config.l2_block_fullness_threshold_percent.into()
+        config.l2_block_fullness_threshold_percent
     );
     assert_eq!(algo_updater.gas_price_factor, config.gas_price_factor);
     assert_eq!(algo_updater.min_da_gas_price, config.min_da_gas_price);
