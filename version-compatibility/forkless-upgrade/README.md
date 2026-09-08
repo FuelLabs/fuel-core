@@ -71,9 +71,14 @@ In the case of breaking API, we need to remove old tests(usually, we need to cre
 If at any point the state transition function becomes forward incompatible, we need to update 
 `latest_state_transition_function_is_forward_compatible_with_v44_binary` to use the latest version of `fuel-core`.
 
+Advancing the historical node baseline does not change which older clients are
+supported. Retain their compatibility tests and dependencies unless the client
+support policy explicitly retires them; do not upgrade those fixtures merely
+because the node baseline advances.
+
 To update the test, we need to:
 - Update the historical release in `build-historical-node.sh`, the CI cache key, and the driver's executable path and expected node version.
-- Update the historical client/type dependencies and verify the new release's CLI arguments and structured GraphQL startup message.
+- Update the client/type dependencies used by the historical node driver, preserving dependencies still needed by older-client tests, and verify the new release's CLI arguments and structured GraphQL startup message.
 - Add a new `chain-configurations` entry for the new version
 - Copy over the contents of the previous version. i.e. if we are updating from `v36` to `v44`, we should create a new 
 `v44` directory and copy over the contents of `v36` to `v44`.
@@ -84,3 +89,24 @@ To update the test, we need to:
         - "genesis_state_transition_version" in `chain_config.json`
         - "state_transition_version" for the `latest_block` in `state_config.json`
         - Bump the versions in the test asserts. i.e. if the version in the configs is `28`, then the asserts will be `29` and `30` respectively.
+
+### Refreshing the lockfile and verifying
+
+After changing the baseline dependencies, run the compatibility check once without
+`--locked` to refresh `version-compatibility/Cargo.lock`. Keep the existing lockfile
+so unrelated dependencies remain pinned; do not delete it or run an unrestricted
+`cargo update` as part of a baseline bump.
+
+From the repository root:
+
+```sh
+./version-compatibility/build-historical-node.sh
+cargo check --manifest-path version-compatibility/Cargo.toml --workspace --tests
+cargo check --manifest-path version-compatibility/Cargo.toml --workspace --tests --locked
+cargo test --manifest-path version-compatibility/Cargo.toml --workspace --locked
+```
+
+Review the lockfile changes for the intended dependency updates and removals, and
+commit them with the baseline change. The final locked check and test commands
+verify that the committed dependency graph supports the updated compatibility
+tests without further lockfile changes.
