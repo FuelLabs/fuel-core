@@ -13,16 +13,43 @@ use crate::{
         upgrade_transaction,
     },
 };
-use libp2p::{
-    futures::StreamExt,
-    identity::secp256k1::Keypair as SecpKeypair,
-};
+use libp2p::identity::secp256k1::Keypair as SecpKeypair;
 use rand::{
     SeedableRng,
     rngs::StdRng,
 };
 use std::time::Duration;
+use version_44_fuel_core_client::client::{
+    FuelClient,
+    types::{
+        Block,
+        TransactionStatus,
+    },
+};
 use version_44_fuel_core_type::fuel_tx::field::ChargeableBody;
+
+async fn await_v44_block(client: &FuelClient, height: u32, timeout: Duration) -> Block {
+    tokio::time::timeout(timeout, async {
+        loop {
+            let block =
+                client
+                    .block_by_height(height.into())
+                    .await
+                    .unwrap_or_else(|error| {
+                        panic!("Failed to query v44 validator block {height}: {error}")
+                    });
+            if let Some(block) = block {
+                assert_eq!(block.header.height, height);
+                return block;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| {
+        panic!("Timed out after {timeout:?} waiting for v44 validator block {height}")
+    })
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_state_transition_function_is_forward_compatible_with_v44_binary() {
@@ -88,25 +115,26 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
     .unwrap();
 
     // Given
-    let mut imported_blocks = validator_node.node.shared.block_importer.events();
     const BLOCKS_TO_PRODUCE: u32 = 10;
-    for i in 0..BLOCKS_TO_PRODUCE {
-        tracing::warn!("beep");
-        let block = tokio::time::timeout(Duration::from_secs(10), imported_blocks.next())
+    const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(10);
+    // Capture the starting height once, then inspect every subsequent block.
+    let initial_height =
+        tokio::time::timeout(BLOCK_IMPORT_TIMEOUT, validator_node.client.chain_info())
             .await
-            .expect(format!("Timed out waiting for block import {i}").as_str())
-            .expect(format!("Failed to import block {i}").as_str());
-        tracing::warn!("boop");
+            .expect("Timed out querying the v44 validator's initial height")
+            .expect("Failed to query the v44 validator's initial height")
+            .latest_block
+            .header
+            .height;
+    for offset in 1..=BLOCKS_TO_PRODUCE {
+        let height = initial_height.checked_add(offset).expect("Height overflow");
+        let block =
+            await_v44_block(&validator_node.client, height, BLOCK_IMPORT_TIMEOUT).await;
         assert_eq!(
-            block
-                .sealed_block
-                .entity
-                .header()
-                .state_transition_bytecode_version(),
-            29
+            block.header.state_transition_bytecode_version, 29,
+            "Unexpected STF version before upgrade at height {height}"
         );
     }
-    drop(imported_blocks);
 
     // When
     let subsections =
@@ -121,11 +149,17 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
     let root = transactions[0].body().root;
     for upload in transactions {
         let tx = version_44_fuel_core_type::fuel_tx::Transaction::Upload(upload);
-        validator_node
-            .client
-            .submit_and_await_commit(&tx)
-            .await
-            .unwrap();
+        let status = tokio::time::timeout(
+            BLOCK_IMPORT_TIMEOUT,
+            validator_node.client.submit_and_await_commit(&tx),
+        )
+        .await
+        .expect("Timed out committing a bytecode upload")
+        .expect("Failed to submit a bytecode upload");
+        assert!(
+            matches!(status, TransactionStatus::Success { .. }),
+            "Bytecode upload did not succeed: {status:?}"
+        );
     }
     let upgrade = upgrade_transaction(
         version_44_fuel_core_type::fuel_tx::UpgradePurpose::StateTransition { root },
@@ -133,28 +167,40 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
         amount,
     );
     let upgrade_tx = version_44_fuel_core_type::fuel_tx::Transaction::Upgrade(upgrade);
-    validator_node
-        .client
-        .submit_and_await_commit(&upgrade_tx)
-        .await
-        .unwrap();
+    let upgrade_status = tokio::time::timeout(
+        BLOCK_IMPORT_TIMEOUT,
+        validator_node.client.submit_and_await_commit(&upgrade_tx),
+    )
+    .await
+    .expect("Timed out committing the STF upgrade")
+    .expect("Failed to submit the STF upgrade");
+    let upgrade_height = match upgrade_status {
+        TransactionStatus::Success { block_height, .. } => u32::from(block_height),
+        status => panic!("STF upgrade did not succeed: {status:?}"),
+    };
 
     // Then
-    let mut imported_blocks = validator_node.node.shared.block_importer.events();
-    for i in 0..BLOCKS_TO_PRODUCE {
+    // The upgrade executes under version 29 and stores version 30 for the next
+    // block's header. Anchor to its committed height, not a moving chain tip, so
+    // delayed polling cannot skip an incorrect first block after activation.
+    let upgrade_block =
+        await_v44_block(&validator_node.client, upgrade_height, BLOCK_IMPORT_TIMEOUT)
+            .await;
+    assert_eq!(
+        upgrade_block.header.state_transition_bytecode_version, 29,
+        "Unexpected STF version in the upgrade block at height {upgrade_height}"
+    );
+    for offset in 1..=BLOCKS_TO_PRODUCE {
+        let height = upgrade_height.checked_add(offset).expect("Height overflow");
         // Big timeout because we need to compile the state transition function.
         let block =
-            tokio::time::timeout(Duration::from_secs(360), imported_blocks.next())
-                .await
-                .expect(format!("Timed out waiting for block import {i}").as_str())
-                .expect(format!("Failed to import block {i}").as_str());
+            await_v44_block(&validator_node.client, height, Duration::from_secs(360))
+                .await;
         assert_eq!(
-            block
-                .sealed_block
-                .entity
-                .header()
-                .state_transition_bytecode_version(),
-            30
+            block.header.state_transition_bytecode_version, 30,
+            "Unexpected STF version after activation at height {height}"
         );
     }
+    drop(validator_node.kill().await);
+    drop(_v44_node.kill().await);
 }

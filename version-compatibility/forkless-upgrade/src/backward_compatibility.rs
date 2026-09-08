@@ -143,8 +143,7 @@ async fn latest_binary_serves_consensus_parameters_to_v44_client() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn latest_binary_serves_ignition_snapshot_consensus_parameters_to_v44_client()
- {
+async fn latest_binary_serves_ignition_snapshot_consensus_parameters_to_v44_client() {
     // given
     let latest_node = LatestFuelCoreDriver::spawn(&[
         "--debug",
@@ -272,8 +271,8 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
     for i in 0..BLOCKS_TO_PRODUCE {
         let _ = tokio::time::timeout(BLOCK_INCLUSION_TIMEOUT, imported_blocks.next())
             .await
-            .expect(format!("Timed out waiting for block import {i}").as_str())
-            .expect(format!("Failed to import block {i}").as_str());
+            .unwrap_or_else(|_| panic!("Timed out waiting for block import {i}"))
+            .unwrap_or_else(|| panic!("Failed to import block {i}"));
     }
 }
 
@@ -335,9 +334,10 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v44_
     for i in 0..BLOCKS_TO_PRODUCE {
         let _ = tokio::time::timeout(BLOCK_INCLUSION_TIMEOUT, imported_blocks.next())
             .await
-            .expect(format!("Timed out waiting for block import {i}").as_str())
-            .expect(format!("Failed to import block {i}").as_str());
+            .unwrap_or_else(|_| panic!("Timed out waiting for block import {i}"))
+            .unwrap_or_else(|| panic!("Failed to import block {i}"));
     }
+    drop(_v44_node.kill().await);
 }
 
 #[tokio::test(flavor = "multi_thread")]

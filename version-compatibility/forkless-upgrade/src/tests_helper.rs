@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use anyhow::Context;
 use genesis_fuel_core_bin::FuelService as GenesisFuelService;
 use genesis_fuel_core_client::client::FuelClient as GenesisClient;
 use genesis_fuel_core_services::Service as _;
@@ -9,10 +10,22 @@ use rand::{
     Rng,
     prelude::StdRng,
 };
-use std::str::FromStr;
-use version_44_fuel_core_bin::FuelService as Version44FuelService;
+use std::{
+    io::{
+        BufRead,
+        BufReader,
+    },
+    net::SocketAddr,
+    path::PathBuf,
+    process::{
+        Child,
+        Command,
+        Stdio,
+    },
+    str::FromStr,
+    time::Duration,
+};
 use version_44_fuel_core_client::client::FuelClient as Version44Client;
-use version_44_fuel_core_services as _;
 use version_44_fuel_core_type::{
     fuel_crypto::{
         SecretKey,
@@ -101,20 +114,175 @@ define_core_driver!(
     false
 );
 
-define_core_driver!(
-    version_44_fuel_core_bin,
-    Version44FuelService,
-    Version44Client,
-    Version44FuelCoreDriver,
-    true
-);
+/// The historical binary has its own dependency graph and lockfile.
+pub struct Version44FuelCoreDriver {
+    // Reap the child before removing its database.
+    process: HistoricalProcess,
+    pub _db_dir: tempfile::TempDir,
+    pub client: Version44Client,
+}
+
+struct HistoricalProcess {
+    child: Child,
+    log: tempfile::NamedTempFile,
+}
+
+impl HistoricalProcess {
+    fn ensure_running(&mut self) -> anyhow::Result<()> {
+        if let Some(status) = self.child.try_wait()? {
+            anyhow::bail!("Historical node exited unexpectedly: {status}");
+        }
+        Ok(())
+    }
+
+    fn logs(&self) -> String {
+        std::fs::read_to_string(self.log.path()).unwrap_or_else(|error| {
+            format!("Unable to read historical node logs: {error}")
+        })
+    }
+
+    async fn client(&mut self) -> anyhow::Result<Version44Client> {
+        // Let the OS allocate the port. Reading the pinned release's structured
+        // startup log avoids the race inherent in reserving and releasing a port.
+        let mut reader = BufReader::new(self.log.reopen()?);
+        let mut line = String::new();
+        let client = 'endpoint: loop {
+            self.ensure_running()?;
+            while reader.read_line(&mut line)? != 0 {
+                if !line.ends_with('\n') {
+                    break;
+                }
+                if let Ok(record) = serde_json::from_str::<serde_json::Value>(&line)
+                    && let Some(address) =
+                        record["fields"]["message"].as_str().and_then(|message| {
+                            message.strip_prefix("Binding GraphQL provider to ")
+                        })
+                {
+                    break 'endpoint Version44Client::from(address.parse::<SocketAddr>()?);
+                }
+                line.clear();
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        };
+        loop {
+            self.ensure_running()?;
+            if client.health().await.unwrap_or(false) {
+                let version = client.node_info().await?.node_version;
+                anyhow::ensure!(
+                    version == "0.44.0",
+                    "Expected historical node 0.44.0, got {version}"
+                );
+                self.ensure_running()?;
+                return Ok(client);
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+}
+
+impl Drop for HistoricalProcess {
+    fn drop(&mut self) {
+        // Drop also runs during unwinding and cancelled async startup. Always
+        // reap before TempDir cleanup; a detached node must never outlive a test.
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        if std::thread::panicking() {
+            eprintln!("Historical node logs:\n{}", self.logs());
+        }
+    }
+}
 
 impl Version44FuelCoreDriver {
-    pub async fn kill(self) -> tempfile::TempDir {
-        self.node
-            .send_stop_signal_and_await_shutdown()
+    pub async fn spawn(extra_args: &[&str]) -> anyhow::Result<Self> {
+        Self::spawn_with_directory(tempfile::tempdir()?, extra_args).await
+    }
+
+    pub async fn spawn_with_directory(
+        db_dir: tempfile::TempDir,
+        extra_args: &[&str],
+    ) -> anyhow::Result<Self> {
+        let executable = std::env::var_os("FUEL_CORE_V44_BIN")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../target/historical/v0.44.0/bin/fuel-core")
+                    .with_extension(std::env::consts::EXE_EXTENSION)
+            });
+        let log = tempfile::NamedTempFile::new()?;
+        let child = Command::new(&executable)
+            .arg("run")
+            .arg("--db-path")
+            .arg(db_dir.path())
+            .args(["--ip", "127.0.0.1", "--port", "0"])
+            .args(["--address", "127.0.0.1"])
+            .args(extra_args)
+            .env("HUMAN_LOGGING", "false")
+            .env("RUST_LOG", "info")
+            .stdin(Stdio::null())
+            .stdout(log.as_file().try_clone()?)
+            .stderr(log.as_file().try_clone()?)
+            .spawn()
+            .with_context(|| {
+                format!(
+                    "Unable to launch {}. Run version-compatibility/build-historical-node.sh first",
+                    executable.display()
+                )
+            })?;
+        let mut process = HistoricalProcess { child, log };
+        let result =
+            tokio::time::timeout(Duration::from_secs(60), process.client()).await;
+        let client = match result {
+            Ok(Ok(client)) => client,
+            Ok(Err(error)) => {
+                return Err(error.context(process.logs()));
+            }
+            Err(error) => {
+                return Err(anyhow::anyhow!(
+                    "Historical node startup timed out: {error}\n{}",
+                    process.logs()
+                ));
+            }
+        };
+        Ok(Self {
+            process,
+            _db_dir: db_dir,
+            client,
+        })
+    }
+
+    pub async fn kill(mut self) -> tempfile::TempDir {
+        #[cfg(unix)]
+        {
+            use nix::{
+                sys::signal::{
+                    Signal,
+                    kill,
+                },
+                unistd::Pid,
+            };
+            kill(
+                Pid::from_raw(self.process.child.id() as i32),
+                Signal::SIGTERM,
+            )
+            .expect("Failed to signal historical node shutdown");
+            tokio::time::timeout(Duration::from_secs(30), async {
+                loop {
+                    if let Some(status) = self.process.child.try_wait().unwrap() {
+                        assert!(
+                            status.success(),
+                            "Historical node shutdown failed: {status}\n{}",
+                            self.process.logs()
+                        );
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(25)).await;
+                }
+            })
             .await
-            .expect("Failed to stop the node");
+            .expect("Historical node shutdown timed out");
+        }
+        // On platforms without SIGTERM, Drop still kills and reaps the child.
+        drop(self.process);
         self._db_dir
     }
 }
@@ -138,8 +306,7 @@ impl LatestFuelCoreDriver {
 }
 
 pub const IGNITION_TESTNET_SNAPSHOT: &str = "./chain-configurations/ignition";
-pub const IGNITION_V21_TESTNET_SNAPSHOT: &str =
-    "./chain-configurations/ignition-v21";
+pub const IGNITION_V21_TESTNET_SNAPSHOT: &str = "./chain-configurations/ignition-v21";
 
 pub const V44_TESTNET_SNAPSHOT: &str = "./chain-configurations/v44";
 pub const POA_SECRET_KEY: &str =
