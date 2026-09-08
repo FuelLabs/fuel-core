@@ -44,7 +44,7 @@ latest-fuel-core-type = { path = "../../crates/types", package = "fuel-core-type
 latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
     "wasm-executor",
 ] }
-libp2p = "0.55.0"
+libp2p = "0.56.0"
 rand = "0.8"
 reqwest = { version = "0.12", features = ["json"] }
 serde_json = "1.0"
