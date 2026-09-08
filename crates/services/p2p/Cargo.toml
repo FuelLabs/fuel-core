@@ -44,8 +44,8 @@ thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 void = "1"
-# Keep published dependency resolution above the malformed-frame panic fixes.
-yamux = "0.13.10"
+# Pin the validated Yamux release for published-crate dependency resolution.
+yamux = "=0.13.10"
 
 [dev-dependencies]
 fuel-core-services = { path = "../../services", features = ["test-helpers"] }
