@@ -5,18 +5,16 @@ name = "forkless-upgrade"
 publish = false
 version = "0.0.0"
 build = "build.rs"
+[dependencies]
+tracing = "0.1.41"
 
 [dev-dependencies]
 anyhow = "1.0"
+
+# pin async-graphql because they bumped msrv in a patch release
+async-graphql = "=7.0.15"
 clap = "4.4"
-libp2p = "0.55.0"
-hex = "0.4.3"
-rand = "0.8"
-tempfile = "3.4"
-tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
 cynic = { version = "=3.12.0" }
-reqwest = { version = "0.12", features = ["json"] }
-serde_json = "1.0"
 
 # Neutral deps
 fuel-core = { path = "../../crates/fuel-core", default-features = false, features = ["test-helpers"] }
@@ -24,40 +22,40 @@ fuel-core-trace = { path = "../../crates/trace" }
 fuel-crypto = { version = "0.63.0" }
 fuel-tx = { version = "0.63.0", features = ["random"] }
 
-# Latest fuel-core
-latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", default-features = false, features = [
-  "relayer",
-  "parquet",
-  "p2p",
-] }
-latest-fuel-core-type = { path = "../../crates/types", package = "fuel-core-types", features = [
-  "test-helpers",
-] }
-latest-fuel-core-client = { path = "../../crates/client", package = "fuel-core-client" }
-latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
-  "wasm-executor",
-] }
-
 # Genesis fuel-core
 genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", features = [
-  "parquet",
-  "p2p",
+    "parquet",
+    "p2p",
 ] }
 genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
 genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
+hex = "0.4.3"
+
+# Latest fuel-core
+latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", default-features = false, features = [
+    "relayer",
+    "parquet",
+    "p2p",
+] }
+latest-fuel-core-client = { path = "../../crates/client", package = "fuel-core-client" }
+latest-fuel-core-type = { path = "../../crates/types", package = "fuel-core-types", features = [
+    "test-helpers",
+] }
+latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
+    "wasm-executor",
+] }
+libp2p = "0.55.0"
+rand = "0.8"
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = "1.0"
+tempfile = "3.4"
+tokio = { version = "1.37.0", features = ["rt-multi-thread", "time"] }
+version-44-fuel-core-client = { version = "0.44.0", package = "fuel-core-client" }
 
 # Fuel core version 0.44.0
-version-44-fuel-core-bin = { version = "0.44.0", package = "fuel-core-bin", features = [
-  "parquet",
-  "p2p",
-] }
 version-44-fuel-core-type = { version = "0.44.0", package = "fuel-core-types", features = [
-  "test-helpers",
+    "test-helpers",
 ] }
-version-44-fuel-core-client = { version = "0.44.0", package = "fuel-core-client" }
-version-44-fuel-core-services = { version = "0.44.0", package = "fuel-core-services" }
 
-# pin async-graphql because they bumped msrv in a patch release
-async-graphql = "=7.0.15"
-[dependencies]
-tracing = "0.1.41"
+[target.'cfg(unix)'.dev-dependencies]
+nix = { version = "0.30", features = ["signal"] }

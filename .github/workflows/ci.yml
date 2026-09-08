@@ -132,6 +132,7 @@ jobs:
           # and `--locked` when we build `fuel-core-wasm-executor 0.26.0`).
           - command: check
             args: --manifest-path version-compatibility/Cargo.toml --workspace --locked && cargo test --manifest-path version-compatibility/Cargo.toml --workspace --locked
+            historical-node: true
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
 
@@ -169,6 +170,22 @@ jobs:
         with:
           key: ${{ matrix.command }}-${{ matrix.args }}
           cache-on-failure: true
+      - name: Determine historical node target
+        if: ${{ matrix.historical-node }}
+        id: historical-target
+        run: |
+          echo "host=$(rustc -vV | sed -n 's/^host: //p')" >> "$GITHUB_OUTPUT"
+      - name: Cache historical node and build artifacts
+        if: ${{ matrix.historical-node }}
+        uses: actions/cache@v4
+        with:
+          path: version-compatibility/target/historical
+          key: historical-v0.44.0-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ steps.historical-target.outputs.host }}-release-default-parquet-p2p-${{ hashFiles('version-compatibility/build-historical-node.sh') }}
+      - name: Install historical node
+        if: ${{ matrix.historical-node }}
+        env:
+          FUEL_CORE_V44_TOOLCHAIN: ${{ env.RUST_VERSION }}
+        run: ./version-compatibility/build-historical-node.sh
       - name: Install cargo-nextest
         if: ${{ matrix.command == 'nextest' }}
         uses: taiki-e/install-action@v2
