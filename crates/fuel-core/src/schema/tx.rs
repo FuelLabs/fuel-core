@@ -124,7 +124,7 @@ impl TxQuery {
     async fn dry_run_inner(
         &self,
         ctx: &Context<'_>,
-        txs: Vec<HexString>,
+        txs: Vec<HexString<'_>>,
         // If set to false, disable input utxo validation, overriding the configuration of the node.
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
@@ -375,7 +375,7 @@ impl TxQuery {
         #[graphql(
             desc = "The original transaction that contains application level logic only"
         )]
-        tx: HexString,
+        tx: HexString<'_>,
         #[graphql(
             desc = "Number of blocks into the future to estimate the gas price for"
         )]
@@ -519,7 +519,7 @@ impl TxQuery {
     async fn estimate_predicates(
         &self,
         ctx: &Context<'_>,
-        tx: HexString,
+        tx: HexString<'_>,
     ) -> async_graphql::Result<Transaction> {
         let query = ctx.read_view()?.into_owned();
 
@@ -550,7 +550,7 @@ impl TxQuery {
     async fn dry_run(
         &self,
         ctx: &Context<'_>,
-        txs: Vec<HexString>,
+        txs: Vec<HexString<'_>>,
         // If set to false, disable input utxo validation, overriding the configuration of the node.
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
@@ -574,7 +574,7 @@ impl TxQuery {
     async fn dry_run_record_storage_reads(
         &self,
         ctx: &Context<'_>,
-        txs: Vec<HexString>,
+        txs: Vec<HexString<'_>>,
         // If set to false, disable input utxo validation, overriding the configuration of the node.
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
@@ -627,7 +627,7 @@ impl TxMutation {
     async fn dry_run(
         &self,
         ctx: &Context<'_>,
-        txs: Vec<HexString>,
+        txs: Vec<HexString<'_>>,
         // If set to false, disable input utxo validation, overriding the configuration of the node.
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
@@ -648,7 +648,7 @@ impl TxMutation {
     async fn submit(
         &self,
         ctx: &Context<'_>,
-        tx: HexString,
+        tx: HexString<'_>,
         estimate_predicates: Option<bool>,
     ) -> async_graphql::Result<Transaction> {
         let txpool = ctx.data_unchecked::<TxPool>();
@@ -679,7 +679,7 @@ impl TxMutation {
 pub struct TxStatusSubscription;
 
 #[Subscription]
-impl TxStatusSubscription {
+impl<'a> TxStatusSubscription {
     /// Returns a stream of status updates for the given transaction id.
     /// If the current status is [`TransactionStatus::Success`], [`TransactionStatus::Failed`],
     /// or [`TransactionStatus::SqueezedOut`] the stream will return that and end immediately.
@@ -693,7 +693,7 @@ impl TxStatusSubscription {
     /// a status. If this occurs the stream can simply be restarted to return
     /// the latest status.
     #[graphql(complexity = "query_costs().status_change + child_complexity")]
-    async fn status_change<'a>(
+    async fn status_change(
         &self,
         ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
@@ -721,7 +721,7 @@ impl TxStatusSubscription {
     }
 
     #[graphql(name = "alpha__preconfirmations")]
-    async fn preconfirmations<'a>(
+    async fn preconfirmations(
         &self,
         ctx: &'a Context<'a>,
     ) -> async_graphql::Result<
@@ -745,10 +745,10 @@ impl TxStatusSubscription {
 
     /// Submits transaction to the `TxPool` and await either success or failure.
     #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
-    async fn submit_and_await<'a>(
+    async fn submit_and_await(
         &self,
         ctx: &'a Context<'a>,
-        tx: HexString,
+        tx: HexString<'a>,
         estimate_predicates: Option<bool>,
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a + use<'a>,
@@ -767,10 +767,10 @@ impl TxStatusSubscription {
     /// Compared to the `submitAndAwait`, the stream also contains
     /// `SubmittedStatus` and potentially preconfirmation as an intermediate state.
     #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
-    async fn submit_and_await_status<'a>(
+    async fn submit_and_await_status(
         &self,
         ctx: &'a Context<'a>,
-        tx: HexString,
+        tx: HexString<'a>,
         estimate_predicates: Option<bool>,
         include_preconfirmation: Option<bool>,
     ) -> async_graphql::Result<
@@ -788,7 +788,7 @@ impl TxStatusSubscription {
 
 async fn submit_and_await_status<'a>(
     ctx: &'a Context<'a>,
-    tx: HexString,
+    tx: HexString<'a>,
     estimate_predicates: bool,
     include_preconfirmation: bool,
 ) -> async_graphql::Result<
@@ -884,8 +884,8 @@ pub mod schema_types {
         // signature verification. They provide a mocked version of the predicate that
         // returns `true` even if the signature doesn't match.
         pub predicate_address: Address,
-        pub predicate: HexString,
-        pub predicate_data: HexString,
+        pub predicate: HexString<'static>,
+        pub predicate_data: HexString<'static>,
     }
 
     #[derive(async_graphql::InputObject)]

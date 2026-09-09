@@ -22,6 +22,7 @@ use std::{
     },
     str::FromStr,
 };
+use std::borrow::Cow;
 pub use tx_pointer::TxPointer;
 pub use utxo_id::UtxoId;
 
@@ -161,10 +162,26 @@ impl CursorType for SortedTxCursor {
 }
 
 #[derive(Clone, Debug, derive_more::Into, derive_more::From, PartialEq, Eq)]
-pub struct HexString(pub(crate) Vec<u8>);
+pub struct HexString<'a>(pub(crate) Cow<'a, [u8]>);
+
+impl From<Vec<u8>> for HexString<'_> {
+    fn from(vec: Vec<u8>) -> Self {
+        HexString(Cow::Owned(vec))
+    }
+}
+
+impl <'a>From<&'a [u8]> for HexString<'a> {
+    fn from(value: &'a [u8]) -> Self { HexString(Cow::Borrowed(value)) }
+}
+
+impl From<HexString<'_>> for Vec<u8> {
+    fn from(hex: HexString) -> Self {
+        hex.0.into_owned()
+    }
+}
 
 #[Scalar(name = "HexString")]
-impl ScalarType for HexString {
+impl ScalarType for HexString<'_> {
     fn parse(value: Value) -> InputValueResult<Self> {
         match &value {
             Value::String(value) => {
@@ -179,14 +196,14 @@ impl ScalarType for HexString {
     }
 }
 
-impl Display for HexString {
+impl Display for HexString<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = format!("0x{}", hex::encode(&self.0));
+        let s = format!("0x{}", hex::encode(&self.0.as_ref()));
         s.fmt(f)
     }
 }
 
-impl CursorType for HexString {
+impl CursorType for HexString<'_> {
     type Error = String;
 
     fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
@@ -198,28 +215,28 @@ impl CursorType for HexString {
     }
 }
 
-impl FromStr for HexString {
+impl FromStr for HexString<'_> {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = s.strip_prefix("0x").unwrap_or(s);
         // decode into bytes
         let bytes = hex::decode(value).map_err(|e| e.to_string())?;
-        Ok(HexString(bytes))
+        Ok(HexString(Cow::Owned(bytes)))
     }
 }
 
-impl From<fuel_types::Nonce> for HexString {
+impl From<fuel_types::Nonce> for HexString<'_> {
     fn from(n: fuel_types::Nonce) -> Self {
-        HexString(n.to_vec())
+        HexString(Cow::Owned(n.to_vec()))
     }
 }
 
-impl TryInto<fuel_types::Nonce> for HexString {
+impl TryInto<fuel_types::Nonce> for HexString<'_> {
     type Error = TryFromSliceError;
 
     fn try_into(self) -> Result<fuel_types::Nonce, Self::Error> {
-        let bytes: [u8; 32] = self.0.as_slice().try_into()?;
+        let bytes: [u8; 32] = self.0.as_ref().try_into()?;
         Ok(fuel_types::Nonce::from(bytes))
     }
 }
