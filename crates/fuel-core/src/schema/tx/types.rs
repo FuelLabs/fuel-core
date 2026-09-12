@@ -45,6 +45,7 @@ use async_graphql::{
 };
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
+    blockchain::transaction::TransactionExt,
     fuel_tx::{
         self,
         Executable,
@@ -210,18 +211,33 @@ impl SuccessStatus {
     async fn total_fee(&self) -> U64 {
         self.status.total_fee.into()
     }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn resolved_outputs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<Vec<ResolvedOutput>>> {
+        let query = ctx.read_view()?;
+        let transaction = query.transaction(&self.tx_id)?;
+        Ok(Some(resolved_outputs_from_tx(self.tx_id, &transaction)))
+    }
 }
 
 #[derive(Debug)]
 pub struct PreconfirmationSuccessStatus {
     pub tx_id: TxId,
     pub status: Arc<transaction_status::statuses::PreConfirmationSuccess>,
+    time: Tai64,
 }
 
 #[Object]
 impl PreconfirmationSuccessStatus {
     async fn tx_pointer(&self) -> TxPointer {
         self.status.tx_pointer.into()
+    }
+
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.time)
     }
 
     async fn total_gas(&self) -> U64 {
@@ -324,18 +340,33 @@ impl FailureStatus {
     async fn total_fee(&self) -> U64 {
         self.status.total_fee.into()
     }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn resolved_outputs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<Vec<ResolvedOutput>>> {
+        let query = ctx.read_view()?;
+        let transaction = query.transaction(&self.tx_id)?;
+        Ok(Some(resolved_outputs_from_tx(self.tx_id, &transaction)))
+    }
 }
 
 #[derive(Debug)]
 pub struct PreconfirmationFailureStatus {
     pub tx_id: TxId,
     pub status: Arc<transaction_status::statuses::PreConfirmationFailure>,
+    time: Tai64,
 }
 
 #[Object]
 impl PreconfirmationFailureStatus {
     async fn reason(&self) -> String {
         self.status.reason.clone()
+    }
+
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.time)
     }
 
     async fn tx_pointer(&self) -> TxPointer {
@@ -422,6 +453,7 @@ impl TransactionStatus {
                 TransactionStatus::PreconfirmationSuccess(PreconfirmationSuccessStatus {
                     tx_id,
                     status,
+                    time: Tai64::now(),
                 })
             }
             TxStatus::PreConfirmationSqueezedOut(status) => {
@@ -434,6 +466,7 @@ impl TransactionStatus {
                 TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
                     tx_id,
                     status,
+                    time: Tai64::now(),
                 })
             }
         }
@@ -997,6 +1030,26 @@ where
     inputs.sort();
     inputs.dedup();
     inputs.into_iter()
+}
+
+fn resolved_outputs_from_tx(
+    tx_id: TxId,
+    tx: &fuel_tx::Transaction,
+) -> Vec<ResolvedOutput> {
+    tx.outputs()
+        .iter()
+        .enumerate()
+        .filter_map(|(index, output)| {
+            if output.is_change() || (output.is_variable() && output.amount() != Some(0))
+            {
+                let output_index = u16::try_from(index).ok()?;
+                let utxo_id = fuel_tx::UtxoId::new(tx_id, output_index);
+                Some(ResolvedOutput::from((utxo_id, *output)))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug)]
