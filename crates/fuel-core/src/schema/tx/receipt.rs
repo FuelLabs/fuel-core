@@ -126,7 +126,7 @@ impl Receipt {
     async fn gas_used(&self) -> Option<U64> {
         self.0.gas_used().map(Into::into)
     }
-    async fn data(&self) -> Option<HexString> {
+    async fn data(&self) -> Option<HexString<'_>> {
         self.0.data().map(|d| d.to_vec().into())
     }
     async fn sender(&self) -> Option<Address> {
