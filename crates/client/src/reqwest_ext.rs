@@ -10,10 +10,18 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
+use serde::{
+    Deserialize,
+    de::{
+        self,
+        Deserializer,
+    },
+};
 use std::{
     future::Future,
     marker::PhantomData,
     pin::Pin,
+    str::FromStr,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -24,6 +32,7 @@ pub struct ExtensionsRequest {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ExtensionsResponse {
     pub required_fuel_block_height: Option<BlockHeight>,
+    #[serde(default, deserialize_with = "deserialize_block_height_option")]
     pub current_fuel_block_height: Option<BlockHeight>,
     pub fuel_block_height_precondition_failed: Option<bool>,
     pub current_stf_version: Option<StateTransitionBytecodeVersion>,
@@ -54,6 +63,22 @@ impl<Operation> FuelOperation<Operation> {
             extensions: ExtensionsRequest {
                 required_fuel_block_height,
             },
+        }
+    }
+}
+
+fn deserialize_block_height_option<'de, D>(
+    deserializer: D,
+) -> Result<Option<BlockHeight>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(value) => {
+            let height = BlockHeight::from_str(&value).map_err(de::Error::custom)?;
+            Ok(Some(height))
         }
     }
 }
