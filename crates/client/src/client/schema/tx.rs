@@ -232,12 +232,14 @@ pub struct SubmittedStatus {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
+    pub transaction_id: TransactionId,
     pub block_height: U32,
     pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
     pub total_gas: U64,
     pub total_fee: U64,
+    pub resolved_outputs: Option<Vec<ResolvedOutput>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -263,6 +265,7 @@ pub struct ResolvedOutput {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct PreconfirmationSuccessStatus {
     pub tx_pointer: TxPointer,
+    pub time: Tai64Timestamp,
     pub transaction_id: TransactionId,
     pub total_fee: U64,
     pub total_gas: U64,
@@ -288,6 +291,7 @@ pub struct PreconfirmationSuccessStatusWithTransaction {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
+    pub transaction_id: TransactionId,
     pub block_height: U32,
     pub time: Tai64Timestamp,
     pub reason: String,
@@ -295,6 +299,7 @@ pub struct FailureStatus {
     pub receipts: Vec<Receipt>,
     pub total_gas: U64,
     pub total_fee: U64,
+    pub resolved_outputs: Option<Vec<ResolvedOutput>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -314,6 +319,7 @@ pub struct FailureStatusWithTransaction {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct PreconfirmationFailureStatus {
     pub tx_pointer: TxPointer,
+    pub time: Tai64Timestamp,
     pub transaction_id: TransactionId,
     pub total_fee: U64,
     pub total_gas: U64,
