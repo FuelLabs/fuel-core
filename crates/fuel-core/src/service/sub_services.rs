@@ -577,7 +577,7 @@ pub fn init_sub_services(
     };
 
     #[allow(unused_mut)]
-    // `FuelService` starts and shutdowns all sub-services in the `services` order
+    // `FuelService` starts subservices sequentially in this order.
     let mut services: SubServices = vec![
         Box::new(gas_price_service_v1),
         Box::new(txpool),
@@ -590,15 +590,17 @@ pub fn init_sub_services(
     }
 
     #[cfg(feature = "p2p")]
-    {
+    let sync = {
         if let Some(network) = network.take() {
             services.push(Box::new(network));
-            services.push(Box::new(sync));
             if let Some(pre_confirmation_service) = pre_confirmation_service {
                 services.push(Box::new(pre_confirmation_service));
             }
+            Some(sync)
+        } else {
+            None
         }
-    }
+    };
     #[cfg(feature = "shared-sequencer")]
     services.push(Box::new(shared_sequencer));
 
@@ -614,9 +616,19 @@ pub fn init_sub_services(
         services.push(Box::new(compression_service));
     }
 
-    // always make sure that the block producer is inserted last
+    // PoA consumes imports too. Production remains gated by the ready signal,
+    // which FuelService sends only after every subservice has started.
     if let Some(poa) = poa {
         services.push(Box::new(poa));
+    }
+
+    // Start importing only after every consumer has completed recovery. Otherwise,
+    // unread startup subscriptions can fill the importer's notification buffer.
+    #[cfg(feature = "p2p")]
+    {
+        if let Some(sync) = sync {
+            services.push(Box::new(sync));
+        }
     }
 
     Ok((services, shared))
