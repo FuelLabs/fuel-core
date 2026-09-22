@@ -24,6 +24,9 @@ mod cached_view;
 mod connection_limits;
 mod limited_behaviour;
 
+#[cfg(test)]
+mod yamux_tests;
+
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;
 
