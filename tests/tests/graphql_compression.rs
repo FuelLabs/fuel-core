@@ -138,3 +138,56 @@ async fn graphql_subscription_is_not_compressed_and_streams_events() {
     .expect("block event should arrive without buffering");
     assert!(event.starts_with("data:"));
 }
+
+#[tokio::test]
+async fn fuel_client_requests_and_decodes_gzip_responses() {
+    use tokio::io::{
+        AsyncReadExt,
+        AsyncWriteExt,
+    };
+
+    // Given
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let node_addr = node.bound_address;
+    let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let relay_addr = relay.local_addr().unwrap();
+    let observed = tokio::spawn(async move {
+        let (mut client_side, _) = relay.accept().await.unwrap();
+        let mut node_side = tokio::net::TcpStream::connect(node_addr).await.unwrap();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut request = Vec::new();
+        while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+            let n = client_side.read(&mut buf).await.unwrap();
+            request.extend_from_slice(&buf[..n]);
+        }
+        node_side.write_all(&request).await.unwrap();
+        let (mut client_read, mut client_write) = client_side.into_split();
+        let (mut node_read, mut node_write) = node_side.into_split();
+        tokio::spawn(async move {
+            let _ = tokio::io::copy(&mut client_read, &mut node_write).await;
+        });
+        let mut response = Vec::new();
+        while !response.windows(4).any(|w| w == b"\r\n\r\n") {
+            let n = node_read.read(&mut buf).await.unwrap();
+            response.extend_from_slice(&buf[..n]);
+        }
+        client_write.write_all(&response).await.unwrap();
+        tokio::spawn(async move {
+            let _ = tokio::io::copy(&mut node_read, &mut client_write).await;
+        });
+        (
+            String::from_utf8_lossy(&request).to_ascii_lowercase(),
+            String::from_utf8_lossy(&response).to_ascii_lowercase(),
+        )
+    });
+    let client = FuelClient::new(format!("http://{relay_addr}")).unwrap();
+
+    // When
+    let chain_info = client.chain_info().await.unwrap();
+
+    // Then
+    let (request, response) = observed.await.unwrap();
+    assert!(request.contains("accept-encoding: gzip"), "{request}");
+    assert!(response.contains("content-encoding: gzip"), "{response}");
+    assert_eq!(chain_info.latest_block.header.height, 0);
+}
