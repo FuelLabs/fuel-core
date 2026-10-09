@@ -107,7 +107,7 @@ impl ProgramState {
         self.return_type
     }
 
-    async fn data(&self) -> HexString {
+    async fn data(&self) -> HexString<'_> {
         self.data.clone().into()
     }
 }
@@ -671,7 +671,7 @@ impl Transaction {
         self.0.is_blob()
     }
 
-    async fn inputs(&self) -> Option<Vec<Input>> {
+    async fn inputs(&self) -> Option<Vec<Input<'_>>> {
         match &self.0 {
             fuel_tx::Transaction::Script(tx) => {
                 Some(tx.inputs().iter().map(Into::into).collect())
@@ -724,37 +724,37 @@ impl Transaction {
         }
     }
 
-    async fn witnesses(&self) -> Option<Vec<HexString>> {
+    async fn witnesses<'a>(&'a self) -> Option<Vec<HexString<'a>>> {
         match &self.0 {
             fuel_tx::Transaction::Script(tx) => Some(
                 tx.witnesses()
                     .iter()
-                    .map(|w| HexString(w.clone().into_inner()))
+                    .map(|w| HexString::from(w.as_vec().as_ref()))
                     .collect(),
             ),
             fuel_tx::Transaction::Create(tx) => Some(
                 tx.witnesses()
                     .iter()
-                    .map(|w| HexString(w.clone().into_inner()))
+                    .map(|w| HexString::from(w.as_vec().as_ref()))
                     .collect(),
             ),
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(tx) => Some(
                 tx.witnesses()
                     .iter()
-                    .map(|w| HexString(w.clone().into_inner()))
+                    .map(|w| HexString::from(w.as_vec().as_ref()))
                     .collect(),
             ),
             fuel_tx::Transaction::Upload(tx) => Some(
                 tx.witnesses()
                     .iter()
-                    .map(|w| HexString(w.clone().into_inner()))
+                    .map(|w| HexString::from(w.as_vec().as_ref()))
                     .collect(),
             ),
             fuel_tx::Transaction::Blob(tx) => Some(
                 tx.witnesses()
                     .iter()
-                    .map(|w| HexString(w.clone().into_inner()))
+                    .map(|w| HexString::from(w.as_vec().as_ref()))
                     .collect(),
             ),
         }
@@ -795,10 +795,10 @@ impl Transaction {
         .map_err(Into::into)
     }
 
-    async fn script(&self) -> Option<HexString> {
+    async fn script(&self) -> Option<HexString<'_>> {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => {
-                Some(HexString(script.script().clone()))
+                Some(HexString::from(script.script().as_ref()))
             }
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
@@ -808,10 +808,10 @@ impl Transaction {
         }
     }
 
-    async fn script_data(&self) -> Option<HexString> {
+    async fn script_data(&self) -> Option<HexString<'_>> {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => {
-                Some(HexString(script.script_data().clone()))
+                Some(HexString::from(script.script_data().as_ref()))
             }
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
@@ -854,7 +854,7 @@ impl Transaction {
         }
     }
 
-    async fn storage_slots(&self) -> Option<Vec<HexString>> {
+    async fn storage_slots(&self) -> Option<Vec<HexString<'_>>> {
         match &self.0 {
             fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => Some(
@@ -939,8 +939,8 @@ impl Transaction {
 
     #[graphql(complexity = "query_costs().tx_raw_payload")]
     /// Return the transaction bytes using canonical encoding
-    async fn raw_payload(&self) -> HexString {
-        HexString(self.0.clone().to_bytes())
+    async fn raw_payload(&self) -> HexString<'_> {
+        HexString::from(self.0.to_bytes())
     }
 }
 
@@ -1094,8 +1094,8 @@ impl DryRunStorageReads {
 #[derive(Clone)]
 pub struct StorageReadReplayEvent {
     column: U32,
-    key: HexString,
-    value: Option<HexString>,
+    key: HexString<'static>,
+    value: Option<HexString<'static>>,
 }
 
 impl From<fuel_core_types::services::executor::StorageReadReplayEvent>
@@ -1104,8 +1104,8 @@ impl From<fuel_core_types::services::executor::StorageReadReplayEvent>
     fn from(event: fuel_core_types::services::executor::StorageReadReplayEvent) -> Self {
         Self {
             column: event.column.into(),
-            key: HexString(event.key),
-            value: event.value.map(HexString),
+            key: HexString(event.key.into()),
+            value: event.value.map(|bytes|HexString(bytes.into())),
         }
     }
 }
@@ -1116,11 +1116,11 @@ impl StorageReadReplayEvent {
         self.column
     }
 
-    async fn key(&self) -> HexString {
+    async fn key(&self) -> HexString<'_> {
         self.key.clone()
     }
 
-    async fn value(&self) -> Option<HexString> {
+    async fn value(&self) -> Option<HexString<'_>> {
         self.value.clone()
     }
 }

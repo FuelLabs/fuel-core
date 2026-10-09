@@ -424,13 +424,13 @@ impl BlockMutation {
 pub struct BlockSubscription;
 
 #[Subscription]
-impl BlockSubscription {
+impl <'a>BlockSubscription {
     #[graphql(name = "alpha__new_blocks")]
-    async fn new_blocks<'a>(
+    async fn new_blocks(
         &self,
         ctx: &Context<'a>,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<HexString>> + 'a + use<'a>,
+        impl Stream<Item = async_graphql::Result<HexString<'a>>> + 'a + use<'a>,
     > {
         require_expensive_subscriptions(ctx)?;
         let worker_state: &graphql_api::worker_service::SharedState =
@@ -440,9 +440,7 @@ impl BlockSubscription {
         let stream = BroadcastStream::new(receiver).map(|result| {
             result
                 .map(|bytes| {
-                    // TODO: Avoid cloning the bytes here.
-                    //  https://github.com/FuelLabs/fuel-core/issues/2657
-                    HexString(bytes.as_ref().clone())
+                    HexString::from(bytes.as_ref().clone())
                 })
                 .map_err(Into::into)
         });
