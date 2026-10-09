@@ -53,7 +53,7 @@ itertools = { workspace = true }
 launchdarkly-sdk-transport = { version = "0.1.4", default-features = false, optional = true }
 postcard = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
-reqwest = { workspace = true, features = ["stream"] }
+reqwest = { workspace = true, features = ["gzip", "stream"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 # We force the version because 4.1.0 update leap seconds that breaks our timestamps

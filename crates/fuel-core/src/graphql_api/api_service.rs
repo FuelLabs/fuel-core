@@ -100,6 +100,10 @@ use std::{
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::{
+    compression::{
+        CompressionLayer,
+        CompressionLevel,
+    },
     set_header::SetResponseHeaderLayer,
     timeout::TimeoutLayer,
     trace::TraceLayer,
@@ -481,6 +485,9 @@ where
         .route("/v1/ready", get(ready))
         .layer(Extension(readiness))
         .layer(Extension(schema))
+        // The default predicate skips `text/event-stream`, so SSE subscriptions
+        // are streamed without compression.
+        .layer(CompressionLayer::new().quality(CompressionLevel::Fastest))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

@@ -112,9 +112,11 @@ impl FailoverTransport {
             let client = reqwest::Client::builder()
                 .cookie_provider(cookie.clone())
                 .build()?;
+            // SSE streams are read event by event, so they stay uncompressed.
             let sse_client = reqwest::Client::builder()
                 .cookie_provider(cookie)
                 .redirect(reqwest::redirect::Policy::none())
+                .no_gzip()
                 .build()?;
             Ok(Self {
                 urls: urls.into_boxed_slice(),
