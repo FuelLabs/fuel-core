@@ -532,6 +532,29 @@ static GRAPHQL_PLAYGROUND_HTML: OnceLock<Arc<String>> = OnceLock::new();
 
 const PLAYGROUND_ENDPOINT_PLACEHOLDER: &str = "__FUEL_GRAPHQL_ENDPOINT__";
 const PLAYGROUND_SUBSCRIPTION_PLACEHOLDER: &str = "__FUEL_GRAPHQL_SUBSCRIPTION_ENDPOINT__";
+const PLAYGROUND_AUTH_PLACEHOLDER: &str = "__FUEL_GRAPHQL_AUTH__";
+
+/// Escape a value for safe embedding inside a single-quoted JavaScript string
+/// in the GraphiQL HTML page (prevents query/token breakout / XSS).
+fn js_string_escape(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for c in input.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\u{2028}' => out.push_str("\\u2028"),
+            '\u{2029}' => out.push_str("\\u2029"),
+            '<' => out.push_str("\\u003c"),
+            '>' => out.push_str("\\u003e"),
+            '&' => out.push_str("\\u0026"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
 
 fn _render_graphql_playground(
     endpoint: &str,
@@ -539,9 +562,13 @@ fn _render_graphql_playground(
     query: RawQuery,
 ) -> impl IntoResponse + Send + Sync {
     let html = GRAPHQL_PLAYGROUND_HTML.get_or_init(|| {
+        // Include Authorization in the template so GraphiQL emits a `headers`
+        // object we can rewrite per request (`.header()` is required for that).
         let raw_html = GraphiQLSource::build()
             .endpoint(PLAYGROUND_ENDPOINT_PLACEHOLDER)
             .subscription_endpoint(PLAYGROUND_SUBSCRIPTION_PLACEHOLDER)
+            .header("Authorization", PLAYGROUND_AUTH_PLACEHOLDER)
+            .header("Content-Type", "application/json")
             .title("Fuel Graphql Playground")
             .finish();
 
@@ -569,36 +596,21 @@ fn _render_graphql_playground(
         .map(|q| format!("?{q}"))
         .unwrap_or_default();
 
+    let endpoint_js = js_string_escape(&format!("{endpoint}{qs}"));
+    let subscription_js = js_string_escape(&format!("{subscription_endpoint}{qs}"));
+
     let mut page = html
-        .replace(
-            PLAYGROUND_ENDPOINT_PLACEHOLDER,
-            &format!("{endpoint}{qs}"),
-        )
-        .replace(
-            PLAYGROUND_SUBSCRIPTION_PLACEHOLDER,
-            &format!("{subscription_endpoint}{qs}"),
-        );
+        .replace(PLAYGROUND_ENDPOINT_PLACEHOLDER, &endpoint_js)
+        .replace(PLAYGROUND_SUBSCRIPTION_PLACEHOLDER, &subscription_js);
 
     if let Some(auth_header) = playground_auth_header(query.0.as_deref()) {
-        // Inject Authorization into the GraphiQL fetcher headers object when
-        // present. GraphiQL already exposes a headers editor; this pre-fills
-        // it for provider tokens passed on the playground URL.
-        let injection = format!(
-            "headers: {{ 'Authorization': '{auth_header}', 'Content-Type': 'application/json' }},"
-        );
-        if page.contains("headers: { 'Content-Type': 'application/json' },") {
-            page = page.replace(
-                "headers: { 'Content-Type': 'application/json' },",
-                &injection,
-            );
-        } else if page.contains("headers: {") {
-            // GraphiQL v2 template style
-            page = page.replacen(
-                "headers: {",
-                &format!("headers: {{ 'Authorization': '{auth_header}',"),
-                1,
-            );
-        }
+        page = page.replace(PLAYGROUND_AUTH_PLACEHOLDER, &js_string_escape(&auth_header));
+    } else {
+        // Drop the unused Authorization entry when no token was supplied.
+        page = page
+            .replace("'Authorization': '__FUEL_GRAPHQL_AUTH__',", "")
+            .replace("\"Authorization\": \"__FUEL_GRAPHQL_AUTH__\",", "")
+            .replace(PLAYGROUND_AUTH_PLACEHOLDER, "");
     }
 
     Html(page)
@@ -741,6 +753,16 @@ mod tests {
         AsyncReadExt,
         AsyncWriteExt,
     };
+
+    #[test]
+    fn js_string_escape_neutralizes_quote_breakout() {
+        assert_eq!(
+            js_string_escape("Bearer x';alert(1)//"),
+            "Bearer x\\';alert(1)//"
+        );
+        assert_eq!(js_string_escape("a<b>&c"), "a\\u003cb\\u003e\\u0026c");
+    }
+
     #[tokio::test]
     async fn accept_retries_after_resource_error() {
         let mut results = std::collections::VecDeque::from([
