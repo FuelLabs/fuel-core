@@ -44,6 +44,7 @@ use axum::{
     extract::{
         DefaultBodyLimit,
         Extension,
+        RawQuery,
     },
     http::{
         HeaderValue,
@@ -464,8 +465,9 @@ where
     let graphql_endpoint = "/v1/graphql";
     let graphql_subscription_endpoint = "/v1/graphql-sub";
 
-    let graphql_playground =
-        || render_graphql_playground(graphql_endpoint, graphql_subscription_endpoint);
+    let graphql_playground = |query: RawQuery| {
+        render_graphql_playground(graphql_endpoint, graphql_subscription_endpoint, query)
+    };
 
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
@@ -523,17 +525,23 @@ where
 }
 
 /// Single initialization of the GraphQL playground HTML.
-/// This is because the rendering and replacing is expensive
+/// This is because the rendering and replacing is expensive.
+/// Auth / provider query params are applied at request time via a cheap
+/// string replace so the expensive template build stays cached.
 static GRAPHQL_PLAYGROUND_HTML: OnceLock<Arc<String>> = OnceLock::new();
+
+const PLAYGROUND_ENDPOINT_PLACEHOLDER: &str = "__FUEL_GRAPHQL_ENDPOINT__";
+const PLAYGROUND_SUBSCRIPTION_PLACEHOLDER: &str = "__FUEL_GRAPHQL_SUBSCRIPTION_ENDPOINT__";
 
 fn _render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
+    query: RawQuery,
 ) -> impl IntoResponse + Send + Sync {
     let html = GRAPHQL_PLAYGROUND_HTML.get_or_init(|| {
         let raw_html = GraphiQLSource::build()
-            .endpoint(endpoint)
-            .subscription_endpoint(subscription_endpoint)
+            .endpoint(PLAYGROUND_ENDPOINT_PLACEHOLDER)
+            .subscription_endpoint(PLAYGROUND_SUBSCRIPTION_PLACEHOLDER)
             .title("Fuel Graphql Playground")
             .finish();
 
@@ -551,14 +559,121 @@ fn _render_graphql_playground(
         Arc::new(raw_html)
     });
 
-    Html(html.as_str())
+    // Forward playground URL query (e.g. ?token=... used by QuickNode/Ankr)
+    // onto the GraphQL HTTP and subscription endpoints, and surface common
+    // auth params as an Authorization header GraphiQL will send.
+    let qs = query
+        .0
+        .as_deref()
+        .filter(|q| !q.is_empty())
+        .map(|q| format!("?{q}"))
+        .unwrap_or_default();
+
+    let mut page = html
+        .replace(
+            PLAYGROUND_ENDPOINT_PLACEHOLDER,
+            &format!("{endpoint}{qs}"),
+        )
+        .replace(
+            PLAYGROUND_SUBSCRIPTION_PLACEHOLDER,
+            &format!("{subscription_endpoint}{qs}"),
+        );
+
+    if let Some(auth_header) = playground_auth_header(query.0.as_deref()) {
+        // Inject Authorization into the GraphiQL fetcher headers object when
+        // present. GraphiQL already exposes a headers editor; this pre-fills
+        // it for provider tokens passed on the playground URL.
+        let injection = format!(
+            "headers: {{ 'Authorization': '{auth_header}', 'Content-Type': 'application/json' }},"
+        );
+        if page.contains("headers: { 'Content-Type': 'application/json' },") {
+            page = page.replace(
+                "headers: { 'Content-Type': 'application/json' },",
+                &injection,
+            );
+        } else if page.contains("headers: {") {
+            // GraphiQL v2 template style
+            page = page.replacen(
+                "headers: {",
+                &format!("headers: {{ 'Authorization': '{auth_header}',"),
+                1,
+            );
+        }
+    }
+
+    Html(page)
+}
+
+/// Map common provider query keys to an HTTP Authorization header value.
+fn playground_auth_header(query: Option<&str>) -> Option<String> {
+    let query = query?;
+    for pair in query.split('&') {
+        let mut parts = pair.splitn(2, '=');
+        let key = parts.next()?.to_ascii_lowercase();
+        let value = parts.next().unwrap_or("");
+        let value = urlencoding_decode(value);
+        if value.is_empty() {
+            continue;
+        }
+        match key.as_str() {
+            "authorization" => return Some(value),
+            "token" | "api_key" | "apikey" | "access_token" => {
+                if value.to_ascii_lowercase().starts_with("bearer ") {
+                    return Some(value);
+                }
+                return Some(format!("Bearer {value}"));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn urlencoding_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => {
+                let h1 = from_hex(bytes[i + 1]);
+                let h2 = from_hex(bytes[i + 2]);
+                if let (Some(a), Some(b)) = (h1, h2) {
+                    out.push((a << 4) | b);
+                    i += 3;
+                } else {
+                    out.push(bytes[i]);
+                    i += 1;
+                }
+            }
+            c => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn from_hex(c: u8) -> Option<u8> {
+    match c {
+        b'0'..=b'9' => Some(c - b'0'),
+        b'a'..=b'f' => Some(c - b'a' + 10),
+        b'A'..=b'F' => Some(c - b'A' + 10),
+        _ => None,
+    }
 }
 
 async fn render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
+    query: RawQuery,
 ) -> impl IntoResponse + Send + Sync {
-    _render_graphql_playground(endpoint, subscription_endpoint)
+    _render_graphql_playground(endpoint, subscription_endpoint, query)
 }
 
 async fn health() -> Json<serde_json::Value> {
