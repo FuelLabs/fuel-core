@@ -72,6 +72,7 @@ async fn preconfirmation__received_after_successful_execution() {
             transaction_id,
             receipts,
             resolved_outputs,
+            time: _,
         } => {
             // Then
             assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 0));
@@ -224,6 +225,7 @@ async fn preconfirmation__received_after_failed_execution() {
             receipts,
             resolved_outputs,
             reason: _,
+            time: _,
         } => {
             // Then
             assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 0));
