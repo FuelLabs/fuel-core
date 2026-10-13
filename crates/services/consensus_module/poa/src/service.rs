@@ -674,7 +674,19 @@ where
                 Ok(self.handle_normal_block_production(deadline).await)
             }
             LeaderState::UnreconciledBlocks(blocks) => {
+                // Highest height we still need. If we finish the pass
+                // below this tip, P2P (or our imports) already caught up
+                // and we can re-enter leader_state immediately; otherwise
+                // back off so we do not re-fan Redis on every tight loop.
+                let max_unreconciled =
+                    blocks.iter().map(|b| *b.entity.header().height()).max();
+
                 for block in blocks {
+                    // Re-read tip each iteration — P2P sync can commit
+                    // while this loop runs, and a single pre-loop sync
+                    // leaves `last_height` stale (DEVOPS-1764).
+                    self.sync_last_height_from_db();
+
                     let block_height = *block.entity.header().height();
                     let block_time = block.entity.header().time();
 
@@ -697,23 +709,59 @@ where
                             self.last_timestamp = block_time;
                         }
                         Err(err) => {
-                            // Re-sync from the DB and skip — the block
-                            // may have been imported via P2P between our
-                            // tip check and now. Stream cursors are always
-                            // restored by the adapter, so these entries
-                            // remain re-readable.
+                            // Re-sync from the DB — the block may have been
+                            // imported via P2P between our tip check and
+                            // now. Stream cursors are always restored by
+                            // the adapter, so these entries remain
+                            // re-readable.
                             tracing::warn!(
                                 "Reconciliation import failed at height \
                                  {block_height}: {err}. Re-syncing from DB."
                             );
                             self.sync_last_height_from_db();
+
+                            if block_height <= self.last_height {
+                                // P2P won the race; continue with later
+                                // heights.
+                                continue;
+                            }
+
+                            // Importer guard held by P2P (`try_acquire`
+                            // → no permits) or another persistent failure:
+                            // stop racing remaining heights this pass.
+                            // The post-loop backoff below prevents the
+                            // ~40 Redis fan-outs/height seen in the
+                            // 2026-09-24 mainnet stall.
+                            if is_importer_guard_contended(&err) {
+                                tracing::debug!(
+                                    "Importer contended at height \
+                                     {block_height}; backing off \
+                                     reconciliation"
+                                );
+                            }
+                            break;
                         }
                     }
                 }
+
+                if max_unreconciled.is_some_and(|h| self.last_height < h) {
+                    tokio::time::sleep(self.error_retry_delay()).await;
+                }
+
                 Ok(TaskNextAction::Continue)
             }
         }
     }
+}
+
+/// Detect importer-guard contention through the PoA port's `anyhow` boundary.
+///
+/// `fuel_core_importer::Error` converts via [`anyhow::Error::msg`], so the
+/// typed `Semaphore(TryAcquireError::NoPermits)` variant is lost. Match the
+/// stable Display text from `Importer::lock` instead.
+fn is_importer_guard_contended(err: &anyhow::Error) -> bool {
+    let msg = err.to_string();
+    msg.contains("commit is already in the progress") || msg.contains("no permits")
 }
 
 #[derive(Serialize)]
