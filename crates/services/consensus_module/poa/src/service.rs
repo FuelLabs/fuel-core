@@ -759,6 +759,8 @@ where
 /// `fuel_core_importer::Error` converts via [`anyhow::Error::msg`], so the
 /// typed `Semaphore(TryAcquireError::NoPermits)` variant is lost. Match the
 /// stable Display text from `Importer::lock` instead.
+///
+/// Contract: `fuel_core_importer::importer::test::semaphore_no_permits_display_keeps_poa_contention_markers`.
 fn is_importer_guard_contended(err: &anyhow::Error) -> bool {
     let msg = err.to_string();
     msg.contains("commit is already in the progress") || msg.contains("no permits")
