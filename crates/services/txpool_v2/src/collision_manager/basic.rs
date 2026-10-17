@@ -329,33 +329,31 @@ where
     }
 
     fn on_removed_transaction(&mut self, transaction: &PoolTransaction) {
+        self.on_committed_transaction(transaction);
+        self.remove_from_contract_users(transaction);
+    }
+
+    fn on_committed_transaction(&mut self, transaction: &PoolTransaction) {
         if let PoolTransaction::Blob(checked_tx, _) = transaction {
             let blob_id = checked_tx.transaction().blob_id();
             self.blobs_users.remove(blob_id);
         }
-        let tx_id = transaction.id();
         for input in transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // remove coin
                     self.coins_spenders.remove(utxo_id);
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
-                    // remove message
                     self.messages_spenders.remove(nonce);
                 }
-                Input::Contract(ContractInput { contract_id, .. }) => {
-                    if let Some(users) = self.contract_users.get_mut(contract_id) {
-                        users.retain(|id| id != &tx_id);
-                        if users.is_empty() {
-                            self.contract_users.remove(contract_id);
-                        }
-                    }
-                }
+                // Deliberately skipped: contract_users cleanup is deferred to
+                // remove_from_contract_users, which the caller invokes after
+                // all preconfirmation rollback for the block is complete.
+                Input::Contract(_) => {}
             }
         }
         for output in transaction.outputs().iter() {
@@ -365,10 +363,23 @@ where
                 | Output::Variable { .. }
                 | Output::Contract(_) => {}
                 Output::ContractCreated { contract_id, .. } => {
-                    // remove contract
                     self.contracts_creators.remove(contract_id);
                 }
             };
+        }
+    }
+
+    fn remove_from_contract_users(&mut self, transaction: &PoolTransaction) {
+        let tx_id = transaction.id();
+        for input in transaction.inputs() {
+            if let Input::Contract(ContractInput { contract_id, .. }) = input
+                && let Some(users) = self.contract_users.get_mut(contract_id)
+            {
+                users.retain(|id| id != &tx_id);
+                if users.is_empty() {
+                    self.contract_users.remove(contract_id);
+                }
+            }
         }
     }
 }
