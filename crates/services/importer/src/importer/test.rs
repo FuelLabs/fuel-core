@@ -458,6 +458,26 @@ fn one_lock_at_the_same_time() {
     );
 }
 
+/// Contract for PoA's `is_importer_guard_contended` (DEVOPS-1764 / #3349).
+///
+/// `Error` converts to `anyhow` via `Error::msg`, so PoA matches Display
+/// substrings. Pin those fragments here so a Display rewrite fails CI
+/// instead of silently dropping the contended-importer debug signal.
+#[test]
+fn semaphore_no_permits_display_keeps_poa_contention_markers() {
+    let err = Error::Semaphore(TryAcquireError::NoPermits);
+    let as_anyhow = anyhow::Error::from(err);
+    let msg = as_anyhow.to_string();
+    assert!(
+        msg.contains("commit is already in the progress"),
+        "missing importer-guard Display prefix; got {msg:?}"
+    );
+    assert!(
+        msg.contains("no permits"),
+        "missing TryAcquireError::NoPermits Display fragment; got {msg:?}"
+    );
+}
+
 ///////// New block, Block After Execution, Verification result, commits /////////
 #[test_case(
     genesis(113), ex_result, ok(()), 0
