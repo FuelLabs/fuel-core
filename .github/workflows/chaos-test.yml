@@ -38,11 +38,12 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - id: matrix
+        env:
+          RANGE: ${{ inputs.seeds }}
+          BATCH_SIZE: ${{ inputs.parallelism }}
         run: |
-          RANGE="${{ inputs.seeds }}"
           START="${RANGE%-*}"
           END="${RANGE#*-}"
-          BATCH_SIZE=${{ inputs.parallelism }}
           BATCHES="["
           FIRST=true
           for ((i=START; i<=END; i+=BATCH_SIZE)); do
@@ -83,17 +84,24 @@ jobs:
         run: cargo build --release -p fuel-core-chaos-test
 
       - name: Run chaos tests (seeds ${{ matrix.batch.start }}-${{ matrix.batch.end }})
+        env:
+          BATCH_START: ${{ matrix.batch.start }}
+          BATCH_END: ${{ matrix.batch.end }}
+          DURATION: ${{ inputs.duration }}
+          BLOCK_TIME: ${{ inputs.block_time }}
+          FAULT_INTERVAL: ${{ inputs.fault_interval }}
+          STALL_THRESHOLD: ${{ inputs.stall_threshold }}
         run: |
           FAILED=0
-          for seed in $(seq ${{ matrix.batch.start }} ${{ matrix.batch.end }}); do
+          for seed in $(seq "$BATCH_START" "$BATCH_END"); do
             echo "=== Seed $seed ==="
             LOG="chaos_seed${seed}.log"
             cargo run --release -p fuel-core-chaos-test -- \
               --seed $seed \
-              --duration ${{ inputs.duration }} \
-              --block-time ${{ inputs.block_time }} \
-              --fault-interval ${{ inputs.fault_interval }} \
-              --stall-threshold ${{ inputs.stall_threshold }} \
+              --duration "$DURATION" \
+              --block-time "$BLOCK_TIME" \
+              --fault-interval "$FAULT_INTERVAL" \
+              --stall-threshold "$STALL_THRESHOLD" \
               > "$LOG" 2>&1
             RC=$?
             if [ $RC -ne 0 ]; then
