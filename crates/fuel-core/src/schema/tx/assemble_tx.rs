@@ -285,13 +285,16 @@ where
             // If the user didn't request the asset, we add it to the required balances
             // with minimal amount `0` and `ChangePolicy::Change` policy.
             if !requested_asset.contains(input_asset_id) {
-                let recipient = fee_payer_account.owner();
+                let change_policy = change_output_policies
+                    .get(input_asset_id)
+                    .cloned()
+                    .unwrap_or_else(|| ChangePolicy::Change(fee_payer_account.owner()));
 
                 arguments.required_balances.push(RequiredBalance {
                     account: fee_payer_account.clone(),
                     asset_id: *input_asset_id,
                     amount: 0,
-                    change_policy: ChangePolicy::Change(recipient),
+                    change_policy,
                 });
             }
         }
