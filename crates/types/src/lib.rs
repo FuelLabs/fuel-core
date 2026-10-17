@@ -32,8 +32,11 @@ pub use tai64;
 
 pub mod blockchain;
 pub mod entities;
+pub mod primitives;
 pub mod services;
 pub mod signer;
+
+pub use primitives::ClampedPercentage;
 
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {
