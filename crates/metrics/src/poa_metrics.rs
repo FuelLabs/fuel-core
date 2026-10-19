@@ -14,7 +14,20 @@ use prometheus_client::{
         histogram::Histogram,
     },
 };
-use std::sync::OnceLock;
+use std::{
+    sync::{
+        OnceLock,
+        atomic::{
+            AtomicU64,
+            Ordering,
+        },
+    },
+    time::{
+        Duration,
+        SystemTime,
+        UNIX_EPOCH,
+    },
+};
 
 /// A quorum fan-out operation: a point where the adapter contacts all N
 /// Redis nodes in parallel and waits for a quorum to respond. Used as
@@ -54,8 +67,28 @@ struct QuorumOpLabel {
 pub struct PoAMetrics {
     /// Current fencing token epoch value.
     pub leader_epoch: Gauge,
-    /// 1 if this node is the leader, 0 if follower.
+    /// 1 while the last successful lease acquisition or quorum renewal
+    /// is still inside the lease TTL, 0 after that TTL passes or the
+    /// lease is released. Recomputed on each metrics scrape so a wedged
+    /// PoA task cannot leave the gauge stuck at 1.
     pub is_leader: Gauge,
+    /// Unix timestamp of the last block this node published to a Redis
+    /// quorum. Stays at the last value so scrapers can compute age with
+    /// `time() - poa_last_produced_block_timestamp_seconds`. 0 if this
+    /// process has not published a block.
+    pub last_produced_block_timestamp_seconds: Gauge,
+    /// Unix timestamp of the last successful lease acquisition or quorum
+    /// `write_block` renewal. 0 if this process has not held the lease.
+    pub lease_last_renewed_timestamp_seconds: Gauge,
+    /// Unix millis when the current lease stops counting as held.
+    /// 0 means this process does not hold a live lease.
+    lease_valid_until_unix_millis: AtomicU64,
+    /// Seqlock for `lease_valid_until_unix_millis` and `is_leader`.
+    /// Even: stable. Odd: a renewal or release is writing. A scrape
+    /// retries until it observes an even generation that does not
+    /// change across the gauge update, so it cannot stick `is_leader`
+    /// at 0 after a renewal or at 1 after a release.
+    lease_generation: AtomicU64,
     /// Maximum epoch difference across Redis quorum nodes
     /// observed during promotion.
     pub epoch_max_drift: Gauge,
@@ -122,6 +155,8 @@ impl Default for PoAMetrics {
     fn default() -> Self {
         let leader_epoch = Gauge::default();
         let is_leader = Gauge::default();
+        let last_produced_block_timestamp_seconds = Gauge::default();
+        let lease_last_renewed_timestamp_seconds = Gauge::default();
         let epoch_max_drift = Gauge::default();
         let stream_trim_headroom = Gauge::default();
         let outstanding_publish_tasks = Gauge::default();
@@ -156,8 +191,18 @@ impl Default for PoAMetrics {
         );
         registry.register(
             "poa_is_leader",
-            "1 if this node is the leader, 0 if follower",
+            "1 while the last successful lease acquisition or quorum renewal is still inside the lease TTL, 0 once that TTL passes without a renewal or the lease is released",
             is_leader.clone(),
+        );
+        registry.register(
+            "poa_last_produced_block_timestamp_seconds",
+            "Unix timestamp of the last block this node published to a Redis quorum",
+            last_produced_block_timestamp_seconds.clone(),
+        );
+        registry.register(
+            "poa_lease_last_renewed_timestamp_seconds",
+            "Unix timestamp of the last successful lease acquisition or quorum write_block renewal",
+            lease_last_renewed_timestamp_seconds.clone(),
         );
         registry.register(
             "poa_epoch_max_drift",
@@ -257,6 +302,10 @@ impl Default for PoAMetrics {
         Self {
             leader_epoch,
             is_leader,
+            last_produced_block_timestamp_seconds,
+            lease_last_renewed_timestamp_seconds,
+            lease_valid_until_unix_millis: AtomicU64::new(0),
+            lease_generation: AtomicU64::new(0),
             epoch_max_drift,
             stream_trim_headroom,
             outstanding_publish_tasks,
@@ -291,10 +340,129 @@ impl PoAMetrics {
             })
             .observe(seconds);
     }
+
+    /// Record a successful lease acquisition or a quorum `write_block`
+    /// renewal. Both reset the Redis lease TTL.
+    pub fn note_lease_renewed(&self, lease_ttl: Duration) {
+        let now_ms = unix_time_millis();
+        let ttl_ms = u64::try_from(lease_ttl.as_millis()).unwrap_or(u64::MAX);
+        self.write_lease_deadline(now_ms.saturating_add(ttl_ms), 1, Some(now_ms));
+    }
+
+    /// This process no longer holds the lease. Timestamp gauges stay at
+    /// their last values so scrapers can still compute age.
+    pub fn note_lease_lost(&self) {
+        self.write_lease_deadline(0, 0, None);
+    }
+
+    /// Record a block this node published to a Redis quorum.
+    pub fn note_block_produced(&self) {
+        self.last_produced_block_timestamp_seconds
+            .set(millis_to_unix_seconds(unix_time_millis()));
+    }
+
+    /// Set `poa_is_leader` from the last renewal plus TTL. A scrape calls
+    /// this so the gauge drops after the TTL even when the PoA task is
+    /// not running `leader_state`.
+    pub fn sync_is_leader_from_lease(&self) {
+        loop {
+            let generation = self.lease_generation.load(Ordering::Acquire);
+            if generation_is_writing(generation) {
+                std::hint::spin_loop();
+                continue;
+            }
+            let until = self.lease_valid_until_unix_millis.load(Ordering::Acquire);
+            let generation_after = self.lease_generation.load(Ordering::Acquire);
+            if generation != generation_after {
+                continue;
+            }
+            let want = if until > unix_time_millis() { 1 } else { 0 };
+            self.is_leader.set(want);
+            if self.lease_generation.load(Ordering::Acquire) == generation {
+                return;
+            }
+        }
+    }
+
+    fn write_lease_deadline(
+        &self,
+        until_ms: u64,
+        leader: i64,
+        renewed_at_ms: Option<u64>,
+    ) {
+        self.lease_generation.fetch_add(1, Ordering::Release);
+        self.lease_valid_until_unix_millis
+            .store(until_ms, Ordering::Release);
+        if let Some(renewed_at_ms) = renewed_at_ms {
+            self.lease_last_renewed_timestamp_seconds
+                .set(millis_to_unix_seconds(renewed_at_ms));
+        }
+        self.is_leader.set(leader);
+        self.lease_generation.fetch_add(1, Ordering::Release);
+    }
+}
+
+fn generation_is_writing(generation: u64) -> bool {
+    (generation & 1) == 1
+}
+
+fn unix_time_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or(0)
+}
+
+fn millis_to_unix_seconds(millis: u64) -> i64 {
+    let secs = millis.checked_div(1000).unwrap_or(0);
+    i64::try_from(secs).unwrap_or(i64::MAX)
+}
+
+/// Recompute `poa_is_leader` when the PoA metrics have been registered.
+/// Does not register them — sentries that never start PoA stay free of
+/// these series.
+pub fn sync_leader_gauge_if_registered() {
+    if let Some(metrics) = POA_METRICS.get() {
+        metrics.sync_is_leader_from_lease();
+    }
 }
 
 static POA_METRICS: OnceLock<PoAMetrics> = OnceLock::new();
 
 pub fn poa_metrics() -> &'static PoAMetrics {
     POA_METRICS.get_or_init(PoAMetrics::default)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn sync_is_leader_clears_gauge_after_ttl_without_another_renewal() {
+        let metrics = poa_metrics();
+        metrics.note_lease_renewed(Duration::from_millis(80));
+        assert_eq!(metrics.is_leader.get(), 1);
+        assert!(metrics.lease_last_renewed_timestamp_seconds.get() > 0);
+        metrics.note_block_produced();
+        let produced = metrics.last_produced_block_timestamp_seconds.get();
+        assert!(produced > 0);
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        metrics.sync_is_leader_from_lease();
+
+        assert_eq!(
+            metrics.is_leader.get(),
+            0,
+            "poa_is_leader must drop once the lease TTL passes without a renewal"
+        );
+        assert!(metrics.lease_last_renewed_timestamp_seconds.get() > 0);
+        assert_eq!(
+            metrics.last_produced_block_timestamp_seconds.get(),
+            produced
+        );
+
+        metrics.note_lease_lost();
+        assert_eq!(metrics.is_leader.get(), 0);
+        assert!(metrics.lease_last_renewed_timestamp_seconds.get() > 0);
+    }
 }
