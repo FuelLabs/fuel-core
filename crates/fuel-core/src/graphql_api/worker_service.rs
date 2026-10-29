@@ -16,6 +16,7 @@ use crate::{
             worker::{
                 BlockAt,
                 OffChainDatabaseTransaction,
+                OnChainDatabase,
             },
         },
         storage::{
@@ -105,8 +106,10 @@ use futures::{
 };
 use std::{
     borrow::Cow,
+    collections::VecDeque,
     ops::Deref,
     sync::Arc,
+    time::Instant,
 };
 
 #[cfg(test)]
@@ -154,7 +157,21 @@ pub struct Task<TxStatusManager, D> {
     asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
     shared_state: SharedState,
+    /// Historical catch-up. It runs in `run`, not `into_task`, so service
+    /// start is not blocked on per-block re-validation.
+    startup_sync: Option<StartupSync>,
 }
+
+struct StartupSync {
+    target_chain_height: Option<BlockHeight>,
+    importer: Arc<dyn ports::worker::BlockImporter>,
+    on_chain: Arc<dyn OnChainDatabase>,
+}
+
+/// Live import results held while a historical block is re-validated.
+/// The importer allows 1024 in-flight results. Staying under that leaves
+/// room for other subscribers, so block production is not stalled here.
+const CATCH_UP_LIVE_BUFFER: usize = 256;
 
 impl<TxStatusManager, D> Task<TxStatusManager, D>
 where
@@ -224,6 +241,227 @@ where
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
 
         Ok(())
+    }
+
+    /// Returns `Ok(true)` when catch-up finished, `Ok(false)` when stopping.
+    async fn finish_startup_sync(
+        &mut self,
+        watcher: &mut StateWatcher,
+    ) -> anyhow::Result<bool> {
+        let Some(mut sync) = self.startup_sync.take() else {
+            return Ok(true);
+        };
+        let mut target = sync.target_chain_height;
+        let started = Instant::now();
+        let mut logged = false;
+        let mut applied = 0u64;
+
+        let result = self
+            .catch_up(&mut sync, watcher, &mut target, &mut logged, &mut applied)
+            .await;
+
+        match result {
+            Ok(true) => {
+                if logged {
+                    tracing::info!(
+                        elapsed_ms = u64::try_from(started.elapsed().as_millis())
+                            .unwrap_or(u64::MAX),
+                        blocks = applied,
+                        ?target,
+                        "Off-chain database caught up"
+                    );
+                }
+                Ok(true)
+            }
+            other => {
+                sync.target_chain_height = target;
+                self.startup_sync = Some(sync);
+                other
+            }
+        }
+    }
+
+    async fn catch_up(
+        &mut self,
+        sync: &mut StartupSync,
+        watcher: &mut StateWatcher,
+        target: &mut Option<BlockHeight>,
+        logged: &mut bool,
+        applied: &mut u64,
+    ) -> anyhow::Result<bool> {
+        // Blocks committed before this process are not in the live stream.
+        // `block_event_at_height` re-executes those. Blocks committed during
+        // catch-up are already executed; apply them from the stream so catch-up
+        // does not fall behind by re-executing every new block.
+        let mut buffered: VecDeque<SharedImportResult> = VecDeque::new();
+        let mut logged_drop = false;
+
+        loop {
+            if watcher.borrow().stopping() || watcher.borrow().stopped() {
+                return Ok(false);
+            }
+
+            if !Self::enqueue_ready(
+                &mut self.block_importer,
+                &mut buffered,
+                &mut logged_drop,
+            )? {
+                return Ok(false);
+            }
+
+            let tip = sync.on_chain.latest_height()?;
+            if tip > *target {
+                *target = tip;
+            }
+
+            let off_chain_height = self.database.latest_height()?;
+            if *target < off_chain_height {
+                return Err(anyhow::anyhow!(
+                    "The target chain height is lower than the off-chain database height"
+                ));
+            }
+
+            while buffered
+                .front()
+                .is_some_and(|block| Some(Self::import_height(block)) <= off_chain_height)
+            {
+                buffered.pop_front();
+            }
+
+            if *target == off_chain_height && buffered.is_empty() {
+                return Ok(true);
+            }
+
+            if buffered.front().is_some_and(|block| {
+                Self::is_successor(off_chain_height, Self::import_height(block))
+            }) {
+                let block = buffered.pop_front().expect("front was checked above");
+                // Commit is visible on the stream before `latest_height` must be.
+                // Raising the target here avoids treating that block as a rewind.
+                Self::raise_target(target, Self::import_height(&block));
+                self.process_block(block)?;
+                *applied = applied.saturating_add(1);
+                continue;
+            }
+
+            if !*logged {
+                tracing::info!(
+                    ?off_chain_height,
+                    ?target,
+                    "Re-validating blocks missing from the off-chain database; block production is not waiting on this"
+                );
+                *logged = true;
+            }
+
+            let next_block_height = match off_chain_height {
+                Some(height) => {
+                    BlockAt::Specific(BlockHeight::new(height.saturating_add(1)))
+                }
+                None => BlockAt::Genesis,
+            };
+            tracing::debug!(?next_block_height, "Off-chain catch-up block");
+
+            let importer = Arc::clone(&sync.importer);
+            let mut fetch = tokio::task::spawn_blocking(move || {
+                importer.block_event_at_height(next_block_height)
+            });
+
+            loop {
+                tokio::select! {
+                    biased;
+
+                    _ = watcher.while_started() => {
+                        fetch.abort();
+                        return Ok(false);
+                    }
+
+                    joined = &mut fetch => {
+                        let import_result = joined.map_err(|err| {
+                            anyhow::anyhow!("off-chain catch-up task failed: {err}")
+                        })??;
+                        self.process_block(import_result)?;
+                        *applied = applied.saturating_add(1);
+                        break;
+                    }
+
+                    maybe_block = self.block_importer.next() => {
+                        let Some(block) = maybe_block else {
+                            fetch.abort();
+                            return Ok(false);
+                        };
+                        if Self::is_successor(off_chain_height, Self::import_height(&block))
+                        {
+                            // The next height is already executed. Do not wait
+                            // for re-validation of the same block.
+                            fetch.abort();
+                            Self::raise_target(target, Self::import_height(&block));
+                            self.process_block(block)?;
+                            *applied = applied.saturating_add(1);
+                            break;
+                        }
+                        Self::push_live(&mut buffered, block, &mut logged_drop);
+                    }
+                }
+            }
+        }
+    }
+
+    fn import_height(block: &SharedImportResult) -> BlockHeight {
+        *block.sealed_block.entity.header().height()
+    }
+
+    fn raise_target(target: &mut Option<BlockHeight>, height: BlockHeight) {
+        if Some(height) > *target {
+            *target = Some(height);
+        }
+    }
+
+    /// `None` is the genesis gap. A live block is only the next height once
+    /// genesis has been applied; genesis itself is re-read by `BlockAt::Genesis`.
+    fn is_successor(off_chain_height: Option<BlockHeight>, height: BlockHeight) -> bool {
+        match off_chain_height {
+            Some(current) => height == BlockHeight::new(current.saturating_add(1)),
+            None => false,
+        }
+    }
+
+    /// Returns `Ok(false)` when the importer stream has closed.
+    fn enqueue_ready(
+        stream: &mut BoxStream<SharedImportResult>,
+        buffered: &mut VecDeque<SharedImportResult>,
+        logged_drop: &mut bool,
+    ) -> anyhow::Result<bool> {
+        loop {
+            if buffered.len() >= CATCH_UP_LIVE_BUFFER {
+                break;
+            }
+            match stream.next().now_or_never() {
+                Some(Some(block)) => {
+                    Self::push_live(buffered, block, logged_drop);
+                }
+                Some(None) => return Ok(false),
+                None => break,
+            }
+        }
+        Ok(true)
+    }
+
+    fn push_live(
+        buffered: &mut VecDeque<SharedImportResult>,
+        block: SharedImportResult,
+        logged_drop: &mut bool,
+    ) {
+        if buffered.len() >= CATCH_UP_LIVE_BUFFER {
+            if !*logged_drop {
+                tracing::warn!(
+                    buffered = buffered.len(),
+                    "Off-chain catch-up is holding too many live blocks; later blocks will be re-read by height"
+                );
+                *logged_drop = true;
+            }
+            return;
+        }
+        buffered.push_back(block);
     }
 }
 
@@ -564,8 +802,8 @@ impl<TxStatusManager, BlockImporter, OnChain, OffChain> RunnableService
     for InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain>
 where
     TxStatusManager: ports::worker::TxStatusCompletion,
-    BlockImporter: ports::worker::BlockImporter,
-    OnChain: ports::worker::OnChainDatabase,
+    BlockImporter: ports::worker::BlockImporter + 'static,
+    OnChain: ports::worker::OnChainDatabase + 'static,
     OffChain: ports::worker::OffChainDatabase,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
@@ -619,7 +857,17 @@ where
             shared_state,
         } = self;
 
-        let mut task = Task {
+        let target_chain_height = on_chain_database.latest_height()?;
+        // Re-validation of missing blocks (`block_event_at_height`) stays out of
+        // `into_task`. FuelService waits on this method before it starts PoA or
+        // sends the block-production ready signal, and one block has taken minutes.
+        let startup_sync = Some(StartupSync {
+            target_chain_height,
+            importer: Arc::new(block_importer),
+            on_chain: Arc::new(on_chain_database),
+        });
+
+        Ok(Task {
             tx_status_manager,
             block_importer: blocks_events,
             database: off_chain_database,
@@ -630,65 +878,9 @@ where
             asset_metadata_indexation_enabled,
             base_asset_id,
             shared_state,
-        };
-
-        let mut target_chain_height = on_chain_database.latest_height()?;
-        // First, deterministically catch up from the off-chain tip to the
-        // current on-chain tip.
-        sync_databases(&mut task, target_chain_height, &block_importer)?;
-
-        // Then observe all blocks that are already available from the live
-        // importer stream at startup and update the target height only.
-        while let Some(Some(block)) = task.block_importer.next().now_or_never() {
-            if Some(*block.sealed_block.entity.header().height()) <= target_chain_height {
-                continue;
-            }
-            target_chain_height = Some(*block.sealed_block.entity.header().height());
-            task.process_block(block)?;
-        }
-
-        Ok(task)
+            startup_sync,
+        })
     }
-}
-
-fn sync_databases<TxStatusManager, BlockImporter, OffChain>(
-    task: &mut Task<TxStatusManager, OffChain>,
-    target_chain_height: Option<BlockHeight>,
-    import_result_provider: &BlockImporter,
-) -> anyhow::Result<()>
-where
-    BlockImporter: ports::worker::BlockImporter,
-    OffChain: ports::worker::OffChainDatabase,
-    TxStatusManager: ports::worker::TxStatusCompletion,
-{
-    loop {
-        let off_chain_height = task.database.latest_height()?;
-
-        if target_chain_height < off_chain_height {
-            return Err(anyhow::anyhow!(
-                "The target chain height is lower than the off-chain database height"
-            ));
-        }
-
-        if target_chain_height == off_chain_height {
-            break;
-        }
-
-        let next_block_height =
-            off_chain_height.map(|height| BlockHeight::new(height.saturating_add(1)));
-
-        let next_block_height = match next_block_height {
-            Some(block_height) => BlockAt::Specific(block_height),
-            None => BlockAt::Genesis,
-        };
-
-        let import_result =
-            import_result_provider.block_event_at_height(next_block_height)?;
-
-        task.process_block(import_result)?
-    }
-
-    Ok(())
 }
 
 impl<TxStatusManager, D> RunnableTask for Task<TxStatusManager, D>
@@ -697,6 +889,21 @@ where
     TxStatusManager: ports::worker::TxStatusCompletion,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        if self.startup_sync.is_some() {
+            match self.finish_startup_sync(watcher).await {
+                Ok(true) => {}
+                Ok(false) => return TaskNextAction::Stop,
+                Err(e) => {
+                    tracing::error!("Failed to sync the off-chain database: {e:#}");
+                    return if self.continue_on_error {
+                        TaskNextAction::ErrorContinue(e)
+                    } else {
+                        TaskNextAction::Stop
+                    };
+                }
+            }
+        }
+
         tokio::select! {
             biased;
 
@@ -727,6 +934,11 @@ where
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
+        if self.startup_sync.is_some() {
+            // Catch-up did not finish. Applying a live block here would commit
+            // it ahead of the off-chain tip. The next start re-reads by height.
+            return Ok(());
+        }
         // Process all remaining blocks before shutdown to not lose any data.
         loop {
             let result = self.block_importer.next().now_or_never();
@@ -751,10 +963,10 @@ pub(crate) fn new_service<TxStatusManager, BlockImporter, OnChain, OffChain>(
     ServiceRunner<InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain>>,
 >
 where
-    TxStatusManager: ports::worker::TxStatusCompletion,
-    OnChain: ports::worker::OnChainDatabase,
-    OffChain: ports::worker::OffChainDatabase,
-    BlockImporter: ports::worker::BlockImporter,
+    TxStatusManager: ports::worker::TxStatusCompletion + 'static,
+    OnChain: ports::worker::OnChainDatabase + 'static,
+    OffChain: ports::worker::OffChainDatabase + 'static,
+    BlockImporter: ports::worker::BlockImporter + 'static,
 {
     let Context {
         tx_status_manager,
