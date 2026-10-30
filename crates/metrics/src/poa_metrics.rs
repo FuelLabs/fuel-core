@@ -441,10 +441,24 @@ pub fn poa_metrics() -> &'static PoAMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
-    #[tokio::test]
-    async fn sync_is_leader_clears_gauge_after_ttl_without_another_renewal() {
+    /// `poa_metrics()` is process-global. Serialize these tests so a
+    /// short-TTL expiry assertion cannot race a parallel renewal that
+    /// plants a long deadline (same pattern as `publish_gauge_lock` in
+    /// the Redis adapter tests).
+    fn lease_gauge_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn sync_is_leader_clears_gauge_after_ttl_without_another_renewal() {
+        let _serial = lease_gauge_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let metrics = poa_metrics();
+        metrics.note_lease_lost();
         metrics.note_lease_renewed(Duration::from_millis(80));
         assert_eq!(metrics.is_leader.get(), 1);
         assert!(metrics.lease_last_renewed_timestamp_seconds.get() > 0);
@@ -452,7 +466,7 @@ mod tests {
         let produced = metrics.last_produced_block_timestamp_seconds.get();
         assert!(produced > 0);
 
-        tokio::time::sleep(Duration::from_millis(150)).await;
+        std::thread::sleep(Duration::from_millis(150));
         metrics.sync_is_leader_from_lease();
 
         assert_eq!(
@@ -473,7 +487,11 @@ mod tests {
 
     #[test]
     fn failed_ownership_sync_keeps_deadline_until_ttl() {
+        let _serial = lease_gauge_test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let metrics = poa_metrics();
+        metrics.note_lease_lost();
         metrics.note_lease_renewed(Duration::from_secs(60));
         assert_eq!(metrics.is_leader.get(), 1);
 
