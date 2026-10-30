@@ -1606,7 +1606,12 @@ impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
                 Ok(LeaderState::UnreconciledBlocks(unreconciled_blocks))
             }
         } else {
-            poa_metrics().note_lease_lost();
+            // Do not call note_lease_lost here. Ownership/acquire can return
+            // false on transient Redis blips while the lease (and the local
+            // renewal-plus-TTL deadline) is still valid; wiping the deadline
+            // would leave poa_is_leader at 0 until the next quorum write.
+            // Explicit release clears the deadline via note_lease_lost.
+            poa_metrics().sync_is_leader_from_lease();
             Ok(LeaderState::ReconciledFollower)
         }
     }

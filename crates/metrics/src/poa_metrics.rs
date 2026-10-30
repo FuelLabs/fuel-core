@@ -349,8 +349,13 @@ impl PoAMetrics {
         self.write_lease_deadline(now_ms.saturating_add(ttl_ms), 1, Some(now_ms));
     }
 
-    /// This process no longer holds the lease. Timestamp gauges stay at
-    /// their last values so scrapers can still compute age.
+    /// Explicit lease release: clear the renewal-plus-TTL deadline and
+    /// `poa_is_leader`. Do not call this on a failed ownership check —
+    /// that path can be a transient Redis blip while the lease is still
+    /// valid; use [`Self::sync_is_leader_from_lease`] instead so the
+    /// deadline survives until TTL expiry or the next renewal.
+    /// Timestamp gauges stay at their last values so scrapers can still
+    /// compute age.
     pub fn note_lease_lost(&self) {
         self.write_lease_deadline(0, 0, None);
     }
@@ -464,5 +469,32 @@ mod tests {
         metrics.note_lease_lost();
         assert_eq!(metrics.is_leader.get(), 0);
         assert!(metrics.lease_last_renewed_timestamp_seconds.get() > 0);
+    }
+
+    #[test]
+    fn failed_ownership_sync_keeps_deadline_until_ttl() {
+        let metrics = poa_metrics();
+        metrics.note_lease_renewed(Duration::from_secs(60));
+        assert_eq!(metrics.is_leader.get(), 1);
+
+        // leader_state Ok(false) path: recompute from deadline, do not wipe it.
+        metrics.sync_is_leader_from_lease();
+        assert_eq!(metrics.is_leader.get(), 1);
+        assert!(
+            metrics
+                .lease_valid_until_unix_millis
+                .load(Ordering::Acquire)
+                > 0
+        );
+
+        metrics.note_lease_lost();
+        metrics.sync_is_leader_from_lease();
+        assert_eq!(metrics.is_leader.get(), 0);
+        assert_eq!(
+            metrics
+                .lease_valid_until_unix_millis
+                .load(Ordering::Acquire),
+            0
+        );
     }
 }

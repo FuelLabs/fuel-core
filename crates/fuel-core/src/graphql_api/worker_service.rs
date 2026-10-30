@@ -371,7 +371,10 @@ where
                     biased;
 
                     _ = watcher.while_started() => {
-                        fetch.abort();
+                        // spawn_blocking cannot be interrupted; await so
+                        // FuelService database.shutdown() does not race the
+                        // still-running re-validation.
+                        let _ = fetch.await;
                         return Ok(false);
                     }
 
@@ -386,14 +389,16 @@ where
 
                     maybe_block = self.block_importer.next() => {
                         let Some(block) = maybe_block else {
-                            fetch.abort();
+                            let _ = fetch.await;
                             return Ok(false);
                         };
                         if Self::is_successor(off_chain_height, Self::import_height(&block))
                         {
-                            // The next height is already executed. Do not wait
-                            // for re-validation of the same block.
-                            fetch.abort();
+                            // Live stream already has the next height.
+                            // Still await the unused re-validation so it
+                            // cannot overlap the next spawn_blocking or a
+                            // later database.shutdown().
+                            let _ = fetch.await;
                             Self::raise_target(target, Self::import_height(&block));
                             self.process_block(block)?;
                             *applied = applied.saturating_add(1);
@@ -937,6 +942,8 @@ where
         if self.startup_sync.is_some() {
             // Catch-up did not finish. Applying a live block here would commit
             // it ahead of the off-chain tip. The next start re-reads by height.
+            // In-flight spawn_blocking re-validation was awaited in catch_up
+            // before run() returned, so database.shutdown() is safe after this.
             return Ok(());
         }
         // Process all remaining blocks before shutdown to not lose any data.
