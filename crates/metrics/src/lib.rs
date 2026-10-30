@@ -39,6 +39,11 @@ pub fn global_registry() -> &'static GlobalRegistry {
 }
 
 pub fn encode_metrics() -> Result<String, std::fmt::Error> {
+    // Refresh before taking the registry lock. `poa_metrics()` registers
+    // gauges under that lock; calling it while the lock is held deadlocks.
+    // No-op until the PoA adapter has registered its metrics.
+    poa_metrics::sync_leader_gauge_if_registered();
+
     let mut encoded = String::new();
 
     // encode the rest of the fuel-core metrics using latest prometheus

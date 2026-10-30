@@ -1272,3 +1272,219 @@ async fn main_task__reconciliation_import_does_not_deadlock_leader() {
          April 9, 2026 testnet outage"
     );
 }
+
+/// DEVOPS-1764: P2P can commit heights while the UnreconciledBlocks loop
+/// runs. Re-reading the DB tip before each height must skip blocks that
+/// landed mid-loop instead of racing `execute_and_commit`.
+#[tokio::test]
+async fn main_task__reconciliation_skips_heights_already_committed_by_p2p() {
+    // given
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        min_connected_reserved_peers: 0,
+        time_until_synced: Duration::ZERO,
+        ..Default::default()
+    };
+
+    // Shared DB tip observed by `latest_block_header`. Starts at 1; after
+    // height 2 is reconciled, jumps to 3 (P2P imported 3 concurrently).
+    let db_tip = Arc::new(StdMutex::new(1u32));
+    let execute_calls = Arc::new(AtomicUsize::new(0));
+
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
+
+    let tip_for_header = db_tip.clone();
+    block_importer
+        .expect_latest_block_header()
+        .returning(move || {
+            let height = *tip_for_header.lock().unwrap();
+            Ok(Some(BlockHeader::new_block(
+                BlockHeight::from(height),
+                Tai64::UNIX_EPOCH,
+            )))
+        });
+
+    let tip_for_import = db_tip.clone();
+    let calls_for_import = execute_calls.clone();
+    block_importer
+        .expect_execute_and_commit()
+        .returning(move |block| {
+            calls_for_import.fetch_add(1, Ordering::SeqCst);
+            let height = u32::from(*block.entity.header().height());
+            // Simulate P2P racing ahead: once we import 2, tip is already 3.
+            *tip_for_import.lock().unwrap() = height.max(3);
+            Ok(())
+        });
+
+    let block_2 = block_for_height(2);
+    let block_3 = block_for_height(3);
+    let signer = FakeBlockSigner { succeeds: true };
+    let sealed_2 = SealedBlock {
+        entity: block_2.clone(),
+        consensus: signer.seal_block(&block_2).await.unwrap(),
+    };
+    let sealed_3 = SealedBlock {
+        entity: block_3.clone(),
+        consensus: signer.seal_block(&block_3).await.unwrap(),
+    };
+
+    let reconciliation_port =
+        FakeReconciliationPort::with_state(Ok(LeaderState::UnreconciledBlocks(vec![
+            sealed_2, sealed_3,
+        ])));
+    let reconciliation_state = reconciliation_port.state.clone();
+
+    let time = TestTime::at_unix_epoch();
+    let watch = time.watch();
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        MockTransactionPool::no_tx_updates(),
+        block_producer,
+        block_importer,
+        generate_p2p_port(),
+        FakeBlockSigner { succeeds: true }.into(),
+        InMemoryPredefinedBlocks::new(HashMap::new()),
+        watch,
+        FakeBlockProductionReadySignal,
+        reconciliation_port,
+    );
+
+    // when
+    service.start_and_await().await.unwrap();
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    time::advance(Duration::from_millis(20)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+
+    // Allow production once heights are caught up.
+    {
+        let mut state = reconciliation_state.lock().unwrap();
+        *state = Ok(LeaderState::ReconciledLeader);
+    }
+    time::advance(Duration::from_millis(20)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+
+    let _ = service.stop_and_await().await;
+    let _ = block_receiver.try_recv();
+
+    // then — height 3 must be skipped after the mid-loop tip jump
+    let calls = execute_calls.load(Ordering::SeqCst);
+    assert_eq!(
+        calls, 1,
+        "expected execute_and_commit only for height 2; height 3 should \
+         be skipped after P2P advanced the tip — got {calls} calls"
+    );
+}
+
+/// DEVOPS-1764: when the importer guard is held (`try_acquire` → no
+/// permits), reconciliation must sleep `error_retry_delay` instead of
+/// immediately re-fanning `leader_state` across Redis.
+#[tokio::test]
+async fn main_task__reconciliation_backs_off_when_importer_contended() {
+    // given — 100ms block period. With backoff, ~10 leader_state calls
+    // per second of paused time; without it the loop spins into the
+    // hundreds (the ~40 attempts/height seen on 2026-09-24 mainnet).
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(100),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        min_connected_reserved_peers: 0,
+        time_until_synced: Duration::ZERO,
+        ..Default::default()
+    };
+
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().times(0);
+    block_importer.expect_execute_and_commit().returning(|_| {
+        Err(anyhow::anyhow!(
+            "The commit is already in the progress: no permits available"
+        ))
+    });
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(1u32))));
+    block_importer.expect_latest_block_header().returning(|| {
+        Ok(Some(BlockHeader::new_block(
+            BlockHeight::from(1u32),
+            Tai64::UNIX_EPOCH,
+        )))
+    });
+
+    let block = block_for_height(2);
+    let consensus = FakeBlockSigner { succeeds: true }
+        .seal_block(&block)
+        .await
+        .unwrap();
+    let unreconciled = LeaderState::UnreconciledBlocks(vec![SealedBlock {
+        entity: block,
+        consensus,
+    }]);
+    let reconciliation_port = FakeReconciliationPort::with_state(Ok(unreconciled));
+    let leader_state_calls = reconciliation_port.leader_state_calls_handle();
+
+    let time = TestTime::at_unix_epoch();
+    let watch = time.watch();
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        MockTransactionPool::no_tx_updates(),
+        MockBlockProducer::default(),
+        block_importer,
+        generate_p2p_port(),
+        FakeBlockSigner { succeeds: true }.into(),
+        InMemoryPredefinedBlocks::new(HashMap::new()),
+        watch,
+        FakeBlockProductionReadySignal,
+        reconciliation_port,
+    );
+
+    // when
+    service.start_and_await().await.unwrap();
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    for _ in 0..10 {
+        time::advance(Duration::from_millis(100)).await;
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+    }
+    let _ = service.stop_and_await().await.unwrap();
+
+    // then
+    let count = leader_state_calls.load(Ordering::SeqCst);
+    assert!(
+        count <= 30,
+        "contended reconciliation must back off on leader_state — \
+         got {count} calls in 1s with period=100ms"
+    );
+    assert!(
+        count >= 5,
+        "expected reconciliation to keep retrying with backoff — \
+         got only {count} leader_state calls"
+    );
+}

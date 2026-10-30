@@ -629,6 +629,8 @@ impl RedisLeaderLeaseAdapter {
                 poa_metrics()
                     .promotion_duration_s
                     .observe(promotion_start.elapsed().as_secs_f64());
+                poa_metrics()
+                    .note_lease_renewed(Duration::from_millis(self.lease_ttl_millis));
                 // New leadership generation — forces the next
                 // `leader_state` to run a full all-nodes reconcile scan
                 // before this leader produces.
@@ -1108,6 +1110,7 @@ impl RedisLeaderLeaseAdapter {
             .lock()
             .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
         *current_epoch_token = None;
+        poa_metrics().note_lease_lost();
         Ok(())
     }
 
@@ -1251,8 +1254,11 @@ impl RedisLeaderLeaseAdapter {
         // have this specific block during reconciliation). Only count
         // newly Written nodes — HeightExists means the node has *some*
         // block at this height, but it might be a different block from
-        // a competing leader's partial write.
+        // a competing leader's partial write. PEXPIRE runs only on
+        // Written, so a lease renewal needs a quorum of those writes,
+        // not a quorum that is mostly pre-existing copies.
         let mut total_with_block = pre_existing_count;
+        let mut newly_written = 0usize;
         for result in self
             .publish_block_on_all_nodes(epoch, block, &block_data)
             .await
@@ -1260,6 +1266,7 @@ impl RedisLeaderLeaseAdapter {
             match result {
                 Ok(WriteBlockResult::Written) => {
                     total_with_block = total_with_block.saturating_add(1);
+                    newly_written = newly_written.saturating_add(1);
                 }
                 Ok(WriteBlockResult::HeightExists) => {
                     // Node has some block at this height — may or may
@@ -1280,6 +1287,12 @@ impl RedisLeaderLeaseAdapter {
         let reached_quorum = self.quorum_reached(total_with_block);
         if reached_quorum {
             poa_metrics().repair_success_total.inc();
+            // PEXPIRE runs only inside a successful write_block.lua.
+            // Pre-existing copies do not extend their lease TTL.
+            if self.quorum_reached(newly_written) {
+                poa_metrics()
+                    .note_lease_renewed(Duration::from_millis(self.lease_ttl_millis));
+            }
         } else {
             poa_metrics().repair_failure_total.inc();
         }
@@ -1540,7 +1553,10 @@ impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
         next_height: BlockHeight,
     ) -> anyhow::Result<LeaderState> {
         if self.can_produce_block().await? {
-            poa_metrics().is_leader.set(1);
+            // Acquisition and quorum writes record the renewal. An
+            // ownership check does not extend Redis TTL, so the gauge
+            // follows the last renewal plus TTL instead of this call.
+            poa_metrics().sync_is_leader_from_lease();
             if let Ok(epoch) = self.current_epoch_token.lock()
                 && let Some(epoch) = *epoch
             {
@@ -1590,7 +1606,12 @@ impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
                 Ok(LeaderState::UnreconciledBlocks(unreconciled_blocks))
             }
         } else {
-            poa_metrics().is_leader.set(0);
+            // Do not call note_lease_lost here. Ownership/acquire can return
+            // false on transient Redis blips while the lease (and the local
+            // renewal-plus-TTL deadline) is still valid; wiping the deadline
+            // would leave poa_is_leader at 0 until the next quorum write.
+            // Explicit release clears the deadline via note_lease_lost.
+            poa_metrics().sync_is_leader_from_lease();
             Ok(LeaderState::ReconciledFollower)
         }
     }
@@ -1637,6 +1658,9 @@ impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
             .filter(|success| *success)
             .count();
         if self.quorum_reached(successes) {
+            poa_metrics()
+                .note_lease_renewed(Duration::from_millis(self.lease_ttl_millis));
+            poa_metrics().note_block_produced();
             Ok(())
         } else {
             Err(anyhow!(
@@ -1899,14 +1923,16 @@ mod tests {
         },
     };
 
-    /// Serializes the `poa_outstanding_publish_tasks` metric test against
-    /// every other test that drives the publish path. Those tests mutate
-    /// the process-global gauge via `OutstandingPublishTaskGuard`; they
-    /// take a *read* lock so they still run in parallel with each other,
-    /// while `publish_produced_block__outstanding_tasks_metric_drains_to_baseline`
-    /// takes the *write* lock for an exclusive, pollution-free measurement
-    /// window. Any new test that reaches the publish path must take the
-    /// read lock too, otherwise the metric test can flake again.
+    /// Serializes process-global PoA gauges. Publish tests mutate
+    /// `poa_outstanding_publish_tasks` via `OutstandingPublishTaskGuard`.
+    /// Acquire, release, and publish also move `poa_is_leader` and the
+    /// lease timestamps. Those tests take a *read* lock so they still run
+    /// in parallel with each other, while
+    /// `publish_produced_block__outstanding_tasks_metric_drains_to_baseline`
+    /// and `poa_is_leader__drops_on_scrape_after_ttl_without_leader_state`
+    /// take the *write* lock for an exclusive measurement window. Any new
+    /// test that acquires, releases, or publishes must take the read lock
+    /// too, otherwise the metric tests can flake.
     fn publish_gauge_lock() -> &'static tokio::sync::RwLock<()> {
         static LOCK: std::sync::OnceLock<tokio::sync::RwLock<()>> =
             std::sync::OnceLock::new();
@@ -2381,6 +2407,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn release__when_adapter_is_not_lease_owner_then_returns_ok() {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2424,16 +2451,17 @@ mod tests {
             format!("redis://127.0.0.1:{halflive_port}/"),
         ];
         let adapter = new_test_adapter(urls, lease_key);
-        adapter
-            .acquire_lease_if_free()
-            .await
-            .expect("acquire should succeed");
 
         // Exclusive measurement window. Acquired only now — after the
         // (lock-free) redis setup above — so we hold the write lock just
         // for the measurement and don't batch every other publish-path
-        // test's redis spawns into a post-barrier stampede.
+        // test's redis spawns into a post-barrier stampede. Acquire
+        // stays inside the lock: it records the lease gauges.
         let _serial = publish_gauge_lock().write().await;
+        adapter
+            .acquire_lease_if_free()
+            .await
+            .expect("acquire should succeed");
 
         // Drain stragglers from publish-path tests that finished just
         // before we acquired the write lock — their background tasks live
@@ -2545,6 +2573,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn drop__when_per_node_adapter_is_dropped_then_parent_lease_is_unchanged() {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -3625,6 +3654,7 @@ mod tests {
     /// leader promotion.
     #[tokio::test(flavor = "multi_thread")]
     async fn acquire_lease_if_free__returns_within_bound_when_one_node_is_half_alive() {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -3672,6 +3702,7 @@ mod tests {
     /// heal lagging nodes upward instead of FENCING_ERROR-ing forever.
     #[tokio::test(flavor = "multi_thread")]
     async fn acquire_lease_if_free__folds_late_higher_epoch_into_current_epoch_token() {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 redis nodes with node C pre-drifted to epoch 100
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -3762,6 +3793,7 @@ mod tests {
     /// a detached background task and does not pin the caller.
     #[tokio::test(flavor = "multi_thread")]
     async fn has_lease_owner_quorum__returns_within_bound_when_one_node_is_half_alive() {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 healthy + 1 half-alive, adapter has acquired lease
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -4697,6 +4729,8 @@ mod tests {
         let expected_names = [
             "poa_leader_epoch",
             "poa_is_leader",
+            "poa_last_produced_block_timestamp_seconds",
+            "poa_lease_last_renewed_timestamp_seconds",
             "poa_epoch_max_drift",
             "poa_stream_trim_headroom",
             "poa_outstanding_publish_tasks",
@@ -4726,6 +4760,8 @@ mod tests {
         let non_zero_metrics = [
             "poa_leader_epoch",
             "poa_is_leader",
+            "poa_last_produced_block_timestamp_seconds",
+            "poa_lease_last_renewed_timestamp_seconds",
             "poa_write_block_success_total",
             "poa_promotion_success_total",
             "poa_repair_success_total",
@@ -4744,6 +4780,91 @@ mod tests {
                 "Metric '{name}' should be non-zero, got: {metric_line}"
             );
         }
+    }
+
+    fn metric_i64(encoded: &str, name: &str) -> i64 {
+        let line = encoded
+            .lines()
+            .find(|l| {
+                l.starts_with(name)
+                    && !l.starts_with(&format!("{name}_"))
+                    && !l.starts_with('#')
+            })
+            .unwrap_or_else(|| panic!("No data line for {name}"));
+        line.rsplit_once(' ')
+            .and_then(|(_, value)| value.parse().ok())
+            .unwrap_or_else(|| panic!("No integer value in {line}"))
+    }
+
+    /// Scrape path expires `poa_is_leader` after the lease TTL with no
+    /// further `leader_state` call — the gauge must not stay 1 while the
+    /// PoA task is wedged in the importer.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn poa_is_leader__drops_on_scrape_after_ttl_without_leader_state() {
+        let _serial = publish_gauge_lock().write().await;
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:lease-gauge-expiry".to_string();
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let lease_ttl = Duration::from_millis(200);
+        let adapter = RedisLeaderLeaseAdapter::new(
+            redis_urls,
+            lease_key,
+            lease_ttl,
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed")
+        );
+        let block = poa_block_at_time(1, 100);
+        adapter
+            .publish_produced_block(&block)
+            .await
+            .expect("publish should succeed");
+
+        let encoded =
+            fuel_core_metrics::encode_metrics().expect("encode_metrics should succeed");
+        assert_eq!(metric_i64(&encoded, "poa_is_leader"), 1);
+        let produced = metric_i64(&encoded, "poa_last_produced_block_timestamp_seconds");
+        let renewed = metric_i64(&encoded, "poa_lease_last_renewed_timestamp_seconds");
+        assert!(
+            produced > 0,
+            "produced timestamp should be set, got {produced}"
+        );
+        assert!(
+            renewed > 0,
+            "lease renewal timestamp should be set, got {renewed}"
+        );
+
+        sleep(lease_ttl + Duration::from_millis(150)).await;
+        let encoded =
+            fuel_core_metrics::encode_metrics().expect("encode_metrics should succeed");
+        assert_eq!(
+            metric_i64(&encoded, "poa_is_leader"),
+            0,
+            "scrape must clear poa_is_leader after the lease TTL without leader_state"
+        );
+        assert_eq!(
+            metric_i64(&encoded, "poa_last_produced_block_timestamp_seconds"),
+            produced
+        );
+        assert_eq!(
+            metric_i64(&encoded, "poa_lease_last_renewed_timestamp_seconds"),
+            renewed
+        );
     }
 
     /// When quorum reads fail during reconciliation, a subsequent call
