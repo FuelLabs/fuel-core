@@ -567,6 +567,96 @@ where
 }
 
 #[tokio::test]
+async fn execute_and_commit_already_committed_height_skips_execution_and_releases_guard()
+{
+    // Tip is 113, so 113 is already committed. Expected next height is 114.
+    // This is the shape that held the importer guard for the full execution.
+    stale_execute_and_commit(113, 113, 114).await;
+}
+
+#[tokio::test]
+async fn execute_and_commit_gapped_height_skips_execution_and_releases_guard() {
+    // Tip is 111, so the next height is 112. Block 113 does not extend the tip.
+    stale_execute_and_commit(113, 111, 112).await;
+}
+
+async fn stale_execute_and_commit(block_height: u32, db_height: u32, expected_next: u32) {
+    let sealed_block = poa_block(block_height);
+    let db = underlying_db(ok(Some(db_height)), 0)();
+
+    let mut executor = MockValidator::default();
+    executor
+        .expect_validate()
+        .times(0)
+        .returning(|_| ex_result());
+    let mut verifier = MockBlockVerifier::default();
+    verifier
+        .expect_verify_block_fields()
+        .times(0)
+        .returning(|_, _| Ok(()));
+
+    let importer = Importer::default_config(db, executor, verifier);
+
+    let started = std::time::Instant::now();
+    let result = importer.execute_and_commit(sealed_block).await;
+    let elapsed = started.elapsed();
+
+    assert_eq!(
+        result,
+        Err(Error::IncorrectBlockHeight(
+            expected_next.into(),
+            block_height.into(),
+        ))
+    );
+    assert!(
+        elapsed < std::time::Duration::from_secs(1),
+        "stale execute_and_commit took {elapsed:?}"
+    );
+    assert!(
+        importer.lock().is_ok(),
+        "importer guard still held after stale execute_and_commit"
+    );
+}
+
+#[tokio::test]
+async fn commit_result_already_committed_height_releases_guard() {
+    let sealed_block = poa_block(113);
+    let db = underlying_db(ok(Some(113)), 0)();
+    let mut executor = MockValidator::default();
+    executor
+        .expect_validate()
+        .times(0)
+        .returning(|_| ex_result());
+    let mut verifier = MockBlockVerifier::default();
+    verifier
+        .expect_verify_block_fields()
+        .times(0)
+        .returning(|_, _| Ok(()));
+    let importer = Importer::default_config(db, executor, verifier);
+    let uncommitted_result = UncommittedResult::new(
+        ImportResult::new_from_local(sealed_block, vec![], vec![]),
+        Default::default(),
+    );
+
+    let started = std::time::Instant::now();
+    let result = importer.commit_result(uncommitted_result).await;
+
+    assert_eq!(
+        result,
+        Err(Error::IncorrectBlockHeight(114u32.into(), 113u32.into()))
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(1),
+        "stale commit_result took {:?}",
+        started.elapsed()
+    );
+    assert!(
+        importer.lock().is_ok(),
+        "importer guard still held after stale commit_result"
+    );
+}
+
+#[tokio::test]
 async fn verify_and_execute_allowed_when_locked() {
     let importer = Importer::default_config(
         MockDatabase::default(),
