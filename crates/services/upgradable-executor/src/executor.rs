@@ -1530,6 +1530,25 @@ mod test {
         use fuel_core_types::fuel_vm::UploadedBytecode;
 
         #[test]
+        fn engine_rejects_chained_function_reference_types() {
+            // RUSTSEC-2026-0359 requires chains of types referring to other types.
+            // Keep typed function references disabled until Wasmtime is patched.
+            // This encodes (module (type (func))
+            //                     (type (func (param (ref null 0))))).
+            let module = [
+                0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x09, 0x02, 0x60,
+                0x00, 0x00, 0x60, 0x01, 0x63, 0x00, 0x00,
+            ];
+            let error = wasmtime::Module::validate(private::default_engine(), &module)
+                .expect_err("typed function references must remain disabled");
+            assert!(
+                format!("{error:#}")
+                    .contains("function references required for index reference types"),
+                "unexpected validation error: {error:#}"
+            );
+        }
+
+        #[test]
         fn can_validate_block__native_strategy() {
             let storage = storage();
 

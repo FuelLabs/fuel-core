@@ -4,4 +4,29 @@ ignore = [
     "RUSTSEC-2026-0119", # https://github.com/FuelLabs/fuel-core/issues/3296 — libp2p-dns 0.44 pins hickory-proto 0.25
     "RUSTSEC-2026-0316", # https://github.com/FuelLabs/fuel-core/issues/3345: wasmtime component Val API; fuel-core does not enable component-model
     "RUSTSEC-2026-0327", # https://github.com/FuelLabs/fuel-core/issues/3345: wasmtime component-model-async; fuel-core does not enable component-model
+    # Wasmtime is built without component-model/component-model-async. The
+    # executor only loads core Modules; these component APIs are not compiled.
+    # Reassess these exceptions before enabling either Cargo feature.
+    "RUSTSEC-2026-0353",
+    "RUSTSEC-2026-0354",
+    "RUSTSEC-2026-0355",
+    "RUSTSEC-2026-0356",
+    "RUSTSEC-2026-0357",
+    "RUSTSEC-2026-0358",
+    "RUSTSEC-2026-0361",
+    "RUSTSEC-2026-0363",
+    "RUSTSEC-2026-0378",
+    "RUSTSEC-2026-0424",
+    # Mixed sync/async re-entry: our host bindings and TypedFunc::call are
+    # synchronous; no call_async/async host functions are used.
+    "RUSTSEC-2026-0362",
+    # Recursive type chains require typed function references/GC, disabled in
+    # our core-module engine. We do not construct host-side recursive types.
+    # Guarded by engine_rejects_chained_function_reference_types; reassess when
+    # changing Wasmtime features, engine configuration, or host type creation.
+    "RUSTSEC-2026-0359",
+    # Thrift 0.17 is only used by parquet 58.1.0. Its file readers use the
+    # compact protocol, not the affected TBinaryInputProtocol::read_bytes/read_string.
+    # Reassess if another Thrift consumer or binary-protocol reader is introduced.
+    "RUSTSEC-2026-0435",
 ]
