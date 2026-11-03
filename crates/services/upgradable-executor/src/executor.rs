@@ -172,6 +172,7 @@ mod private {
         Config,
         Engine,
         Module,
+        WasmFeatures,
     };
 
     /// The default engine for the WASM executor. It is used to compile the WASM bytecode.
@@ -184,6 +185,17 @@ mod private {
     pub(crate) fn default_engine() -> &'static Engine {
         DEFAULT_ENGINE.get_or_init(|| {
             let mut config = Config::default();
+            // Preserve the Wasmtime 46 proposal set across runtime upgrades.
+            // A new proposal must not let upgraded nodes accept executor
+            // bytecode that nodes using the previous runtime reject.
+            let features = WasmFeatures::WASM2.difference(WasmFeatures::GC_TYPES)
+                | WasmFeatures::MULTI_MEMORY
+                | WasmFeatures::RELAXED_SIMD
+                | WasmFeatures::TAIL_CALL
+                | WasmFeatures::EXTENDED_CONST
+                | WasmFeatures::MEMORY64;
+            config.wasm_features(WasmFeatures::all(), false);
+            config.wasm_features(features, true);
             // Enables compilation caching.
             let cache_config = CacheConfig::from_file(None)
                 .expect("Failed to load the default cache config");
@@ -1531,8 +1543,8 @@ mod test {
 
         #[test]
         fn engine_rejects_chained_function_reference_types() {
-            // RUSTSEC-2026-0359 requires chains of types referring to other types.
-            // Keep typed function references disabled until Wasmtime is patched.
+            // Runtime upgrades must not silently accept new executor proposals.
+            // Typed function references were disabled in Wasmtime 46.
             // This encodes (module (type (func))
             //                     (type (func (param (ref null 0))))).
             let module = [

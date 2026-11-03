@@ -14,6 +14,7 @@ build = "build.rs"
 [features]
 default = ["std"]
 std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
+# Wasmtime requires Rust 1.95 when this optional feature is enabled.
 wasm-executor = [
     "dep:anyhow",
     "dep:derive_more",
@@ -42,7 +43,7 @@ futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-wasmtime = { version = "46.0.2", default-features = false, features = ["anyhow", "cache", "cranelift", "parallel-compilation", "pooling-allocator", "runtime"], optional = true }
+wasmtime = { version = "48.0.8", default-features = false, features = ["anyhow", "cache", "cranelift", "parallel-compilation", "pooling-allocator", "runtime"], optional = true }
 
 [build-dependencies]
 fuel-core-wasm-executor = { workspace = true, optional = true, default-features = false }
