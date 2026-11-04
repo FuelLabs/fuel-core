@@ -6,4 +6,16 @@ ignore = [
     # compact protocol, not the affected TBinaryInputProtocol::read_bytes/read_string.
     # Reassess if another Thrift consumer or binary-protocol reader is introduced.
     "RUSTSEC-2026-0435",
+    # Temporary risk acceptance: crypto-bigint 0.5.5 is required by
+    # elliptic-curve 0.13 (via fuel-crypto, Alloy, and libp2p) and aws-sigv4.
+    # The advisory's fix starts at 0.7.6, outside those dependency requirements.
+    # Signing paths include secret arithmetic: this exception does not fix the
+    # timing side channel or establish that our usage is unaffected.
+    # Upstream blocker: https://github.com/alloy-rs/alloy/issues/4445
+    # Upstream precedent: https://github.com/alloy-rs/alloy/pull/4456
+    # https://github.com/alloy-rs/core/pull/1242
+    # https://github.com/worldcoin/bedrock/pull/489
+    # Review before the next release, no later than 2026-12-03. Remove once
+    # upstream backports or dependency migrations eliminate affected versions.
+    "RUSTSEC-2026-0387",
 ]
