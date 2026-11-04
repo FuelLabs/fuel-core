@@ -14,7 +14,6 @@ build = "build.rs"
 [features]
 default = ["std"]
 std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
-# Wasmtime requires Rust 1.95 when this optional feature is enabled.
 wasm-executor = [
     "dep:anyhow",
     "dep:derive_more",
