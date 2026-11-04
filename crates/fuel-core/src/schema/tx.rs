@@ -283,13 +283,12 @@ impl TxQuery {
                                 .map(|sorted| sorted.tx_id.0)
                                 .collect::<Vec<_>>();
                             let txs = async_query.transactions(tx_ids).await;
-                            let txs = txs.into_iter().zip(chunk.into_iter()).map(
-                                |(result, sorted)| {
+                            let txs =
+                                txs.into_iter().zip(chunk).map(|(result, sorted)| {
                                     result.map(|tx| {
                                         (sorted, Transaction::from_tx(sorted.tx_id.0, tx))
                                     })
-                                },
-                            );
+                                });
                             Ok(Some(futures::stream::iter(txs)))
                         }
                     })

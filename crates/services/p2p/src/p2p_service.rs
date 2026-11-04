@@ -269,7 +269,7 @@ async fn parse_multiaddrs(multiaddrs: Vec<Multiaddr>) -> anyhow::Result<Vec<Mult
     let resolved_multiaddrs = multiaddrs
         .into_iter()
         .filter(|multiaddr| !multiaddr.iter().any(|p| matches!(p, Protocol::Dnsaddr(_))))
-        .chain(dnsaddr_multiaddrs.into_iter())
+        .chain(dnsaddr_multiaddrs)
         .collect();
     Ok(resolved_multiaddrs)
 }

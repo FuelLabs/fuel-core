@@ -154,7 +154,7 @@ impl Block {
                     let txs = async_query.transactions(tx_ids.clone()).await;
                     let txs = txs
                         .into_iter()
-                        .zip(tx_ids.into_iter())
+                        .zip(tx_ids)
                         .map(|(r, tx_id)| r.map(|tx| Transaction::from_tx(tx_id, tx)));
 
                     Some(futures::stream::iter(txs))
