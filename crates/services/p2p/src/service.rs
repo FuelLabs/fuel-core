@@ -1079,10 +1079,8 @@ where
                             return TaskNextAction::ErrorContinue(err)
                         }
                     },
-                    Some(FuelP2PEvent::NewSubscription { peer_id, tag }) => {
-                        if tag == GossipTopicTag::NewTx {
-                            let _ = self.broadcast.new_tx_subscription_broadcast(FuelPeerId::from(peer_id.to_bytes()));
-                        }
+                    Some(FuelP2PEvent::NewSubscription { peer_id, tag: GossipTopicTag::NewTx }) => {
+                        let _ = self.broadcast.new_tx_subscription_broadcast(FuelPeerId::from(peer_id.to_bytes()));
                     },
                     _ => (),
                 }

@@ -5,12 +5,15 @@
 use crate::{
     bootstrap_node,
     tests_helper::{
+        LatestFuelCoreDriver,
         POA_SECRET_KEY,
+        PRIVILEGED_ADDRESS_KEY,
         SUBSECTION_SIZE,
         V44_TESTNET_SNAPSHOT,
         Version44FuelCoreDriver,
         transactions_from_subsections,
         upgrade_transaction,
+        valid_input,
     },
 };
 use libp2p::identity::secp256k1::Keypair as SecpKeypair;
@@ -26,7 +29,21 @@ use version_44_fuel_core_client::client::{
         TransactionStatus,
     },
 };
-use version_44_fuel_core_type::fuel_tx::field::ChargeableBody;
+use version_44_fuel_core_type::{
+    fuel_asm::{
+        RegId,
+        op,
+    },
+    fuel_crypto::SecretKey,
+    fuel_tx::{
+        Signable,
+        Transaction,
+        Witness,
+        field::ChargeableBody,
+        policies::Policies,
+    },
+    fuel_types::ChainId,
+};
 
 async fn await_v44_block(client: &FuelClient, height: u32, timeout: Duration) -> Block {
     tokio::time::timeout(timeout, async {
@@ -51,15 +68,40 @@ async fn await_v44_block(client: &FuelClient, height: u32, timeout: Duration) ->
     })
 }
 
+async fn assert_latest_matches_v44(latest: &LatestFuelCoreDriver, old_block: &Block) {
+    let height = old_block.header.height;
+    // The first block for each STF can require compiling its Wasm module.
+    tokio::time::timeout(Duration::from_secs(360), async {
+        loop {
+            if let Some(block) = latest
+                .client
+                .block_by_height(height.into())
+                .await
+                .expect("Failed to query the latest validator")
+            {
+                assert_eq!(block.id.to_string(), old_block.id.to_string());
+                assert_eq!(
+                    block.header.state_transition_bytecode_version,
+                    old_block.header.state_transition_bytecode_version
+                );
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("Latest runtime failed to import v44 block {height}"));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_state_transition_function_is_forward_compatible_with_v44_binary() {
     let (_bootstrap_node, addr) = bootstrap_node(V44_TESTNET_SNAPSHOT).await.unwrap();
 
-    // The test has a v44 block producer and one v44 validator.
+    // The test has a v44 producer, a v44 validator, and a latest-runtime validator.
     // v44 nodes execute several blocks by using the v44 state transition function.
     // At some point, we upgrade the network to use the latest state transition function.
     // The network should be able to generate several new blocks with a new version.
-    // v44 block producer and validator should process all blocks.
+    // All three nodes must agree on blocks before and after STF activation.
     //
     // These actions test that old nodes could use a new state transition function,
     // and it is forward compatible.
@@ -72,6 +114,8 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
         "--service-name",
         "V44Producer",
         "--debug",
+        "--gas-price-change-percent",
+        "0",
         "--poa-interval-period",
         "50ms",
         "--consensus-key",
@@ -98,8 +142,38 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
         "--service-name",
         "V44Validator",
         "--debug",
+        "--gas-price-change-percent",
+        "0",
         "--poa-instant",
         "false",
+        "--snapshot",
+        V44_TESTNET_SNAPSHOT,
+        "--enable-p2p",
+        "--keypair",
+        hexed_secret.as_str(),
+        "--reserved-nodes",
+        addr.as_str(),
+        "--peering-port",
+        "0",
+        "--heartbeat-idle-duration=0ms",
+    ])
+    .await
+    .unwrap();
+
+    let latest_keypair = SecpKeypair::generate();
+    let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
+    let latest_validator = LatestFuelCoreDriver::spawn(&[
+        "--service-name",
+        "LatestWasmValidator",
+        "--debug",
+        "--gas-price-change-percent",
+        "0",
+        "--poa-instant",
+        "false",
+        // Force Wasm execution for both STF 29 and STF 30, rather than allowing
+        // a native-executor fast path to hide a runtime incompatibility.
+        "--native-executor-version",
+        "0",
         "--snapshot",
         V44_TESTNET_SNAPSHOT,
         "--enable-p2p",
@@ -134,6 +208,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
             block.header.state_transition_bytecode_version, 29,
             "Unexpected STF version before upgrade at height {height}"
         );
+        assert_latest_matches_v44(&latest_validator, &block).await;
     }
 
     // When
@@ -144,7 +219,9 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
         )
         .unwrap();
     let mut rng = StdRng::seed_from_u64(12345);
-    let amount = 100000;
+    // This tests executor compatibility, not gas-price dynamics. Keep ample
+    // fee headroom for the upload chunks as compiler output sizes change.
+    let amount = 1_000_000;
     let transactions = transactions_from_subsections(&mut rng, subsections, amount);
     let root = transactions[0].body().root;
     for upload in transactions {
@@ -190,6 +267,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
         upgrade_block.header.state_transition_bytecode_version, 29,
         "Unexpected STF version in the upgrade block at height {upgrade_height}"
     );
+    assert_latest_matches_v44(&latest_validator, &upgrade_block).await;
     for offset in 1..=BLOCKS_TO_PRODUCE {
         let height = upgrade_height.checked_add(offset).expect("Height overflow");
         // Big timeout because we need to compile the state transition function.
@@ -200,7 +278,40 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
             block.header.state_transition_bytecode_version, 30,
             "Unexpected STF version after activation at height {height}"
         );
+        assert_latest_matches_v44(&latest_validator, &block).await;
     }
+    // Exercise a non-mint transaction under the new STF on both runtimes.
+    let secret_key: SecretKey = PRIVILEGED_ADDRESS_KEY.parse().unwrap();
+    let mut script = Transaction::script(
+        100_000,
+        op::ret(RegId::ONE).to_bytes().to_vec(),
+        vec![],
+        Policies::new().with_max_fee(amount),
+        vec![valid_input(&secret_key, &mut rng, amount)],
+        vec![],
+        vec![Witness::default()],
+    );
+    script.sign_inputs(&secret_key, &ChainId::new(0));
+    let status = tokio::time::timeout(
+        BLOCK_IMPORT_TIMEOUT,
+        validator_node
+            .client
+            .submit_and_await_commit(&Transaction::Script(script)),
+    )
+    .await
+    .expect("Timed out committing a script under the upgraded STF")
+    .expect("Failed to submit a script under the upgraded STF");
+    let script_height = match status {
+        TransactionStatus::Success { block_height, .. } => u32::from(block_height),
+        status => panic!("Upgraded STF script failed: {status:?}"),
+    };
+    let script_block =
+        await_v44_block(&validator_node.client, script_height, BLOCK_IMPORT_TIMEOUT)
+            .await;
+    assert_eq!(script_block.header.state_transition_bytecode_version, 30);
+    assert_latest_matches_v44(&latest_validator, &script_block).await;
+
+    drop(latest_validator.kill().await);
     drop(validator_node.kill().await);
     drop(_v44_node.kill().await);
 }

@@ -73,7 +73,7 @@ impl CachedView {
 
         self.update_metrics(increment_p2p_req_res_cache_misses);
         if let Some(fetched_items) = fetch_fn(view, missing_range.clone())? {
-            for (height, item) in missing_range.zip(fetched_items.into_iter()) {
+            for (height, item) in missing_range.zip(fetched_items) {
                 cache.insert(height, item.clone());
                 items.push(item);
             }

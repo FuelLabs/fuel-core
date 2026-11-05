@@ -159,10 +159,10 @@ impl Wallet {
         let script_data = asset_id
             .to_bytes()
             .into_iter()
-            .chain(output_index.to_bytes().into_iter())
-            .chain(coinbase_contract.to_bytes().into_iter())
-            .chain(0u64.to_bytes().into_iter())
-            .chain(0u64.to_bytes().into_iter())
+            .chain(output_index.to_bytes())
+            .chain(coinbase_contract.to_bytes())
+            .chain(0u64.to_bytes())
+            .chain(0u64.to_bytes())
             .collect();
 
         let tx = self

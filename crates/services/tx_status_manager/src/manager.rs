@@ -174,35 +174,25 @@ impl TxStatusManager {
             .update_sender
             .send(TxUpdate::new(tx_id, tx_status.clone().into()));
 
-        match tx_status {
+        let preconfirmation = match tx_status {
             TransactionStatus::PreConfirmationSuccess(s) => {
-                if self
-                    .preconfirmations_update_sender
-                    .send((tx_id, PreConfirmationStatus::Success(s)))
-                    .is_err()
-                {
-                    tracing::warn!("Failed to send preconfirmation update");
-                }
+                Some(PreConfirmationStatus::Success(s))
             }
             TransactionStatus::PreConfirmationFailure(s) => {
-                if self
-                    .preconfirmations_update_sender
-                    .send((tx_id, PreConfirmationStatus::Failure(s)))
-                    .is_err()
-                {
-                    tracing::warn!("Failed to send preconfirmation update");
-                }
+                Some(PreConfirmationStatus::Failure(s))
             }
             TransactionStatus::PreConfirmationSqueezedOut(s) => {
-                if self
-                    .preconfirmations_update_sender
-                    .send((tx_id, PreConfirmationStatus::SqueezedOut(s)))
-                    .is_err()
-                {
-                    tracing::warn!("Failed to send preconfirmation update");
-                }
+                Some(PreConfirmationStatus::SqueezedOut(s))
             }
-            _ => {}
+            _ => None,
+        };
+        if let Some(status) = preconfirmation
+            && self
+                .preconfirmations_update_sender
+                .send((tx_id, status))
+                .is_err()
+        {
+            tracing::warn!("Failed to send preconfirmation update");
         }
 
         if self.metrics {
