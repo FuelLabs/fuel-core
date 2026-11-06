@@ -16,7 +16,9 @@ use fuel_core::{
 use fuel_core_poa::{
     Trigger,
     ports::BlockImporter,
+    service::Mode,
 };
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_crypto::SecretKey,
     fuel_tx::Input,
@@ -102,7 +104,8 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(12);
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const PHASE_BLOCKS: usize = 5;
-    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+    // Leader-lock shutdown keeps P2P up for a 2s gossip flush after PoA stops.
+    const STOP_TIMEOUT: Duration = Duration::from_secs(8);
 
     // given
     let (_redis, _bootstrap, make_node_config) =
@@ -154,7 +157,8 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     const BLOCKS_BEFORE_FAILOVER: usize = 3;
     const BLOCKS_AFTER_RESTART: usize = 5;
     const FIRST_PRODUCER_NO_LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(60);
-    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+    // Leader-lock shutdown keeps P2P up for a 2s gossip flush after PoA stops.
+    const STOP_TIMEOUT: Duration = Duration::from_secs(8);
 
     // given
     let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
@@ -266,7 +270,8 @@ async fn leader_lock__two_producers__when_second_starts_after_first_shutdown_the
  {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
-    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+    // Leader-lock shutdown keeps P2P up for a 2s gossip flush after PoA stops.
+    const STOP_TIMEOUT: Duration = Duration::from_secs(8);
 
     // given
     let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
@@ -309,6 +314,99 @@ async fn leader_lock__two_producers__when_second_starts_after_first_shutdown_the
     );
 }
 
+/// Stopping the leader must not hide its last committed block from peers.
+///
+/// Shutdown stops PoA (lease released), keeps P2P up through the gossip flush,
+/// then stops P2P. The standby's next locally produced block is exactly the
+/// next height — it already has the leader's final block, so takeover does
+/// not stall on an unreconciled backlog.
+#[tokio::test(flavor = "multi_thread")]
+async fn leader_lock__leader_shutdown__follower_has_final_block() {
+    const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(12);
+    const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
+    const STOP_TIMEOUT: Duration = Duration::from_secs(8);
+    const TAKEOVER_TIMEOUT: Duration = Duration::from_secs(12);
+
+    let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
+        4441,
+        BLOCK_TIME,
+        "poa:leader:shutdown-gossip",
+    )
+    .await;
+
+    let first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+    let second_producer = make_node(make_node_config("Second Producer"), vec![]).await;
+    let (mut leader, followers) = find_leader_and_followers(
+        vec![first_producer, second_producer],
+        LEADER_ELECTION_TIMEOUT,
+    )
+    .await;
+    let follower = &followers[0];
+
+    only_leader_produces_blocks(
+        &leader,
+        std::slice::from_ref(follower),
+        2,
+        BLOCK_IMPORT_TIMEOUT,
+    )
+    .await;
+
+    leader
+        .node
+        .shared
+        .poa_adapter
+        .manually_produce_blocks(
+            None,
+            Mode::Blocks {
+                number_of_blocks: 1,
+            },
+        )
+        .await
+        .expect("leader should commit a final block");
+
+    let leader_height = on_chain_height(&leader);
+    let started = Instant::now();
+    let shutdown = async {
+        tokio::time::timeout(STOP_TIMEOUT, leader.shutdown())
+            .await
+            .expect("leader shutdown should finish within the grace window");
+        assert!(
+            started.elapsed() >= Duration::from_millis(1900),
+            "leader-lock shutdown should flush gossip before stopping P2P, elapsed {:?}",
+            started.elapsed()
+        );
+    };
+    // Subscribe before shutdown so a block produced during the gossip flush
+    // is not missed.
+    let takeover =
+        tokio::time::timeout(TAKEOVER_TIMEOUT, wait_for_local_block_height(follower));
+    let (takeover_result, ()) = tokio::join!(takeover, shutdown);
+    let next_height = takeover_result
+        .expect("standby should produce the next block without an unreconciled backlog");
+    assert_eq!(
+        next_height,
+        leader_height + 1,
+        "standby takeover should extend the leader's final height with no gap"
+    );
+
+    let follower_height = on_chain_height(follower);
+    assert!(
+        follower_height >= leader_height,
+        "follower height {follower_height} is behind leader final height {leader_height}"
+    );
+}
+
+fn on_chain_height(node: &Node) -> u32 {
+    let height = node
+        .db
+        .latest_view()
+        .expect("on-chain view")
+        .latest_height()
+        .expect("latest height");
+    u32::from(height)
+}
+
 /// When one of three Redis nodes is down during a leadership handoff,
 /// the new leader should still reconcile blocks from the remaining two
 /// nodes (quorum) and continue producing at the correct height.
@@ -317,7 +415,8 @@ async fn leader_lock__two_producers__when_one_redis_node_is_down_then_handoff_re
  {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
-    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+    // Leader-lock shutdown keeps P2P up for a 2s gossip flush after PoA stops.
+    const STOP_TIMEOUT: Duration = Duration::from_secs(8);
 
     // given — 3 Redis nodes, all running
     let redis_a = RedisTestServer::spawn();
@@ -378,7 +477,8 @@ async fn leader_lock__two_producers__when_redis_node_restarts_then_handoff_recon
  {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
-    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+    // Leader-lock shutdown keeps P2P up for a 2s gossip flush after PoA stops.
+    const STOP_TIMEOUT: Duration = Duration::from_secs(8);
 
     // given — 3 Redis nodes, all running
     let redis_a = RedisTestServer::spawn();

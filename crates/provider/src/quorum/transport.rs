@@ -211,7 +211,8 @@ impl<'a> Future for QuorumRequest<'a> {
 
         if this.requests.is_empty() {
             // No more requests and no quorum reached
-            this.responses.sort_by(|a, b| b.1.cmp(&a.1));
+            this.responses
+                .sort_by_key(|response| std::cmp::Reverse(response.1));
             let values: Vec<_> = std::mem::take(&mut this.responses)
                 .into_iter()
                 .map(|r| r.0)

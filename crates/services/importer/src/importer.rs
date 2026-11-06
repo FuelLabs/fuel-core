@@ -321,6 +321,8 @@ where
         runner.run(move || {
             let result = match result {
                 CommitInput::Uncommitted(result) => {
+                    // `create_block_changes` rejects a stale height before
+                    // `store_new_block`. This path does not execute the block.
                     let block_changes = create_block_changes(
                         &self.chain_id,
                         &result.result().sealed_block,
@@ -533,6 +535,17 @@ where
     ) -> Result<PrepareImportResult, Error> {
         let sealed_block_ref = &sealed_block;
 
+        // Reject a stale or gapped PoA height before execution. `create_block_changes`
+        // and execution run in parallel, and `run_in_parallel` waits for both, so a
+        // height mismatch used to hold the importer guard for the full execution.
+        // A `prev_root` mismatch is rejected by the block verifier inside
+        // `verify_and_execute_block_inner` before `executor.validate`.
+        // Genesis keeps the previous order: execution reports `ExecuteGenesis`
+        // before the database-state check.
+        if let Consensus::PoA(_) = sealed_block_ref.consensus {
+            ensure_next_block_height(sealed_block_ref, &self.database)?;
+        }
+
         let block_changes =
             || create_block_changes(&self.chain_id, sealed_block_ref, &self.database);
 
@@ -712,19 +725,38 @@ impl Awaiter {
     }
 }
 
-fn create_block_changes<D: ImporterDatabase + Transactional>(
-    chain_id: &ChainId,
+/// Rejects a block that is not the next height the database can accept.
+///
+/// Call this before starting block execution. An already-committed height still
+/// has a valid parent, so verifier checks do not skip execution.
+fn ensure_next_block_height<D: ImporterDatabase + Transactional>(
     sealed_block: &SealedBlock,
     database: &D,
-) -> Result<Changes, Error> {
-    let consensus = &sealed_block.consensus;
+) -> Result<(), Error> {
     let actual_next_height = *sealed_block.entity.header().height();
+    let expected_next_height =
+        expected_next_height(&sealed_block.consensus, actual_next_height, database)?;
 
+    if expected_next_height != actual_next_height {
+        return Err(Error::IncorrectBlockHeight(
+            expected_next_height,
+            actual_next_height,
+        ))
+    }
+
+    Ok(())
+}
+
+fn expected_next_height<D: ImporterDatabase + Transactional>(
+    consensus: &Consensus,
+    actual_next_height: BlockHeight,
+    database: &D,
+) -> Result<BlockHeight, Error> {
     // During importing of the genesis block, the database should not be initialized
     // and the genesis block defines the next height.
     // During the production of the non-genesis block, the next height should be underlying
     // database height + 1.
-    let expected_next_height = match consensus {
+    match consensus {
         Consensus::Genesis(_) => {
             let result = database.latest_block_height()?;
             let found = result.is_some();
@@ -733,7 +765,7 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
             if found {
                 return Err(Error::InvalidUnderlyingDatabaseGenesisState)
             }
-            actual_next_height
+            Ok(actual_next_height)
         }
         Consensus::PoA(_) => {
             if actual_next_height == BlockHeight::from(0u32) {
@@ -743,26 +775,26 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
             let last_db_height = database
                 .latest_block_height()?
                 .ok_or(not_found!("Latest block height"))?;
-            last_db_height
+            Ok(last_db_height
                 .checked_add(1u32)
                 .ok_or(Error::Overflow)?
-                .into()
+                .into())
         }
-        _ => {
-            return Err(Error::UnsupportedConsensusVariant(format!(
-                "{:?}",
-                consensus
-            )))
-        }
-    };
-
-    if expected_next_height != actual_next_height {
-        return Err(Error::IncorrectBlockHeight(
-            expected_next_height,
-            actual_next_height,
-        ))
+        _ => Err(Error::UnsupportedConsensusVariant(format!(
+            "{:?}",
+            consensus
+        ))),
     }
+}
 
+fn create_block_changes<D: ImporterDatabase + Transactional>(
+    chain_id: &ChainId,
+    sealed_block: &SealedBlock,
+    database: &D,
+) -> Result<Changes, Error> {
+    ensure_next_block_height(sealed_block, database)?;
+
+    let actual_next_height = *sealed_block.entity.header().height();
     let mut transaction = database.storage_transaction(Changes::new());
 
     if !transaction.store_new_block(chain_id, sealed_block)? {

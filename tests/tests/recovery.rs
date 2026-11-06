@@ -38,7 +38,8 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
     assert!(database.on_chain().latest_height() > database.off_chain().latest_height());
     let temp_dir = driver.kill().await;
 
-    // When
+    // When — off-chain catch-up runs after into_task reports started, so the
+    // node can come up (and PoA can run) while indexes are still behind.
     let recovered_driver = FuelCoreDriver::spawn_with_directory(
         temp_dir,
         &[
@@ -57,10 +58,18 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
         recovered_database.on_chain().latest_height(),
         Some(BlockHeight::new(HEIGHTS))
     );
-    assert_eq!(
-        recovered_database.off_chain().latest_height(),
-        Some(BlockHeight::new(HEIGHTS))
-    );
+    let target = Some(BlockHeight::new(HEIGHTS));
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    while recovered_database.off_chain().latest_height() != target {
+        anyhow::ensure!(
+            tokio::time::Instant::now() < deadline,
+            "off-chain did not catch up to {:?}; still at {:?}",
+            target,
+            recovered_database.off_chain().latest_height()
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(recovered_database.off_chain().latest_height(), target);
 
     recovered_driver.kill().await;
     Ok(())

@@ -200,7 +200,7 @@ async fn _dry_runs(
         });
     }
 
-    let stream = futures::stream::iter(queries.into_iter())
+    let stream = futures::stream::iter(queries)
         .buffered(10)
         .collect::<Vec<_>>();
 

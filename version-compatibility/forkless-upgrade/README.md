@@ -26,7 +26,8 @@ features, and setup script.
 
 By default setup uses the active Rust toolchain. To select another already-installed
 toolchain, run `FUEL_CORE_V44_TOOLCHAIN=<toolchain> ./version-compatibility/build-historical-node.sh`.
-CI selects its pinned `RUST_VERSION`. Historical sources can require an older
+CI keeps the historical node on Rust 1.94.1 independently of the current node's
+build toolchain. Historical sources can require an older
 toolchain or native build prerequisites even when the current workspace builds;
 setup clears inherited `RUSTFLAGS` and `CARGO_ENCODED_RUSTFLAGS` so warnings in old
 sources are not promoted to errors.
@@ -61,6 +62,19 @@ dependencies are intentionally preserved for testing, not suitable for deploymen
 We need to add a new backward compatibility test for each new release. To add tests, we need to duplicate tests that are using the latest `fuel-core` and replace usage of the latest crate with a new release.
 
 ## Forward compatibility
+
+The v0.44 forward-compatibility test runs a historical producer and validator
+alongside a latest-version validator. The latest validator is forced to execute
+Wasm, so its native executor cannot hide a runtime incompatibility. The test
+compares block IDs and STF versions before activation, at the upgrade block,
+and after activation, including a script transaction under the new STF. Gas-price
+changes are disabled and uploads have fee headroom so compiler-dependent artifact
+sizes do not turn this into a gas-price test.
+
+When updating Wasmtime, retain this historical baseline and check the accepted
+Wasm proposals as well as executor behavior. The executor explicitly preserves
+the proposal set from Wasmtime 46; enabling additional proposals requires a
+separate compatibility decision for nodes still running older runtimes.
 
 If the forward compatibility test fails after your changes, it usually means that the change breaks a WASM API, and the network first must upgrade the binary before performing an upgrade of the network.
 

@@ -618,12 +618,15 @@ pub fn init_sub_services(
 
     // PoA consumes imports too. Production remains gated by the ready signal,
     // which FuelService sends only after every subservice has started.
+    // The off-chain worker reports started before historical catch-up, so this
+    // signal is not blocked on block re-validation.
     if let Some(poa) = poa {
         services.push(Box::new(poa));
     }
 
-    // Start importing only after every consumer has completed recovery. Otherwise,
-    // unread startup subscriptions can fill the importer's notification buffer.
+    // Sync starts once consumers are running. The off-chain worker drains
+    // importer notifications while it catches up, so recovery does not fill
+    // the notification buffer.
     #[cfg(feature = "p2p")]
     {
         if let Some(sync) = sync {

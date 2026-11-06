@@ -236,14 +236,12 @@ impl Bootstrap {
                             },
                             Some(FuelP2PEvent::InboundRequestMessage {
                                 request_id,
-                                request_message
+                                request_message: RequestMessage::TxPoolAllTransactionsIds
                             }) => {
-                                if request_message == RequestMessage::TxPoolAllTransactionsIds {
-                                    let _ = bootstrap.send_response_msg(
-                                        request_id,
-                                        V2ResponseMessage::TxPoolAllTransactionsIds(Ok(vec![])),
-                                    );
-                                }
+                                let _ = bootstrap.send_response_msg(
+                                    request_id,
+                                    V2ResponseMessage::TxPoolAllTransactionsIds(Ok(vec![])),
+                                );
                             }
                             _ => {}
                         }
@@ -316,7 +314,7 @@ pub async fn make_nodes(
     let mut config = config.unwrap_or_else(Config::local_node);
     let mut state_config = StateConfig::from_reader(&config.snapshot_reader).unwrap();
 
-    for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
+    for (all, producer) in txs_coins.into_iter().zip(producers) {
         match all {
             Some(all) => {
                 let mut txs = Vec::with_capacity(all.len());

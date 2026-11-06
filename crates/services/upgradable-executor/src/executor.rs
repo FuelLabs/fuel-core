@@ -172,6 +172,7 @@ mod private {
         Config,
         Engine,
         Module,
+        WasmFeatures,
     };
 
     /// The default engine for the WASM executor. It is used to compile the WASM bytecode.
@@ -184,6 +185,17 @@ mod private {
     pub(crate) fn default_engine() -> &'static Engine {
         DEFAULT_ENGINE.get_or_init(|| {
             let mut config = Config::default();
+            // Preserve the Wasmtime 46 proposal set across runtime upgrades.
+            // A new proposal must not let upgraded nodes accept executor
+            // bytecode that nodes using the previous runtime reject.
+            let features = WasmFeatures::WASM2.difference(WasmFeatures::GC_TYPES)
+                | WasmFeatures::MULTI_MEMORY
+                | WasmFeatures::RELAXED_SIMD
+                | WasmFeatures::TAIL_CALL
+                | WasmFeatures::EXTENDED_CONST
+                | WasmFeatures::MEMORY64;
+            config.wasm_features(WasmFeatures::all(), false);
+            config.wasm_features(features, true);
             // Enables compilation caching.
             let cache_config = CacheConfig::from_file(None)
                 .expect("Failed to load the default cache config");
@@ -1528,6 +1540,25 @@ mod test {
         };
         use fuel_core_storage::tables::UploadedBytecodes;
         use fuel_core_types::fuel_vm::UploadedBytecode;
+
+        #[test]
+        fn engine_rejects_chained_function_reference_types() {
+            // Runtime upgrades must not silently accept new executor proposals.
+            // Typed function references were disabled in Wasmtime 46.
+            // This encodes (module (type (func))
+            //                     (type (func (param (ref null 0))))).
+            let module = [
+                0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x09, 0x02, 0x60,
+                0x00, 0x00, 0x60, 0x01, 0x63, 0x00, 0x00,
+            ];
+            let error = wasmtime::Module::validate(private::default_engine(), &module)
+                .expect_err("typed function references must remain disabled");
+            assert!(
+                format!("{error:#}")
+                    .contains("function references required for index reference types"),
+                "unexpected validation error: {error:#}"
+            );
+        }
 
         #[test]
         fn can_validate_block__native_strategy() {

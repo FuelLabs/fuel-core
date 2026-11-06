@@ -1,6 +1,7 @@
 use std::{
     net::SocketAddr,
     sync::Arc,
+    time::Duration,
 };
 
 use adapters::{
@@ -531,17 +532,76 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        let total_services = self.services.len();
-        futures::future::join_all((1_usize..).zip(self.services.iter()).map(
-            |(service_num, service)| {
-                stop_sub_service(service_num, total_services, service.as_ref())
-            },
-        ))
-        .await;
+        // Redis-locked authorities are the HA leaders from the shutdown stall:
+        // keep P2P up long enough to heartbeat the final height and serve the
+        // block. Nodes without a leader lock only yield so the height update
+        // is applied; they must not pay this wait in tests.
+        let gossip_flush = self
+            .shared
+            .config
+            .leader_lock
+            .is_some()
+            .then_some(LEADER_SHUTDOWN_GOSSIP_FLUSH);
+        shutdown_sub_services(self.services.as_ref(), gossip_flush).await;
 
         self.database.shutdown();
         Ok(())
     }
+}
+
+/// After PoA stops, a locked leader keeps P2P alive this long so peers can
+/// observe the final heartbeat (`--heartbeat-idle-duration`, default 100ms)
+/// and pull the block. Well inside a typical termination grace period.
+const LEADER_SHUTDOWN_GOSSIP_FLUSH: Duration = Duration::from_secs(2);
+
+const POA_SERVICE_NAME: &str = "PoA";
+const P2P_SERVICE_NAME: &str = "P2P";
+
+/// Stop PoA before P2P.
+///
+/// Parallel shutdown lets P2P exit while PoA is still committing. The block
+/// is then on disk and in the leader-lock stream, but peers never see the
+/// height. Awaiting PoA first finishes any in-flight production (the importer
+/// broadcast fires during commit). P2P stays up through `gossip_flush` when
+/// the node holds a leader lock, then stops. Remaining services stop together.
+async fn shutdown_sub_services(services: &SubServices, gossip_flush: Option<Duration>) {
+    let total_services = services.len();
+    let (poa, rest): (Vec<_>, Vec<_>) = services
+        .iter()
+        .partition(|service| service.name() == POA_SERVICE_NAME);
+    let (p2p, rest): (Vec<_>, Vec<_>) = rest
+        .into_iter()
+        .partition(|service| service.name() == P2P_SERVICE_NAME);
+
+    let mut next_num = 1usize;
+    for service in &poa {
+        stop_sub_service(next_num, total_services, service.as_ref()).await;
+        next_num = next_num.saturating_add(1);
+    }
+
+    if !poa.is_empty() && !p2p.is_empty() {
+        if let Some(flush) = gossip_flush {
+            tracing::info!(
+                ?flush,
+                "PoA stopped; flushing final block gossip before stopping P2P"
+            );
+            tokio::time::sleep(flush).await;
+        } else {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    for service in &p2p {
+        stop_sub_service(next_num, total_services, service.as_ref()).await;
+        next_num = next_num.saturating_add(1);
+    }
+
+    let mut rest_stops = Vec::with_capacity(rest.len());
+    for service in &rest {
+        rest_stops.push(stop_sub_service(next_num, total_services, service.as_ref()));
+        next_num = next_num.saturating_add(1);
+    }
+    futures::future::join_all(rest_stops).await;
 }
 
 async fn stop_sub_service(
@@ -675,5 +735,103 @@ mod tests {
             // Check that the state is `Stopped`(not `StoppedWithError`)
             assert_eq!(service.borrow_and_update().clone(), State::Stopped);
         }
+    }
+
+    struct RecordingService {
+        name: &'static str,
+        order: std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl super::ServiceTrait for RecordingService {
+        fn start(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn start_and_await(&self) -> anyhow::Result<State> {
+            Ok(State::Started)
+        }
+
+        async fn await_start_or_stop(&self) -> anyhow::Result<State> {
+            Ok(State::Started)
+        }
+
+        fn stop(&self) -> bool {
+            true
+        }
+
+        async fn stop_and_await(&self) -> anyhow::Result<State> {
+            self.order.lock().expect("order lock").push(self.name);
+            Ok(State::Stopped)
+        }
+
+        async fn await_stop(&self) -> anyhow::Result<State> {
+            Ok(State::Stopped)
+        }
+
+        fn state(&self) -> State {
+            State::Started
+        }
+
+        fn state_watcher(&self) -> fuel_core_services::StateWatcher {
+            fuel_core_services::StateWatcher::started()
+        }
+
+        fn name(&self) -> &'static str {
+            self.name
+        }
+    }
+
+    fn recording(
+        name: &'static str,
+        order: &std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>,
+    ) -> Box<dyn super::ServiceTrait + Send + Sync> {
+        Box::new(RecordingService {
+            name,
+            order: order.clone(),
+        })
+    }
+
+    #[tokio::test]
+    async fn shutdown_stops_poa_then_p2p_before_the_rest() {
+        let order = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let services: super::SubServices = vec![
+            recording("GasPriceServiceV1", &order),
+            recording("P2P", &order),
+            recording("TxPool", &order),
+            recording("PoA", &order),
+        ];
+
+        let started = std::time::Instant::now();
+        super::shutdown_sub_services(&services, None).await;
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "nodes without a leader lock must not wait out the gossip flush"
+        );
+        let stopped = order.lock().expect("order lock").clone();
+        assert_eq!(&stopped[..2], ["PoA", "P2P"]);
+        let mut rest = stopped[2..].to_vec();
+        rest.sort_unstable();
+        assert_eq!(rest, ["GasPriceServiceV1", "TxPool"]);
+    }
+
+    #[tokio::test]
+    async fn shutdown_flushes_gossip_between_poa_and_p2p_when_asked() {
+        let order = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let services: super::SubServices = vec![
+            recording("P2P", &order),
+            recording("PoA", &order),
+            recording("TxPool", &order),
+        ];
+        let flush = Duration::from_millis(200);
+
+        let started = std::time::Instant::now();
+        super::shutdown_sub_services(&services, Some(flush)).await;
+
+        assert!(started.elapsed() >= flush);
+        assert_eq!(
+            order.lock().expect("order lock").as_slice(),
+            ["PoA", "P2P", "TxPool"]
+        );
     }
 }

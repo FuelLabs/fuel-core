@@ -143,24 +143,20 @@ impl NetworkBehaviour for Behaviour {
         match &event {
             FromSwarm::ConnectionEstablished(ConnectionEstablished {
                 peer_id,
-                other_established,
+                other_established: 0,
                 ..
             }) => {
-                if *other_established == 0 {
-                    self.connected_peers.insert(*peer_id);
+                self.connected_peers.insert(*peer_id);
 
-                    trace!("Connected to a peer {:?}", peer_id);
-                }
+                trace!("Connected to a peer {:?}", peer_id);
             }
             FromSwarm::ConnectionClosed(ConnectionClosed {
                 peer_id,
-                remaining_established,
+                remaining_established: 0,
                 ..
             }) => {
-                if *remaining_established == 0 {
-                    self.connected_peers.remove(peer_id);
-                    trace!("Disconnected from {:?}", peer_id);
-                }
+                self.connected_peers.remove(peer_id);
+                trace!("Disconnected from {:?}", peer_id);
             }
             _ => (),
         }

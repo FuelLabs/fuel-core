@@ -49,6 +49,13 @@ pub trait Service {
 
     /// Returns the state watcher of the service.
     fn state_watcher(&self) -> StateWatcher;
+
+    /// Name reported for shutdown ordering.
+    ///
+    /// `ServiceRunner` returns `RunnableService::NAME`.
+    fn name(&self) -> &'static str {
+        "service"
+    }
 }
 
 /// Trait used by `ServiceRunner` to encapsulate the business logic tasks for a service.
@@ -317,6 +324,10 @@ where
 
     fn state_watcher(&self) -> StateWatcher {
         self.state.subscribe().into()
+    }
+
+    fn name(&self) -> &'static str {
+        S::NAME
     }
 }
 

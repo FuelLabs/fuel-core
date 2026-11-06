@@ -1,6 +1,7 @@
 [package]
 name = "fuel-core-chaos-test"
 edition = { workspace = true }
+rust-version = { workspace = true }
 version = { workspace = true }
 publish = false
 
