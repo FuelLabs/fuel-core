@@ -135,7 +135,7 @@ mockall = "0.14"
 num-rational = "0.4.2"
 num_enum = "0.7"
 once_cell = "1.16"
-parking_lot = "0.12"
+parking_lot = { version = "0.12", default-features = false }
 parquet = { version = "58", default-features = false }
 paste = "1.0"
 pin-project-lite = "0.2"

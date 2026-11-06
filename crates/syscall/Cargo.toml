@@ -17,6 +17,6 @@ alloc = ["fuel-core-types/alloc"]
 std = ["alloc", "fuel-core-types/std"]
 
 [dependencies]
-fuel-core-types = { workspace = true }
+fuel-core-types = { workspace = true, default-features = false }
 parking_lot = { workspace = true }
 tracing = { workspace = true }
