@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.48.4]
+
+### Breaking
+- [3357](https://github.com/FuelLabs/fuel-core/pull/3357): Raise the minimum supported Rust version to 1.95 across the workspace, including the node, client, and types crates, alongside the patched Wasmtime 48 LTS runtime. Downstream SDKs, tooling, and other Rust consumers adopting this release must use Rust 1.95 or newer. The accepted Wasm feature set and STF version 34 are unchanged; no on-chain executor upgrade is required for this release.
+
+### Added
+- [3344](https://github.com/FuelLabs/fuel-core/pull/3344): Compress GraphQL HTTP responses with gzip when the client sends `Accept-Encoding: gzip`, and make `FuelClient` request and decode gzip responses. SSE subscription streams are not compressed.
+
+### Changed
+- [3328](https://github.com/FuelLabs/fuel-core/pull/3328): Updated vulnerable dependencies and the Rust toolchain to current patched versions.
+
+### Fixed
+- [3332](https://github.com/FuelLabs/fuel-core/pull/3332): Fixed an out-of-bounds panic in `cumulative_percentage_change`: the guard around the `PRECOMPUTED_EXP` lookup table used `>` where the table bounds needed `>=`, so `estimateGasPrice(blockHorizon: 25)` panicked on every node.
+- [3333](https://github.com/FuelLabs/fuel-core/pull/3333): `--gas-price-change-percent` is now honoured by the shared `UniversalGasPriceProvider`, which was constructed with the hardcoded `DEFAULT_GAS_PRICE_CHANGE_PERCENT` (10) regardless of configuration. **Behaviour change:** on a node with a non-default percentage, `estimateGasPrice` and `assembleTx` now return different values, and the tx pool's minimum-affordable-fee check moves by the same factor. Nodes on the default (10) are unaffected.
+- [3334](https://github.com/FuelLabs/fuel-core/pull/3334): Upgrade libp2p/Gossipsub and the active Yamux transport to remediate remote denial-of-service advisories involving PRUNE backoff and malformed Yamux frames.
+- [3337](https://github.com/FuelLabs/fuel-core/pull/3337): Start network sync only after importer consumers have completed startup recovery, preventing importer notification backpressure from repeatedly timing out during off-chain catch-up. Block production remains gated on node readiness.
+  
+  Update the locked `rustls` dependency to 0.23.45 to address RUSTSEC-2026-0285.
+- [3349](https://github.com/FuelLabs/fuel-core/pull/3349): PoA reconciliation no longer races P2P block import: each unreconciled height re-reads the DB tip, and when the importer guard is contended (or the tip has not advanced) the leader backs off instead of spinning Redis `leader_state` fan-out.
+- [3352](https://github.com/FuelLabs/fuel-core/pull/3352): Stop PoA before P2P during FuelService shutdown so a leader-lock node's final block is heartbeated before the network stops. Nodes without a leader lock do not wait.
+- [3353](https://github.com/FuelLabs/fuel-core/pull/3353): Do not block block production on GraphQL off-chain database catch-up. The off-chain worker reports started before it re-validates missing blocks, so a restarted authority can reach PoA while indexes catch up.
+- [3354](https://github.com/FuelLabs/fuel-core/pull/3354): Expire `poa_is_leader` from the last lease renewal plus TTL, and export last produced-block and lease-renewal timestamps.
+- [3355](https://github.com/FuelLabs/fuel-core/pull/3355): Combined PoA failover soak: stop UnreconciledBlocks racing P2P import, stop PoA before P2P on shutdown so the leader's final block propagates, start PoA without waiting on off-chain re-execution, expire `poa_is_leader` with the lease TTL (plus last produced-block / lease-renewal timestamp gauges), and reject stale/gapped PoA heights in the importer before execution so the commit guard is not held for a full block run (DEVOPS-1765).
+- [3357](https://github.com/FuelLabs/fuel-core/pull/3357): Update vulnerable dependencies, including Wasmtime, and document why the Thrift binary-reader advisory does not apply to snapshot readers. Temporarily accept the unresolved crypto-bigint timing advisory while upstream dependencies require unpatched versions; this exception does not remediate the vulnerability.
+
 ## [Version 0.48.3]
 
 ### Added
