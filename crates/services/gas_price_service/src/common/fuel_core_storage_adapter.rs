@@ -27,11 +27,14 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageAsRef,
     StorageInspect,
+    blueprint::BlueprintCodec,
     codec::{
         Encode,
-        postcard::Postcard,
+        Encoder,
     },
     kv_store::KeyValueInspect,
+    structured_storage::TableWithBlueprint,
+    tables::FuelBlocks,
     transactional::{
         Modifiable,
         StorageTransaction,
@@ -56,6 +59,9 @@ use fuel_core_types::{
 
 #[cfg(test)]
 mod metadata_tests;
+
+#[cfg(test)]
+mod block_tests;
 
 pub mod storage;
 
@@ -182,7 +188,7 @@ pub fn get_block_info(
         height: (*block.header().height()).into(),
         gas_used: used_gas,
         block_gas_capacity: block_gas_limit,
-        block_bytes: Postcard::encode(block).len() as u64,
+        block_bytes: block_bytes(block),
         block_fees: fee,
         gas_price,
     };
@@ -200,10 +206,13 @@ pub(crate) fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u6
     Ok((*mint.mint_amount(), *mint.gas_price()))
 }
 
-// TODO: Don't take a direct dependency on `Postcard` as it's not guaranteed to be the encoding format
-// https://github.com/FuelLabs/fuel-core/issues/2443
+type BlockCodec = <<FuelBlocks as TableWithBlueprint>::Blueprint as BlueprintCodec<
+    FuelBlocks,
+>>::ValueCodec;
+
 pub(crate) fn block_bytes(block: &Block<Transaction>) -> u64 {
-    Postcard::encode(block).len() as u64
+    // Use the block table's codec, but account for the full block rather than its compressed form.
+    BlockCodec::encode(block).as_bytes().len() as u64
 }
 
 fn block_used_gas(
