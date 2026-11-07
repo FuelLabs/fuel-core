@@ -223,6 +223,9 @@ impl CombinedDatabase {
             -1 => -1,
             _ => database_config.max_fds.saturating_div(4),
         };
+        let cache_capacity = database_config.cache_capacity.map(|capacity| {
+            capacity.saturating_div(if cfg!(feature = "rpc") { 6 } else { 5 })
+        });
 
         // TODO: Use different cache sizes for different databases
         let on_chain = Database::open_rocksdb(
@@ -230,6 +233,7 @@ impl CombinedDatabase {
             state_rewind_policy,
             DatabaseConfig {
                 max_fds,
+                cache_capacity,
                 ..database_config
             },
         )?;
@@ -238,6 +242,7 @@ impl CombinedDatabase {
             state_rewind_policy,
             DatabaseConfig {
                 max_fds,
+                cache_capacity,
                 ..database_config
             },
         )?;
@@ -246,6 +251,7 @@ impl CombinedDatabase {
             state_rewind_policy,
             DatabaseConfig {
                 max_fds,
+                cache_capacity,
                 ..database_config
             },
         )?;
@@ -254,6 +260,7 @@ impl CombinedDatabase {
             state_rewind_policy,
             DatabaseConfig {
                 max_fds,
+                cache_capacity,
                 ..database_config
             },
         )?;
@@ -262,6 +269,7 @@ impl CombinedDatabase {
             state_rewind_policy,
             DatabaseConfig {
                 max_fds,
+                cache_capacity,
                 ..database_config
             },
         )?;
@@ -271,6 +279,7 @@ impl CombinedDatabase {
             state_rewind_policy,
             DatabaseConfig {
                 max_fds,
+                cache_capacity,
                 ..database_config
             },
         )?;
@@ -912,5 +921,72 @@ mod tests {
         // cleanup
         std::fs::remove_dir_all(db_dir.path()).unwrap();
         std::fs::remove_dir_all(backup_dir.path()).unwrap();
+    }
+
+    fn row_cache_per_database(path: &std::path::Path) -> Vec<String> {
+        std::fs::read_dir(path)
+            .unwrap()
+            .filter_map(|entry| {
+                std::fs::read_to_string(entry.unwrap().path().join("LOG")).ok()
+            })
+            .map(|log| {
+                log.lines()
+                    .find_map(|line| line.split("Options.row_cache:").nth(1))
+                    .unwrap()
+                    .trim()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn open__cache_capacity_configured__splits_capacity_between_databases() {
+        // given
+        let db_dir = TempDir::new().unwrap();
+        let cache_capacity = 90_000_000;
+        let databases = if cfg!(feature = "rpc") { 6 } else { 5 };
+        let config = DatabaseConfig {
+            cache_capacity: Some(cache_capacity),
+            ..DatabaseConfig::config_for_tests()
+        };
+
+        // when
+        let combined_db =
+            CombinedDatabase::open(db_dir.path(), StateRewindPolicy::NoRewind, config)
+                .unwrap();
+        drop(combined_db);
+
+        // then
+        // RocksDB logs the row cache, which is 1/3 of each database's cache capacity.
+        let row_caches = row_cache_per_database(db_dir.path());
+        let share = cache_capacity / databases;
+        assert_eq!(row_caches.len(), databases);
+        assert!(
+            row_caches
+                .iter()
+                .all(|row_cache| *row_cache == (share / 3).to_string())
+        );
+        assert!(share * databases <= cache_capacity);
+    }
+
+    #[test]
+    fn open__cache_capacity_not_configured__databases_have_no_row_cache() {
+        // given
+        let db_dir = TempDir::new().unwrap();
+        let databases = if cfg!(feature = "rpc") { 6 } else { 5 };
+
+        // when
+        let combined_db = CombinedDatabase::open(
+            db_dir.path(),
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        drop(combined_db);
+
+        // then
+        let row_caches = row_cache_per_database(db_dir.path());
+        assert_eq!(row_caches.len(), databases);
+        assert!(row_caches.iter().all(|row_cache| row_cache == "None"));
     }
 }
