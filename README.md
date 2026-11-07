@@ -226,15 +226,19 @@ kubectl create -f deployment/fuel-core.yml
 kubectl delete -f deployment/fuel-core.yml
 ```
 
-## GraphQL service
+## Client APIs
 
-The client functionality is available through a service endpoint that expect GraphQL queries.
+Fuel Core exposes a GraphQL API at `/v1/graphql` for clients that need to query
+node state or submit transactions. The generated schema is available after
+building at `crates/client/assets/schema.sdl`.
 
-### Transaction executor
+For application development, prefer the higher-level Fuel tooling instead of
+hand-crafting GraphQL transaction payloads:
 
-The transaction executor currently performs instant block production. Changes are persisted to RocksDB by default.
-
--   Service endpoint: `/v1/graphql`
--   Schema (available after building): `crates/client/assets/schema.sdl`
-
-The service expects a mutation defined as `submit` that receives a [Transaction](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx) in hex encoded binary format, as [specified here](https://github.com/FuelLabs/fuel-specs/blob/master/src/tx-format/transaction.md).
+-   [Fuel TypeScript SDK](https://docs.fuel.network/docs/fuels-ts/) for
+    building dApps, assembling transactions, and interacting with a Fuel node.
+-   [Fuels CLI](https://docs.fuel.network/docs/fuels-ts/fuels-cli/) for local
+    development workflows such as building, deploying, and running a local Fuel
+    Core node.
+-   [Fuel GraphQL documentation](https://docs.fuel.network/docs/graphql/) for
+    lower-level GraphQL usage.
