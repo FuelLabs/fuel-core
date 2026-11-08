@@ -21,7 +21,7 @@ use fuel_core_types::fuel_types;
 
 pub struct Blob(fuel_types::BlobId);
 
-#[Object]
+#[Object(cache_control(max_age = 60))]
 impl Blob {
     async fn id(&self) -> BlobId {
         self.0.into()
@@ -48,7 +48,10 @@ pub struct BlobQuery;
 
 #[Object]
 impl BlobQuery {
-    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    #[graphql(
+        cache_control(max_age = 60),
+        complexity = "query_costs().storage_read + child_complexity"
+    )]
     async fn blob(
         &self,
         ctx: &Context<'_>,

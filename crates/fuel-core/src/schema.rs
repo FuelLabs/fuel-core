@@ -94,6 +94,7 @@ pub fn build_schema() -> CoreSchemaBuilder {
         Subscription::default(),
         ["TransactionConnection", "MessageConnection"],
     )
+    .extension(crate::graphql_api::extensions::cache_control::CacheControlExtension)
 }
 
 async fn query_pagination<F, Entries, SchemaKey, SchemaValue>(

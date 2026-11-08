@@ -76,6 +76,7 @@ type CoreGenesis = fuel_core_types::blockchain::consensus::Genesis;
 type CoreConsensus = fuel_core_types::blockchain::consensus::Consensus;
 
 #[derive(SimpleObject)]
+#[graphql(cache_control(max_age = 60))]
 pub struct Genesis {
     /// The chain configs define what consensus type to use, what settlement layer to use,
     /// rules of block validity, etc.
@@ -99,7 +100,7 @@ pub enum BlockVersion {
     V1,
 }
 
-#[Object]
+#[Object(cache_control(max_age = 60))]
 impl Block {
     async fn version(&self) -> BlockVersion {
         match self.0 {
@@ -138,7 +139,10 @@ impl Block {
     }
 
     // Assume that in average we have 32 transactions per block.
-    #[graphql(complexity = "query_costs().block_transactions + child_complexity")]
+    #[graphql(
+        cache_control(no_cache),
+        complexity = "query_costs().block_transactions + child_complexity"
+    )]
     async fn transactions(
         &self,
         ctx: &Context<'_>,
@@ -174,7 +178,7 @@ pub enum HeaderVersion {
     V2,
 }
 
-#[Object]
+#[Object(cache_control(max_age = 60))]
 impl Header {
     /// Version of the header
     async fn version(&self) -> HeaderVersion {
@@ -257,7 +261,7 @@ impl Header {
     }
 }
 
-#[Object]
+#[Object(cache_control(max_age = 60))]
 impl PoAConsensus {
     /// Gets the signature of the block produced by `PoA` consensus.
     async fn signature(&self) -> Signature {
@@ -270,7 +274,10 @@ pub struct BlockQuery;
 
 #[Object]
 impl BlockQuery {
-    #[graphql(complexity = "query_costs().block_header + child_complexity")]
+    #[graphql(
+        cache_control(max_age = 60),
+        complexity = "query_costs().block_header + child_complexity"
+    )]
     async fn block(
         &self,
         ctx: &Context<'_>,

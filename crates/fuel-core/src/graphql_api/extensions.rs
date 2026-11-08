@@ -8,6 +8,7 @@ use crate::fuel_core_graphql_api::extensions::{
 };
 use async_graphql::Response;
 
+pub(crate) mod cache_control;
 pub(crate) mod chain_state_info;
 pub(crate) mod metrics;
 pub(crate) mod required_fuel_block_height;
