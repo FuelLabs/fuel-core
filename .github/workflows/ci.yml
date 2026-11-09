@@ -480,11 +480,12 @@ jobs:
           # Unquoted: quoted targets are passed literally to rustup and fail install.
           targets: ${{ matrix.job.target }},wasm32-unknown-unknown
 
+      # Install from GitHub Releases — baptiste0928/cargo-install hits crates.io API
+      # and gets HTTP 403 from Actions runners.
       - name: Install cross
-        uses: baptiste0928/cargo-install@v1
+        uses: taiki-e/install-action@v2
         with:
-          crate: cross
-          cache-key: "${{ matrix.job.target }}"
+          tool: cross
 
       - name: Build fuel-core and fuel-core-keygen
         run: |
