@@ -68,7 +68,7 @@ where
         let largest_column_idx = all::<Description::Column>()
             .map(|column| column.as_usize())
             .max()
-            .expect("there should be atleast 1 column in the storage");
+            .expect("there should be at least 1 column in the storage");
 
         Self {
             inner: (0..=largest_column_idx)
