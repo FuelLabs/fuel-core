@@ -28,11 +28,11 @@ impl Blob {
     }
 
     #[graphql(complexity = "query_costs().bytecode_read")]
-    async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
+    async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString<'_>> {
         let query = ctx.read_view()?;
         query
             .blob_bytecode(self.0)
-            .map(HexString)
+            .map(|bytes| HexString(bytes.into()))
             .map_err(async_graphql::Error::from)
     }
 }
