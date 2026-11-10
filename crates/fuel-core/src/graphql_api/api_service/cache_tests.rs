@@ -11,9 +11,20 @@ use crate::{
         FuelService,
     },
 };
-use fuel_core_types::fuel_types::{
-    BlobId,
-    ContractId,
+use fuel_core_storage::{
+    StorageAsRef,
+    tables::Transactions,
+};
+use fuel_core_types::{
+    fuel_tx::{
+        Transaction,
+        UniqueIdentifier,
+    },
+    fuel_types::{
+        BlobId,
+        ContractId,
+        canonical::Serialize,
+    },
 };
 use tokio::io::{
     AsyncReadExt,
@@ -105,7 +116,6 @@ async fn cache_control_http_historical_and_mutable_queries() {
             "{ block(height: \"0\") { id } health }",
             "{ __typename block(height: \"0\") { __typename id } health }",
             "{ block(height: \"0\") { __typename id } __schema { queryType { name } } }",
-            "{ block(height: \"0\") { transactions { id } } }",
             "{ block(height: \"999\") { id } }",
             "{ block { id } }",
             "{ block(height: \"0\") { id } chain { latestBlock { height } } }",
@@ -174,6 +184,145 @@ async fn cache_control_http_historical_and_mutable_queries() {
         assert!(headers.contains("cache-control: no-store"), "{headers}");
         assert!(body.get("errors").is_some(), "{body}");
     }
+    service.send_stop_signal_and_await_shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn cache_control_http_committed_transaction_payloads() {
+    let mut config = NodeConfig::local_node();
+    config.block_production = fuel_core_poa::Trigger::Never;
+    let chain_id = config.chain_id();
+    let database = Database::default();
+    let service = FuelService::from_database(database.clone(), config)
+        .await
+        .unwrap();
+    let address = service.bound_address;
+
+    let transaction = Transaction::default_test_tx();
+    let tx_id = transaction.id(&chain_id);
+    let pending_payload =
+        crate::schema::scalars::HexString(transaction.to_bytes()).to_string();
+    let by_id = format!("{{ transaction(id: \"{tx_id:#x}\") {{ id rawPayload }} }}");
+    let (headers, body) = request(
+        address,
+        "POST",
+        json!({
+            "query": format!("mutation {{ submit(tx: \"{pending_payload}\") {{ id }} }}"),
+        }),
+    )
+    .await;
+    assert!(body.get("errors").is_none(), "{body}");
+    assert_eq!(body["data"]["submit"]["id"], format!("{tx_id:#x}"));
+    assert!(headers.contains("cache-control: no-store"), "{headers}");
+
+    // A pool transaction's execution fields can still change under the same ID.
+    for method in ["GET", "POST"] {
+        let (headers, body) = request(address, method, json!({"query": by_id})).await;
+        assert!(body.get("errors").is_none(), "{body}");
+        assert!(headers.contains("cache-control: no-store"), "{headers}");
+        assert_eq!(body["data"]["transaction"]["rawPayload"], pending_payload);
+    }
+
+    let (_, body) = request(
+        address,
+        "POST",
+        json!({
+            "query": "mutation { produceBlocks(blocksToProduce: \"1\") }",
+        }),
+    )
+    .await;
+    assert!(body.get("errors").is_none(), "{body}");
+    assert_eq!(body["data"]["produceBlocks"], "1");
+
+    let stored = database
+        .storage::<Transactions>()
+        .get(&tx_id)
+        .unwrap()
+        .unwrap()
+        .into_owned();
+    assert_eq!(stored.id(&chain_id), tx_id);
+    let committed_payload =
+        crate::schema::scalars::HexString(stored.to_bytes()).to_string();
+    assert_ne!(pending_payload, committed_payload);
+
+    for method in ["GET", "POST"] {
+        let (headers, body) = request(address, method, json!({
+            "query": "query Payloads($height: U32!) { block(height: $height) { transactionIds transactions { ...Payload } } } fragment Payload on Transaction { __typename id rawPayload }",
+            "operationName": "Payloads",
+            "variables": {"height": "1"},
+        })).await;
+        assert!(body.get("errors").is_none(), "{body}");
+        assert!(
+            headers.contains("cache-control: public, max-age=60, must-revalidate"),
+            "{headers} {body}"
+        );
+        let block = &body["data"]["block"];
+        let ids = block["transactionIds"].as_array().unwrap();
+        let transactions = block["transactions"].as_array().unwrap();
+        assert!(!transactions.is_empty());
+        assert_eq!(transactions.len(), ids.len());
+        for (transaction, id) in transactions.iter().zip(ids) {
+            assert_eq!(transaction["__typename"], "Transaction");
+            assert_eq!(&transaction["id"], id);
+            let id = id.as_str().unwrap().parse().unwrap();
+            let stored = database
+                .storage::<Transactions>()
+                .get(&id)
+                .unwrap()
+                .unwrap()
+                .into_owned();
+            assert_eq!(
+                transaction["rawPayload"],
+                crate::schema::scalars::HexString(stored.to_bytes()).to_string()
+            );
+        }
+
+        // Direct lookups keep their conservative policy even after commitment.
+        let (headers, body) = request(address, method, json!({"query": by_id})).await;
+        assert!(body.get("errors").is_none(), "{body}");
+        assert!(headers.contains("cache-control: no-store"), "{headers}");
+        assert_eq!(body["data"]["transaction"]["rawPayload"], committed_payload);
+
+        for query in [
+            "{ block(height: \"1\") { transactions { id rawPayload status { __typename } } } }",
+            "{ block(height: \"1\") { transactions { id rawPayload inputAssetIds } } }",
+            "{ block(height: \"1\") { transactions { id rawPayload policies { tip } } } }",
+            "{ block(height: \"1\") { transactions { id rawPayload } } health }",
+            "{ transactions(first: 1) { edges { node { id rawPayload } } } }",
+        ] {
+            let (headers, body) = request(address, method, json!({"query": query})).await;
+            assert!(body.get("errors").is_none(), "{query}: {body}");
+            assert!(
+                headers.contains("cache-control: no-store"),
+                "{query}: {headers}"
+            );
+        }
+
+        let (headers, body) = request(
+            address,
+            method,
+            json!({
+                "query": "{ block(height: \"999\") { transactions { id rawPayload } } }",
+            }),
+        )
+        .await;
+        assert!(body.get("errors").is_none(), "{body}");
+        assert!(body["data"]["block"].is_null());
+        assert!(headers.contains("cache-control: no-store"), "{headers}");
+
+        let (headers, body) = request(
+            address,
+            method,
+            json!({
+                "query": "{ block(height: \"1\") { transactions { id rawPayload } } }",
+                "extensions": {"required_fuel_block_height": 1},
+            }),
+        )
+        .await;
+        assert!(body.get("errors").is_none(), "{body}");
+        assert!(headers.contains("cache-control: no-store"), "{headers}");
+    }
+
     service.send_stop_signal_and_await_shutdown().await.unwrap();
 }
 

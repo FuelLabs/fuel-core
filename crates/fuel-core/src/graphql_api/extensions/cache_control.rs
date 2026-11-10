@@ -1,4 +1,5 @@
 use async_graphql::{
+    QueryPathSegment,
     Request,
     Response,
     ServerResult,
@@ -73,6 +74,11 @@ impl Extension for CacheControlInner {
         info: ResolveInfo<'_>,
         next: NextResolve<'_>,
     ) -> ServerResult<Option<Value>> {
+        // List elements are traversal events, not additional schema fields.
+        // Their enclosing field and any child fields still need a cache policy.
+        if matches!(info.path_node.segment, QueryPathSegment::Index(_)) {
+            return next.run(ctx, info).await;
+        }
         // async-graphql resolves __typename before invoking resolve extensions,
         // including on unions, so it does not need a registry cache policy here.
         let eligible = match ctx.schema_env.registry.types.get(info.parent_type) {
@@ -161,6 +167,20 @@ mod tests {
         async fn mutable(&self) -> u32 {
             5
         }
+
+        #[graphql(cache_control(max_age = 60))]
+        async fn ids(&self, empty: bool) -> Vec<u32> {
+            if empty { vec![] } else { vec![1] }
+        }
+
+        #[graphql(cache_control(max_age = 60))]
+        async fn historical_list(&self) -> Vec<Historical> {
+            vec![Historical]
+        }
+
+        async fn mutable_list(&self) -> Vec<Historical> {
+            vec![Historical]
+        }
     }
 
     #[tokio::test]
@@ -171,6 +191,14 @@ mod tests {
 
         for (query, age) in [
             ("{ historical { value optional } }", 60),
+            ("{ ids(empty: true) }", 60),
+            ("{ ids(empty: false) }", 60),
+            ("{ historicalList { value } }", 60),
+            ("{ alias: historicalList { __typename value } }", 60),
+            ("{ historicalList { nested { value } } }", -1),
+            ("{ historicalList { live } }", -1),
+            ("{ historicalList { failed } }", -1),
+            ("{ mutableList { value } }", -1),
             ("{ __typename historical { __typename value } }", 60),
             ("{ historical { value } mutable }", -1),
             ("{ __typename historical { __typename value } mutable }", -1),
@@ -190,9 +218,14 @@ mod tests {
             assert_eq!(response.cache_control.max_age, age, "{query}");
         }
 
-        let private = schema.execute("{ historical { value private } }").await;
-        assert_eq!(private.cache_control.max_age, 30);
-        assert!(!private.cache_control.public);
+        for query in [
+            "{ historical { value private } }",
+            "{ historicalList { value private } }",
+        ] {
+            let private = schema.execute(query).await;
+            assert_eq!(private.cache_control.max_age, 30);
+            assert!(!private.cache_control.public);
+        }
 
         let mut request = Request::new("{ historical { value } }");
         request

@@ -139,10 +139,7 @@ impl Block {
     }
 
     // Assume that in average we have 32 transactions per block.
-    #[graphql(
-        cache_control(no_cache),
-        complexity = "query_costs().block_transactions + child_complexity"
-    )]
+    #[graphql(complexity = "query_costs().block_transactions + child_complexity")]
     async fn transactions(
         &self,
         ctx: &Context<'_>,
