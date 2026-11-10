@@ -73,6 +73,8 @@ impl Extension for CacheControlInner {
         info: ResolveInfo<'_>,
         next: NextResolve<'_>,
     ) -> ServerResult<Option<Value>> {
+        // async-graphql resolves __typename before invoking resolve extensions,
+        // including on unions, so it does not need a registry cache policy here.
         let eligible = match ctx.schema_env.registry.types.get(info.parent_type) {
             Some(MetaType::Object {
                 fields,
@@ -169,7 +171,13 @@ mod tests {
 
         for (query, age) in [
             ("{ historical { value optional } }", 60),
+            ("{ __typename historical { __typename value } }", 60),
             ("{ historical { value } mutable }", -1),
+            ("{ __typename historical { __typename value } mutable }", -1),
+            (
+                "{ historical { value } __schema { queryType { name } } }",
+                -1,
+            ),
             ("{ historical { nested { value } } }", -1),
             ("{ historical { live } }", -1),
             ("{ historical(exists: false) { value } }", -1),

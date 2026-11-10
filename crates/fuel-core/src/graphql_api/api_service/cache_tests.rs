@@ -78,18 +78,33 @@ async fn cache_control_http_historical_and_mutable_queries() {
 
     for method in ["GET", "POST"] {
         for query in [
-            "{ block(height: \"0\") { id header { height txIdCommitment } consensus { __typename ... on Genesis { chainConfigHash } } transactionIds } }".to_string(),
-            format!("{{ blob(id: \"{blob_id:#x}\") {{ id bytecode }} }}"),
-            format!("{{ contract(id: \"{contract_id:#x}\") {{ id bytecode }} }}"),
+            "{ __typename queryType: __typename block(height: \"0\") { __typename objectType: __typename id header { __typename height txIdCommitment } consensus { __typename unionType: __typename ... on Genesis { __typename chainConfigHash } } transactionIds } }".to_string(),
+            format!("{{ __typename queryType: __typename blob(id: \"{blob_id:#x}\") {{ __typename id bytecode }} }}"),
+            format!("{{ __typename queryType: __typename contract(id: \"{contract_id:#x}\") {{ __typename id bytecode }} }}"),
         ] {
             let (headers, body) = request(address, method, json!({"query": query})).await;
             assert!(headers.starts_with("http/1.1 200"), "{headers}");
             assert!(headers.contains("cache-control: public, max-age=60, must-revalidate"), "{query}: {headers} {body}");
             assert!(body.get("errors").is_none(), "{body}");
+            assert_eq!(body["data"]["__typename"], "Query");
+            assert_eq!(body["data"]["queryType"], "Query");
+            if let Some(block) = body["data"].get("block") {
+                assert_eq!(block["__typename"], "Block");
+                assert_eq!(block["objectType"], "Block");
+                assert_eq!(block["header"]["__typename"], "Header");
+                assert_eq!(block["consensus"]["__typename"], "Genesis");
+                assert_eq!(block["consensus"]["unionType"], "Genesis");
+            } else if let Some(blob) = body["data"].get("blob") {
+                assert_eq!(blob["__typename"], "Blob");
+            } else {
+                assert_eq!(body["data"]["contract"]["__typename"], "Contract");
+            }
             assert!(body["extensions"]["current_fuel_block_height"].is_string() || body["extensions"]["current_fuel_block_height"].is_number(), "{body}");
         }
         for query in [
             "{ block(height: \"0\") { id } health }",
+            "{ __typename block(height: \"0\") { __typename id } health }",
+            "{ block(height: \"0\") { __typename id } __schema { queryType { name } } }",
             "{ block(height: \"0\") { transactions { id } } }",
             "{ block(height: \"999\") { id } }",
             "{ block { id } }",
