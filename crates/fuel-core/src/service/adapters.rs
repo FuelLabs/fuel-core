@@ -462,10 +462,6 @@ pub struct BlockProducerAdapter {
 
 #[derive(Clone)]
 pub struct BlockImporterAdapter {
-    #[cfg(feature = "relayer")]
-    pub fcr_relayer: Arc<std::sync::OnceLock<MaybeRelayerAdapter>>,
-    #[cfg(feature = "relayer")]
-    pub fcr_verifier: VerifierAdapter,
     pub block_importer: Arc<fuel_core_importer::Importer>,
     pub database: Database,
 }

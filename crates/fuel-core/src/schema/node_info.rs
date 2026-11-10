@@ -35,22 +35,6 @@ pub struct NodeInfo {
 
 #[Object]
 impl NodeInfo {
-    /// Public read-only Ethereum finality status; contains no endpoints or journal data.
-    async fn ethereum_finality(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Json<serde_json::Value> {
-        #[cfg(feature = "relayer")]
-        if let Some(relayer) = ctx.data_opt::<fuel_core_relayer::SharedState>() {
-            return async_graphql::Json(
-                serde_json::to_value(relayer.fcr_status())
-                    .unwrap_or(serde_json::Value::Null),
-            );
-        }
-        let _ = ctx;
-        async_graphql::Json(serde_json::json!({"enabled":false}))
-    }
-
     async fn utxo_validation(&self) -> bool {
         self.utxo_validation
     }

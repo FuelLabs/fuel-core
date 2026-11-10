@@ -28,29 +28,6 @@ impl Transactional for Database<Relayer> {
         self.into_transaction()
     }
 
-    fn fcr_evidence(
-        &self,
-        height: &DaBlockHeight,
-    ) -> StorageResult<Option<fuel_core_relayer::fcr::BlockEvidence>> {
-        Ok(self
-            .latest_view()?
-            .storage_as_ref::<fuel_core_relayer::storage::EthereumEvidence>()
-            .get(height)?
-            .map(|value| value.into_owned()))
-    }
-
-    fn fcr_activated(&self) -> StorageResult<bool> {
-        use crate::database::metadata::MetadataTable;
-        Ok(self
-            .storage_as_ref::<MetadataTable<Relayer>>()
-            .get(&())?
-            .is_some_and(|value| value.version() == 1))
-    }
-
-    fn activate_fcr(&mut self, anchor: DaBlockHeight) -> StorageResult<()> {
-        self.activate_fcr_metadata(anchor)
-    }
-
     fn latest_da_height(&self) -> Option<DaBlockHeight> {
         HistoricalView::latest_height(self)
     }

@@ -131,10 +131,6 @@ impl Clone for RedisNode {
 }
 
 pub struct RedisLeaderLeaseAdapter {
-    #[cfg(feature = "relayer")]
-    fcr_latch: Option<fuel_core_relayer::fcr::IncidentLatch>,
-    #[cfg(feature = "relayer")]
-    fcr_shared: Option<fuel_core_relayer::SharedState>,
     redis_nodes: Vec<RedisNode>,
     quorum: usize,
     quorum_disruption_budget: u32,
@@ -185,10 +181,6 @@ enum PromoteOutcome {
 /// don't need a clone of the full adapter — covers publish, lease-owner
 /// check, lease promotion, and stream reads.
 struct PerNodeAdapter {
-    #[cfg(feature = "relayer")]
-    fcr_latch: Option<fuel_core_relayer::fcr::IncidentLatch>,
-    #[cfg(feature = "relayer")]
-    fcr_shared: Option<fuel_core_relayer::SharedState>,
     redis_node: RedisNode,
     lease_key: String,
     epoch_key: String,
@@ -262,10 +254,6 @@ impl RedisLeaderLeaseAdapter {
             .unwrap_or(0)
             .saturating_add(2);
         Ok(Self {
-            #[cfg(feature = "relayer")]
-            fcr_latch: None,
-            #[cfg(feature = "relayer")]
-            fcr_shared: None,
             redis_nodes,
             quorum,
             quorum_disruption_budget,
@@ -308,10 +296,6 @@ impl RedisLeaderLeaseAdapter {
             .get(idx)
             .cloned()
             .map(|redis_node| PerNodeAdapter {
-                #[cfg(feature = "relayer")]
-                fcr_latch: self.fcr_latch.clone(),
-                #[cfg(feature = "relayer")]
-                fcr_shared: self.fcr_shared.clone(),
                 redis_node,
                 lease_key: self.lease_key.clone(),
                 epoch_key: self.epoch_key.clone(),
@@ -1089,15 +1073,6 @@ impl RedisLeaderLeaseAdapter {
     }
 
     async fn can_produce_block(&self) -> anyhow::Result<bool> {
-        #[cfg(feature = "relayer")]
-        if self
-            .fcr_shared
-            .as_ref()
-            .is_some_and(|shared| shared.ensure_production_allowed().is_err())
-        {
-            self.release_if_owner().await?;
-            return Ok(false);
-        }
         tracing::debug!("Checking Redis leader lock");
         if self.has_lease_owner_quorum().await? {
             tracing::debug!(
@@ -1337,10 +1312,6 @@ impl PerNodeAdapter {
             self.node_timeout,
         )
         .await?;
-        #[cfg(feature = "relayer")]
-        if let Some(shared) = &self.fcr_shared {
-            shared.ensure_production_allowed()?;
-        }
         let block_height = u32::from(*block.entity.header().height());
         let lua_start = std::time::Instant::now();
         let write_result = tokio::time::timeout(
@@ -1366,16 +1337,6 @@ impl PerNodeAdapter {
             Ok(Ok(_)) => {
                 poa_metrics().write_block_success_total.inc();
                 Ok(WriteBlockResult::Written)
-            }
-            Ok(Err(err)) if err.to_string().contains("FCR_HALT:") => {
-                #[cfg(feature = "relayer")]
-                if let Some(latch) = &self.fcr_latch {
-                    let text = err.to_string();
-                    latch.declare(
-                        text.split("FCR_HALT:").nth(1).unwrap_or("peer-halt").trim(),
-                    )?;
-                }
-                Ok(WriteBlockResult::FencingRejected)
             }
             Ok(Err(err)) if err.to_string().contains("HEIGHT_EXISTS:") => {
                 poa_metrics().write_block_height_exists_total.inc();
@@ -1447,14 +1408,6 @@ impl PerNodeAdapter {
             Ok(connection) => connection,
             Err(_) => return PromoteOutcome::Unavailable,
         };
-        #[cfg(feature = "relayer")]
-        if self
-            .fcr_shared
-            .as_ref()
-            .is_some_and(|shared| shared.ensure_production_allowed().is_err())
-        {
-            return PromoteOutcome::Unavailable;
-        }
         let promoted = timeout(
             self.node_timeout,
             redis::Script::new(PROMOTE_LEADER_SCRIPT)
@@ -1465,16 +1418,6 @@ impl PerNodeAdapter {
                 .invoke_async::<u64>(&mut connection),
         )
         .await;
-        #[cfg(feature = "relayer")]
-        if let Ok(Err(error)) = &promoted {
-            let text = error.to_string();
-            if let (Some(latch), Some(incident)) =
-                (&self.fcr_latch, text.split("FCR_HALT:").nth(1))
-                && let Err(error) = latch.declare(incident.trim())
-            {
-                tracing::error!("Cannot persist peer FCR halt: {error}");
-            }
-        }
         match promoted {
             Ok(Ok(token)) => PromoteOutcome::Acquired(token),
             Ok(Err(err)) => {
@@ -1609,20 +1552,6 @@ impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
         &self,
         next_height: BlockHeight,
     ) -> anyhow::Result<LeaderState> {
-        #[cfg(feature = "relayer")]
-        if self
-            .fcr_shared
-            .as_ref()
-            .is_some_and(|shared| shared.ensure_production_allowed().is_err())
-        {
-            self.release_if_owner().await?;
-            let blocks = self.unreconciled_blocks(next_height).await?;
-            return Ok(if blocks.is_empty() {
-                LeaderState::ReconciledFollower
-            } else {
-                LeaderState::UnreconciledBlocks(blocks)
-            });
-        }
         if self.can_produce_block().await? {
             // Acquisition and quorum writes record the renewal. An
             // ownership check does not extend Redis TTL, so the gauge
@@ -1692,10 +1621,6 @@ impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
     }
 
     async fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
-        #[cfg(feature = "relayer")]
-        if let Some(shared) = &self.fcr_shared {
-            shared.ensure_production_allowed()?;
-        }
         let epoch = match *self
             .current_epoch_token
             .lock()
@@ -4014,120 +3939,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "relayer")]
-    #[tokio::test(flavor = "multi_thread")]
-    async fn fcr_positive_quorum_fence_blocks_publication_and_promotion() {
-        let _serial = publish_gauge_lock().read().await;
-        let a = RedisTestServer::spawn();
-        let b = RedisTestServer::spawn();
-        let c = RedisTestServer::spawn();
-        let urls = vec![a.redis_url(), b.redis_url(), c.redis_url()];
-        let key = "poa:test:fcr-positive-fence".to_string();
-        let mut producer = new_test_adapter(urls.clone(), key.clone());
-        let directory = tempfile::tempdir().unwrap();
-        producer.enable_fcr(&directory.path().join("state.json"));
-        let reporter = producer.fcr_reporter();
-        assert!(producer.can_produce_block().await.unwrap());
-        reporter.report("canonical:test").await.unwrap();
-        assert_eq!(
-            reporter.observed().await.unwrap().as_deref(),
-            Some("canonical:test")
-        );
-        assert!(
-            producer
-                .publish_produced_block(&poa_block_at_time(1, 10))
-                .await
-                .is_err()
-        );
-        assert!(
-            fuel_core_relayer::fcr::IncidentLatch::new(
-                &directory.path().join("state.json")
-            )
-            .read()
-            .unwrap()
-            .is_some()
-        );
-        producer.release().await.unwrap();
-        let mut standby = new_test_adapter(urls, key.clone());
-        let standby_path = directory.path().join("standby.json");
-        standby.enable_fcr(&standby_path);
-        assert!(!standby.can_produce_block().await.unwrap());
-        assert!(
-            fuel_core_relayer::fcr::IncidentLatch::new(&standby_path)
-                .read()
-                .unwrap()
-                .is_some(),
-            "a non-detecting authority copies the positive Redis signal durably"
-        );
-        for server in [&a, &b, &c] {
-            let mut connection = redis::Client::open(server.redis_url())
-                .unwrap()
-                .get_connection()
-                .unwrap();
-            let length: u64 = redis::cmd("XLEN")
-                .arg(format!("{key}:block:stream"))
-                .query(&mut connection)
-                .unwrap();
-            assert_eq!(length, 0, "halt must reject before stream/index mutations");
-        }
-    }
-
-    #[cfg(feature = "relayer")]
-    #[tokio::test(flavor = "multi_thread")]
-    async fn fcr_import_hold_blocks_the_real_producer_promotion_and_publication_paths() {
-        let _serial = publish_gauge_lock().read().await;
-        let a = RedisTestServer::spawn();
-        let b = RedisTestServer::spawn();
-        let c = RedisTestServer::spawn();
-        let key = "poa:test:fcr-import-hold".to_string();
-        let mut adapter =
-            new_test_adapter(vec![a.redis_url(), b.redis_url(), c.redis_url()], key);
-        let service = fuel_core_relayer::new_service(
-            crate::database::Database::<
-                crate::database::database_description::relayer::Relayer,
-            >::default(),
-            fuel_core_relayer::Config {
-                relayer: Some(vec!["http://127.0.0.1:1".parse().unwrap()]),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let shared = service.shared.clone();
-        adapter.set_fcr_shared(shared.clone());
-        assert!(adapter.can_produce_block().await.unwrap());
-        shared.set_import_held(true);
-        assert!(!adapter.can_produce_block().await.unwrap());
-        assert!(
-            adapter
-                .publish_produced_block(&poa_block_at_time(1, 10))
-                .await
-                .is_err()
-        );
-        let relayer = crate::service::adapters::MaybeRelayerAdapter {
-            relayer_synced: Some(shared.clone()),
-            relayer_database: crate::database::Database::default(),
-            da_deploy_height: 0u64.into(),
-        };
-        assert!(
-            fuel_core_producer::ports::Relayer::wait_for_at_least_height(
-                &relayer,
-                &0u64.into()
-            )
-            .await
-            .is_err()
-        );
-        shared.set_import_held(false);
-        assert!(adapter.can_produce_block().await.unwrap());
-        assert!(
-            fuel_core_producer::ports::Relayer::wait_for_at_least_height(
-                &relayer,
-                &0u64.into()
-            )
-            .await
-            .is_ok()
-        );
-    }
-
     struct RedisTestServer {
         child: Option<Child>,
         port: u16,
@@ -5188,117 +4999,5 @@ mod tests {
             1,
             "Repair failure should not make backlog unreadable on the next round"
         );
-    }
-}
-
-#[cfg(feature = "relayer")]
-impl RedisLeaderLeaseAdapter {
-    pub(crate) fn set_fcr_shared(&mut self, shared: fuel_core_relayer::SharedState) {
-        self.fcr_shared = Some(shared);
-    }
-
-    pub(crate) fn enable_fcr(&mut self, state_path: &std::path::Path) {
-        self.fcr_latch = Some(fuel_core_relayer::fcr::IncidentLatch::new(state_path));
-    }
-
-    pub(crate) fn fcr_reporter(
-        &self,
-    ) -> std::sync::Arc<dyn fuel_core_relayer::fcr::HaltReporter> {
-        std::sync::Arc::new(FcrReporter {
-            redis_nodes: self.redis_nodes.clone(),
-            lease_key: self.lease_key.clone(),
-            node_timeout: self.node_timeout,
-            quorum: self.quorum,
-        })
-    }
-}
-
-#[cfg(feature = "relayer")]
-struct FcrReporter {
-    redis_nodes: Vec<RedisNode>,
-    lease_key: String,
-    node_timeout: Duration,
-    quorum: usize,
-}
-
-#[cfg(feature = "relayer")]
-impl std::fmt::Debug for FcrReporter {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("FcrRedisReporter")
-    }
-}
-
-#[cfg(feature = "relayer")]
-impl fuel_core_relayer::fcr::HaltReporter for FcrReporter {
-    fn observed(&self) -> futures::future::BoxFuture<'_, anyhow::Result<Option<String>>> {
-        Box::pin(async move {
-            let key = format!("{}:fcr:halt", self.lease_key);
-            let mut reachable = false;
-            for node in &self.redis_nodes {
-                let Ok(mut connection) =
-                    RedisLeaderLeaseAdapter::multiplexed_connection_for(
-                        node,
-                        self.node_timeout,
-                    )
-                    .await
-                else {
-                    continue;
-                };
-                if let Ok(Ok(value)) = timeout(
-                    self.node_timeout,
-                    redis::cmd("GET")
-                        .arg(&key)
-                        .query_async::<Option<String>>(&mut connection),
-                )
-                .await
-                {
-                    reachable = true;
-                    if let Some(incident) = value {
-                        return Ok(Some(incident));
-                    }
-                }
-            }
-            anyhow::ensure!(reachable, "Cannot read any authority fence node");
-            Ok(None)
-        })
-    }
-
-    fn report<'a>(
-        &'a self,
-        incident: &'a str,
-    ) -> futures::future::BoxFuture<'a, anyhow::Result<()>> {
-        Box::pin(async move {
-            let key = format!("{}:fcr:halt", self.lease_key);
-            let mut fenced = 0usize;
-            for node in &self.redis_nodes {
-                let Ok(mut connection) =
-                    RedisLeaderLeaseAdapter::multiplexed_connection_for(
-                        node,
-                        self.node_timeout,
-                    )
-                    .await
-                else {
-                    continue;
-                };
-                // Never overwrite or expire an earlier incident.
-                let result = timeout(
-                    self.node_timeout,
-                    redis::cmd("SET")
-                        .arg(&key)
-                        .arg(incident)
-                        .arg("NX")
-                        .query_async::<Option<String>>(&mut connection),
-                )
-                .await;
-                if matches!(result, Ok(Ok(_))) {
-                    fenced = fenced.saturating_add(1);
-                }
-            }
-            anyhow::ensure!(
-                fenced >= self.quorum,
-                "FCR halt has not reached the production quorum"
-            );
-            Ok(())
-        })
     }
 }

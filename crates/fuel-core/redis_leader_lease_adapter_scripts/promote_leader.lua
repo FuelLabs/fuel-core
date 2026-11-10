@@ -5,12 +5,6 @@
 -- ARGV[2]: lease TTL in milliseconds
 --
 -- Returns: new epoch token on success, error if lock is held.
--- Check the same positive fence used by block publication.
-local halt = redis.call("GET", KEYS[1] .. ":fcr:halt")
-if halt then
-    return redis.error_reply("FCR_HALT: " .. halt)
-end
-
 local acquired = redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[2], "NX")
 if not acquired then
     return redis.error_reply("LOCK_HELD: Another leader holds the lock")

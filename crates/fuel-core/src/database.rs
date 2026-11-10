@@ -624,32 +624,20 @@ where
     match maybe_current_metadata.as_ref() {
         Some(metadata) => match metadata.as_ref() {
             DatabaseMetadata::V1 { .. } => DatabaseMetadata::V1 {
-                version: Description::version_for_update(
-                    maybe_current_metadata
-                        .as_ref()
-                        .map(|metadata| metadata.version()),
-                ),
+                version: Description::version(),
                 height: new_height,
             },
             DatabaseMetadata::V2 {
                 indexation_availability,
                 ..
             } => DatabaseMetadata::V2 {
-                version: Description::version_for_update(
-                    maybe_current_metadata
-                        .as_ref()
-                        .map(|metadata| metadata.version()),
-                ),
+                version: Description::version(),
                 height: new_height,
                 indexation_availability: indexation_availability.clone(),
             },
         },
         None => DatabaseMetadata::V2 {
-            version: Description::version_for_update(
-                maybe_current_metadata
-                    .as_ref()
-                    .map(|metadata| metadata.version()),
-            ),
+            version: Description::version(),
             height: new_height,
             indexation_availability: indexation_availability::<Description>(None),
         },
@@ -1238,16 +1226,7 @@ mod tests {
             update_metadata,
         };
 
-        #[derive(
-            Debug,
-            Copy,
-            Clone,
-            Default,
-            PartialEq,
-            Eq,
-            serde::Serialize,
-            serde::Deserialize,
-        )]
+        #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
         struct HeightMock(u64);
         impl DatabaseHeight for HeightMock {
             fn as_u64(&self) -> u64 {
@@ -1370,111 +1349,5 @@ mod tests {
                 }
             }
         }
-    }
-}
-
-#[cfg(feature = "relayer")]
-impl Database<Relayer> {
-    pub(crate) fn activate_fcr_metadata(
-        &mut self,
-        anchor: fuel_core_types::blockchain::primitives::DaBlockHeight,
-    ) -> StorageResult<()> {
-        use database_description::DatabaseMetadata;
-        use fuel_core_storage::{
-            StorageAsMut,
-            StorageAsRef,
-            transactional::IntoTransaction,
-        };
-        let existing = self
-            .storage_as_ref::<MetadataTable<Relayer>>()
-            .get(&())?
-            .map(|value| value.into_owned());
-        if existing.as_ref().is_some_and(|value| value.version() == 1) {
-            return Ok(());
-        }
-        let mut metadata = existing.unwrap_or(DatabaseMetadata::V2 {
-            version: 0,
-            height: anchor,
-            indexation_availability: Default::default(),
-        });
-        match &mut metadata {
-            DatabaseMetadata::V1 { version, .. }
-            | DatabaseMetadata::V2 { version, .. } => *version = 1,
-        }
-        let genesis = GenesisDatabase::<Relayer>::new(self.inner_storage().data.clone());
-        let mut tx = genesis.into_transaction();
-        tx.storage_as_mut::<MetadataTable<Relayer>>()
-            .insert(&(), &metadata)?;
-        tx.commit()?;
-        *self.inner_storage().stage.height.lock() = Some(*metadata.height());
-        Ok(())
-    }
-}
-
-#[cfg(all(test, feature = "relayer", feature = "rocksdb"))]
-mod fcr_tests {
-    use super::*;
-    use fuel_core_relayer::{
-        fcr::{
-            BlockEvidence,
-            Header,
-        },
-        ports::{
-            RelayerDb,
-            Transactional,
-        },
-    };
-    use fuel_core_storage::StorageAsRef;
-
-    #[test]
-    fn fcr_activation_evidence_and_rollback_preserve_the_one_way_marker() {
-        let mut database = Database::<Relayer>::rocksdb_temp(
-            crate::state::historical_rocksdb::StateRewindPolicy::RewindFullRange,
-            crate::state::rocks_db::DatabaseConfig {
-                cache_capacity: None,
-                max_fds: 128,
-                columns_policy: crate::state::rocks_db::ColumnsPolicy::Lazy,
-            },
-        )
-        .unwrap();
-        // Start from an ordinary finalized-only history, then activate without advancing.
-        database.insert_events(&8u64.into(), &[]).unwrap();
-        database.activate_fcr_metadata(8u64.into()).unwrap();
-        assert_eq!(
-            Transactional::latest_da_height(&database),
-            Some(8u64.into())
-        );
-        let evidence = BlockEvidence {
-            header: Some(Header {
-                number: 9,
-                hash: Default::default(),
-                parent_hash: None,
-            }),
-            logs_digest: Default::default(),
-            early: true,
-            admitted_at: 0,
-        };
-        database
-            .insert_fcr_events(&9u64.into(), &[], &evidence)
-            .unwrap();
-        assert_eq!(
-            RelayerDb::fcr_evidence(&database, &9u64.into()).unwrap(),
-            Some(evidence)
-        );
-        database.rollback_last_block().unwrap();
-        assert_eq!(
-            Transactional::latest_da_height(&database),
-            Some(8u64.into())
-        );
-        assert!(Transactional::fcr_activated(&database).unwrap());
-        // Commit after rollback: ordinary metadata updates must also preserve version 1.
-        database.insert_events(&9u64.into(), &[]).unwrap();
-        assert!(Transactional::fcr_activated(&database).unwrap());
-        let metadata = database
-            .storage_as_ref::<MetadataTable<Relayer>>()
-            .get(&())
-            .unwrap()
-            .unwrap();
-        assert_eq!(metadata.version(), 1);
     }
 }

@@ -9,12 +9,6 @@
 -- ARGV[4]: block_data
 -- ARGV[5]: lease_ttl_ms
 -- ARGV[6]: stream_max_len
--- Check the nonexpiring positive incident fence before any mutation.
-local halt = redis.call("GET", KEYS[3] .. ":fcr:halt")
-if halt then
-    return redis.error_reply("FCR_HALT: " .. halt)
-end
-
 local current_token = tonumber(redis.call("GET", KEYS[2]) or "0")
 local current_leader = redis.call("GET", KEYS[3])
 

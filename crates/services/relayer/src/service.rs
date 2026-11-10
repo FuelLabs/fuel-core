@@ -81,8 +81,6 @@ type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 pub struct SharedState {
     /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
-    fcr_status: watch::Receiver<crate::fcr::Status>,
-    import_held: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Not initialized version of the [`Task`].
@@ -97,8 +95,6 @@ pub struct NotInitializedTask<P, D> {
     config: Config,
     /// Retry on error
     retry_on_error: bool,
-    fcr: Option<crate::fcr::Driver>,
-    fcr_status: watch::Sender<crate::fcr::Status>,
 }
 
 pub enum RpcOutcome {
@@ -198,9 +194,6 @@ pub struct Task<P, D, S> {
     /// Determines how many pages to request per RPC call, adapting based on success/failure feedback.
     /// Allows dynamic tuning of log pagination to optimize performance and reliability.
     page_sizer: S,
-    fcr: Option<crate::fcr::Driver>,
-    fcr_status: watch::Sender<crate::fcr::Status>,
-    fcr_ready: bool,
 }
 
 impl<P, D> NotInitializedTask<P, D>
@@ -217,10 +210,7 @@ where
 
         let (synced, _) = watch::channel(SyncState::PartiallySynced(da_block_height));
 
-        let (fcr_status, _) = watch::channel(crate::fcr::Status::default());
         Self {
-            fcr: None,
-            fcr_status,
             synced,
             eth_node,
             database,
@@ -302,11 +292,7 @@ where
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();
 
-        SharedState {
-            synced,
-            fcr_status: self.fcr_status.subscribe(),
-            import_held: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        }
+        SharedState { synced }
     }
 
     async fn into_task(
@@ -321,8 +307,6 @@ where
             database,
             config,
             retry_on_error,
-            fcr,
-            fcr_status,
         } = self;
         let page_sizer = AdaptivePageSizer::new(
             config.log_page_size,
@@ -331,9 +315,6 @@ where
             config.max_logs_per_rpc,
         );
         let task = Task {
-            fcr,
-            fcr_status,
-            fcr_ready: false,
             synced,
             eth_node,
             database,
@@ -356,47 +337,7 @@ where
     async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         let now = tokio::time::Instant::now();
 
-        let result = if let Some(driver) = &mut self.fcr {
-            if let Err(error) = driver.propagate().await {
-                tracing::error!("FCR peer fence observation pending: {error}");
-            }
-            // The independent finalized audit must still run when Redis is unavailable.
-            // Publication and promotion separately retain their strict-quorum gates.
-            let result = driver.sync(&mut self.database, &self.config).await;
-            // Publish the local gate before waiting on external fence propagation.
-            if driver.status("initializing").incident.is_some() {
-                self.fcr_status.send_replace(driver.status("initializing"));
-            }
-            if let Err(error) = driver.propagate().await {
-                tracing::error!("FCR fence propagation incomplete: {error}");
-            }
-            if result.is_ok() {
-                self.fcr_ready = true;
-            }
-            let state = if !self.fcr_ready {
-                "initializing"
-            } else if result.is_err() {
-                "held"
-            } else {
-                "normal"
-            };
-            self.fcr_status.send_replace(driver.status(state));
-            if let Ok(target) = result.as_ref() {
-                let local = self
-                    .database
-                    .get_finalized_da_height()
-                    .unwrap_or(self.config.da_deploy_height);
-                let state = if local.0 >= *target {
-                    SyncState::Synced(local)
-                } else {
-                    SyncState::PartiallySynced(local)
-                };
-                self.synced.send_replace(state);
-            }
-            result.map(|_| ())
-        } else {
-            run::run(self).await
-        };
+        let result = run::run(self).await;
 
         if self.shutdown.borrow_and_update().started()
             && (result.is_err() | self.synced.borrow().is_synced())
@@ -431,48 +372,6 @@ where
 }
 
 impl SharedState {
-    /// Current independent Ethereum-finality state without sensitive configuration.
-    pub fn fcr_status(&self) -> crate::fcr::Status {
-        let mut status = self.fcr_status.borrow().clone();
-        if status.enabled
-            && status.incident.is_none()
-            && self.import_held.load(std::sync::atomic::Ordering::Acquire)
-        {
-            status.state = "held".into();
-        }
-        status
-    }
-
-    /// Hold takeover after a covered, signed candidate disagrees with the local event root.
-    /// A later consistent candidate clears this reversible local hold.
-    pub fn set_import_held(&self, held: bool) {
-        self.import_held
-            .store(held, std::sync::atomic::Ordering::Release);
-    }
-
-    /// Check the local authority gate without blocking follower reconciliation.
-    pub fn ensure_production_allowed(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            !self.import_held.load(std::sync::atomic::Ordering::Acquire),
-            "Canonical event-root divergence holds takeover"
-        );
-        let status = self.fcr_status.borrow();
-        anyhow::ensure!(
-            status.incident.is_none(),
-            "Canonical Ethereum finality incident"
-        );
-        anyhow::ensure!(
-            !status.enabled || status.state != "initializing",
-            "Canonical safety audit pending"
-        );
-        Ok(())
-    }
-
-    /// Whether a durable canonical incident forbids production/import.
-    pub fn fcr_halted(&self) -> bool {
-        self.fcr_status.borrow().incident.is_some()
-    }
-
     /// Wait for the `Task` to be in sync with
     /// the data availability layer.
     ///
@@ -486,23 +385,12 @@ impl SharedState {
     /// some period of time.
     pub async fn await_synced(&self) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
-        let mut fcr = self.fcr_status.clone();
         loop {
-            anyhow::ensure!(
-                !self.import_held.load(std::sync::atomic::Ordering::Acquire),
-                "Canonical event-root divergence holds takeover"
-            );
-            anyhow::ensure!(
-                fcr.borrow().incident.is_none(),
-                "Canonical Ethereum finality incident"
-            );
-            if (!fcr.borrow().enabled || fcr.borrow().state != "initializing")
-                && rx.borrow_and_update().is_synced()
-            {
+            if rx.borrow_and_update().is_synced() {
                 break;
             }
 
-            tokio::select! { result = rx.changed() => result?, result = fcr.changed() => result? };
+            rx.changed().await?;
         }
 
         Ok(())
@@ -514,19 +402,12 @@ impl SharedState {
         height: &DaBlockHeight,
     ) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
-        let mut fcr = self.fcr_status.clone();
         loop {
-            anyhow::ensure!(
-                fcr.borrow().incident.is_none(),
-                "Canonical Ethereum finality incident"
-            );
-            if (!fcr.borrow().enabled || fcr.borrow().state != "initializing")
-                && rx.borrow_and_update().da_block_height() >= *height
-            {
+            if rx.borrow_and_update().da_block_height() >= *height {
                 break;
             }
 
-            tokio::select! { result = rx.changed() => result?, result = fcr.changed() => result? };
+            rx.changed().await?;
         }
         Ok(())
     }
@@ -551,13 +432,26 @@ where
             _ = shutdown.while_started() => {
                 Err(anyhow::anyhow!("The relayer got a stop signal"))
             },
-            block = self.eth_node.get_block(BlockId::Number(BlockNumberOrTag::Finalized)) => {
-                let block = block.map_err(|err| anyhow::anyhow!("Failed to fetch finalized block: {err:?}"))?;
-                let number = block
-                    .map(|b| b.header.number)
-                    .ok_or_else(|| anyhow::anyhow!("Finalized block is pending"))?;
-                Ok(number)
-            }
+            number = async {
+                if self.config.use_fcr {
+                    // The wrapper may return only {number, hash}, not a full block.
+                    #[derive(Debug, serde::Deserialize)]
+                    struct ConfirmedBlock {
+                        number: alloy_primitives::U64,
+                    }
+                    let confirmed = self.eth_node.raw_request::<_, Option<ConfirmedBlock>>(
+                        "eth_getBlockByNumber".into(), ("confirmed", false),
+                    ).await;
+                    match confirmed {
+                        Ok(Some(block)) => return Ok(block.number.to::<u64>()),
+                        result => tracing::warn!(?result, "FCR head unavailable; falling back to finalized"),
+                    }
+                }
+                let block = self.eth_node.get_block(BlockId::Number(BlockNumberOrTag::Finalized)).await
+                    .map_err(|err| anyhow::anyhow!("Failed to fetch finalized block: {err:?}"))?;
+                block.map(|b| b.header.number)
+                    .ok_or_else(|| anyhow::anyhow!("Finalized block is pending"))
+            } => number,
         }
     }
 }
@@ -578,43 +472,20 @@ pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
     D: RelayerDb + 'static,
 {
-    new_service_with_reporter(database, config, None)
-}
-
-/// Creates a relayer using the existing authority's positive halt-fence integration.
-pub fn new_service_with_reporter<D>(
-    database: D,
-    config: Config,
-    reporter: Option<std::sync::Arc<dyn crate::fcr::HaltReporter>>,
-) -> anyhow::Result<Service<D>>
-where
-    D: RelayerDb + 'static,
-{
     let urls = config.relayer.clone().ok_or_else(|| {
         anyhow::anyhow!(
             "Tried to start Relayer without setting an eth_client in the config"
         )
     })?;
 
-    let fcr = config
-        .fcr
-        .clone()
-        .map(|fcr| {
-            crate::fcr::Driver::open(
-                fcr,
-                urls.clone(),
-                &config.eth_v2_listening_contracts,
-                reporter.clone(),
-            )
-        })
-        .transpose()?;
     let eth_node = QuorumProvider::new(Quorum::Majority, urls);
-    let mut task = NotInitializedTask::new(eth_node, database, config, true);
-    if let Some(driver) = &fcr {
-        task.fcr_status.send_replace(driver.status("initializing"));
-    }
-    task.fcr = fcr;
-    Ok(CustomizableService::new(task))
+    let retry_on_error = true;
+    Ok(new_service_internal(
+        eth_node,
+        database,
+        config,
+        retry_on_error,
+    ))
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
@@ -632,7 +503,6 @@ where
     new_service_internal(eth_node, database, config, retry_on_fail)
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
 fn new_service_internal<P, D>(
     eth_node: P,
     database: D,

@@ -16,16 +16,7 @@ pub mod relayer;
 #[cfg(feature = "rpc")]
 pub mod block_aggregator;
 
-pub trait DatabaseHeight:
-    PartialEq
-    + Default
-    + Debug
-    + Copy
-    + Send
-    + Sync
-    + serde::Serialize
-    + serde::de::DeserializeOwned
-{
+pub trait DatabaseHeight: PartialEq + Default + Debug + Copy + Send + Sync {
     fn as_u64(&self) -> u64;
 
     fn advance_height(&self) -> Option<Self>;
@@ -71,22 +62,6 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
 
     /// Returns the expected version of the database.
     fn version() -> u32;
-
-    /// Whether the stored format can be opened by this binary.
-    fn accepts_version(version: u32) -> bool {
-        version == Self::version()
-    }
-
-    /// Format marker preserved by normal commits after a one-way activation.
-    fn version_for_update(previous: Option<u32>) -> u32 {
-        let _ = previous;
-        Self::version()
-    }
-
-    /// Keep a one-way activation marker when restoring older historical metadata.
-    fn preserve_activation_on_rollback() -> bool {
-        false
-    }
 
     /// Returns the name of the database.
     fn name() -> String;

@@ -46,8 +46,6 @@ pub enum Column {
     Metadata = 0,
     /// The column of the table that stores history of the relayer.
     History = 1,
-    /// Verified Ethereum identities and complete relevant log digests.
-    EthereumEvidence = 2,
 }
 
 impl Column {
@@ -92,30 +90,11 @@ impl TableWithBlueprint for EventsHistory {
     }
 }
 
-/// Ethereum evidence committed in the same transaction as EventsHistory.
-pub struct EthereumEvidence;
-
-impl Mappable for EthereumEvidence {
-    type Key = DaBlockHeight;
-    type OwnedKey = DaBlockHeight;
-    type Value = crate::fcr::BlockEvidence;
-    type OwnedValue = crate::fcr::BlockEvidence;
-}
-
-impl TableWithBlueprint for EthereumEvidence {
-    type Blueprint = Plain<Primitive<8>, Postcard>;
-    type Column = Column;
-    fn column() -> Column {
-        Column::EthereumEvidence
-    }
-}
-
 impl<T> RelayerDb for T
 where
     T: Send + Sync,
     T: Transactional,
-    for<'a> T::Transaction<'a>: StorageMutate<EventsHistory, Error = StorageError>
-        + StorageMutate<EthereumEvidence, Error = StorageError>,
+    for<'a> T::Transaction<'a>: StorageMutate<EventsHistory, Error = StorageError>,
 {
     fn insert_events(
         &mut self,
@@ -159,37 +138,6 @@ where
         //  at any time, maybe we want to consider keeping it all the time instead of creating snapshots.
         //  https://github.com/FuelLabs/fuel-core/issues/1627
         Ok(())
-    }
-
-    fn insert_fcr_events(
-        &mut self,
-        height: &DaBlockHeight,
-        events: &[Event],
-        evidence: &crate::fcr::BlockEvidence,
-    ) -> StorageResult<()> {
-        for event in events {
-            if event.da_height() != *height {
-                return Err(anyhow::anyhow!("Invalid FCR event height").into());
-            }
-        }
-        let mut tx = self.transaction();
-        tx.storage::<EventsHistory>().insert(height, events)?;
-        tx.storage::<EthereumEvidence>().insert(height, evidence)?;
-        tx.commit()
-    }
-
-    fn fcr_evidence(
-        &self,
-        height: &DaBlockHeight,
-    ) -> StorageResult<Option<crate::fcr::BlockEvidence>> {
-        Transactional::fcr_evidence(self, height)
-    }
-
-    fn fcr_activated(&self) -> StorageResult<bool> {
-        Transactional::fcr_activated(self)
-    }
-    fn activate_fcr(&mut self, anchor: DaBlockHeight) -> StorageResult<()> {
-        Transactional::activate_fcr(self, anchor)
     }
 
     fn get_finalized_da_height(&self) -> Option<DaBlockHeight> {
