@@ -493,6 +493,7 @@ impl Transaction {
 
 #[Object]
 impl Transaction {
+    #[graphql(cache_control(max_age = 60))]
     async fn id(&self) -> TransactionId {
         TransactionId(self.1)
     }
@@ -937,7 +938,10 @@ impl Transaction {
         }
     }
 
-    #[graphql(complexity = "query_costs().tx_raw_payload")]
+    #[graphql(
+        cache_control(max_age = 60),
+        complexity = "query_costs().tx_raw_payload"
+    )]
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())

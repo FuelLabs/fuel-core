@@ -36,7 +36,12 @@ use crate::{
 use async_graphql::{
     Request,
     Response,
+    ServerError,
     http::GraphiQLSource,
+    parser::types::{
+        DocumentOperations,
+        OperationType,
+    },
 };
 use axum::{
     Json,
@@ -44,6 +49,7 @@ use axum::{
     extract::{
         DefaultBodyLimit,
         Extension,
+        Query,
     },
     http::{
         HeaderValue,
@@ -52,6 +58,8 @@ use axum::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
             ACCESS_CONTROL_ALLOW_ORIGIN,
+            ALLOW,
+            CACHE_CONTROL,
         },
     },
     response::{
@@ -472,7 +480,12 @@ where
         .route(
             graphql_endpoint,
             post(graphql_handler)
+                .get(graphql_get_handler)
                 .layer(ConcurrencyLimitLayer::new(concurrency_limit))
+                .route_layer(SetResponseHeaderLayer::if_not_present(
+                    CACHE_CONTROL,
+                    HeaderValue::from_static("no-store"),
+                ))
                 .options(ok),
         )
         .route(
@@ -594,11 +607,104 @@ async fn ready(
 async fn graphql_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Json<Response> {
+) -> axum::response::Response {
     let response = schema.execute(req.0).await;
-    let response = unify_response(response);
+    graphql_response(response)
+}
 
-    response.into()
+fn graphql_response(response: Response) -> axum::response::Response {
+    let policy = response.cache_control;
+    let cache_control = if response.is_ok() && policy.max_age > 0 {
+        let scope = if policy.public { "public" } else { "private" };
+        // Chain-state extensions remain the origin's snapshot. Revalidate once
+        // the freshness lifetime expires rather than serving stale metadata.
+        format!("{scope}, max-age={}, must-revalidate", policy.max_age)
+    } else {
+        "no-store".to_string()
+    };
+    (
+        [(CACHE_CONTROL, cache_control)],
+        Json(unify_response(response)),
+    )
+        .into_response()
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GraphqlGetParams {
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<String>,
+    extensions: Option<String>,
+}
+
+impl GraphqlGetParams {
+    fn into_request(self) -> Result<Request, serde_json::Error> {
+        let mut request = Request::new(self.query);
+        request.operation_name = self.operation_name.filter(|value| !value.is_empty());
+        if let Some(variables) = self.variables.filter(|value| !value.is_empty()) {
+            request.variables = serde_json::from_str(&variables)?;
+        }
+        if let Some(extensions) = self.extensions.filter(|value| !value.is_empty()) {
+            request.extensions = serde_json::from_str(&extensions)?;
+        }
+        Ok(request)
+    }
+}
+
+async fn graphql_get_handler(
+    schema: Extension<CoreSchema>,
+    Query(params): Query<GraphqlGetParams>,
+) -> axum::response::Response {
+    let mut request = match params.into_request() {
+        Ok(request) => request,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                graphql_response(Response::from_errors(vec![ServerError::new(
+                    error.to_string(),
+                    None,
+                )])),
+            )
+                .into_response();
+        }
+    };
+    let operation_name = request.operation_name.clone();
+    match request.parsed_query() {
+        Ok(document) => {
+            let operation = match &document.operations {
+                DocumentOperations::Single(operation) => Some(operation),
+                DocumentOperations::Multiple(operations) => {
+                    match operation_name.as_deref() {
+                        Some(name) => operations.get(name),
+                        None if operations.len() == 1 => operations.values().next(),
+                        None => None,
+                    }
+                }
+            };
+            if operation
+                .is_some_and(|operation| operation.node.ty != OperationType::Query)
+            {
+                return (
+                    StatusCode::METHOD_NOT_ALLOWED,
+                    [(ALLOW, "POST")],
+                    graphql_response(Response::from_errors(vec![ServerError::new(
+                        "GET only supports query operations",
+                        None,
+                    )])),
+                )
+                    .into_response();
+            }
+        }
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                graphql_response(Response::from_errors(vec![error])),
+            )
+                .into_response();
+        }
+    }
+    graphql_response(schema.execute(request).await)
 }
 
 async fn graphql_subscription_handler(
@@ -616,6 +722,9 @@ async fn graphql_subscription_handler(
 async fn ok() -> anyhow::Result<(), ()> {
     Ok(())
 }
+
+#[cfg(test)]
+mod cache_tests;
 
 #[cfg(test)]
 mod tests {

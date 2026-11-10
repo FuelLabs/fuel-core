@@ -41,7 +41,7 @@ impl From<fuel_types::ContractId> for Contract {
     }
 }
 
-#[Object]
+#[Object(cache_control(max_age = 60))]
 impl Contract {
     async fn id(&self) -> ContractId {
         self.0.into()
@@ -71,7 +71,10 @@ pub struct ContractQuery;
 
 #[Object]
 impl ContractQuery {
-    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    #[graphql(
+        cache_control(max_age = 60),
+        complexity = "query_costs().storage_read + child_complexity"
+    )]
     async fn contract(
         &self,
         ctx: &Context<'_>,
