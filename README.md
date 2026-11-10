@@ -210,7 +210,7 @@ Human logging can be disabled with the environment variable `HUMAN_LOGGING=false
 
 See the guide on [debugging](docs/developers/debugging.md) for an overview on running a debug build of a local node.
 
-## Docker & Kubernetes
+## Docker
 
 ```sh
 # Create Docker Image
@@ -218,13 +218,9 @@ docker build -t fuel-core . -f deployment/Dockerfile
 
 # Delete Docker Image
 docker image rm fuel-core
-
-# Create Kubernetes Volume, Deployment & Service
-kubectl create -f deployment/fuel-core.yml
-
-# Delete Kubernetes Volume, Deployment & Service
-kubectl delete -f deployment/fuel-core.yml
 ```
+
+See [`deployment/README.md`](deployment/README.md) for the Docker files in this repository. Kubernetes manifests are not currently provided under `deployment/`.
 
 ## GraphQL service
 
