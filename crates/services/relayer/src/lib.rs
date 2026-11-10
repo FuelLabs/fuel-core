@@ -9,6 +9,7 @@
 
 pub(crate) mod abi;
 pub(crate) mod config;
+pub mod fcr;
 pub(crate) mod log;
 
 mod service;
@@ -34,6 +35,7 @@ pub use service::{
     Service,
     SharedState,
     new_service,
+    new_service_with_reporter,
 };
 
 #[cfg(test)]

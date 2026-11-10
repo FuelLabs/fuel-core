@@ -668,6 +668,11 @@ type InputMessage {
 	predicateData: HexString!
 }
 
+"""
+A scalar that can represent any JSON value.
+"""
+scalar JSON
+
 type LatestGasPrice {
 	gasPrice: U64!
 	blockHeight: U32!
@@ -810,6 +815,10 @@ type Mutation {
 }
 
 type NodeInfo {
+	"""
+	Public read-only Ethereum finality status; contains no endpoints or journal data.
+	"""
+	ethereumFinality: JSON!
 	utxoValidation: Boolean!
 	vmBacktrace: Boolean!
 	maxTx: U64!

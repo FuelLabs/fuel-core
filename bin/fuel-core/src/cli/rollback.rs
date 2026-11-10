@@ -47,6 +47,14 @@ pub struct Command {
     /// The path to the database.
     #[clap(long = "target-da-block-height")]
     pub target_da_block_height: Option<u64>,
+    /// Safety journal to re-anchor after the coordinated rollback (requires receipt).
+    #[cfg(feature = "relayer")]
+    #[clap(long, requires = "fcr_recovery_receipt")]
+    pub fcr_state: Option<PathBuf>,
+    /// JSON recovery receipt acknowledging the exact incident and all operational steps.
+    #[cfg(feature = "relayer")]
+    #[clap(long, requires = "fcr_state")]
+    pub fcr_recovery_receipt: Option<PathBuf>,
 }
 
 fn get_default_max_fds() -> i32 {
@@ -80,5 +88,16 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         db.rollback_relayer_to(target_da_height.into(), &mut shutdown_listener)?;
     }
 
+    #[cfg(feature = "relayer")]
+    if let (Some(path), Some(receipt)) = (command.fcr_state, command.fcr_recovery_receipt)
+    {
+        use fuel_core::relayer::ports::Transactional;
+        let receipt = serde_json::from_slice(&std::fs::read(receipt)?)?;
+        let actual = db
+            .relayer()
+            .latest_da_height()
+            .ok_or_else(|| anyhow::anyhow!("Missing relayer recovery anchor"))?;
+        fuel_core::relayer::fcr::recover_offline(&path, receipt, actual.0)?;
+    }
     Ok(())
 }

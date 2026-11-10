@@ -271,10 +271,37 @@ pub fn init_sub_services(
         ChainStateInfoProvider::new(chain_state_info_provider_service.shared.clone());
 
     #[cfg(feature = "relayer")]
+    if let (Some(adapter), Some(fcr)) = (
+        &mut redis_reconciliation_adapter,
+        config
+            .relayer
+            .as_ref()
+            .and_then(|config| config.fcr.as_ref()),
+    ) {
+        adapter.enable_fcr(&fcr.state_path);
+    }
+
+    #[cfg(feature = "relayer")]
+    if fuel_core_relayer::ports::Transactional::fcr_activated(database.relayer())? {
+        anyhow::ensure!(
+            config
+                .relayer
+                .as_ref()
+                .is_some_and(|config| config.fcr.is_some()),
+            "Activated FCR database requires its safety configuration"
+        );
+    }
+
+    #[cfg(feature = "relayer")]
     let relayer_service = if let Some(config) = &config.relayer {
-        Some(fuel_core_relayer::new_service(
+        Some(fuel_core_relayer::new_service_with_reporter(
             database.relayer().clone(),
             config.clone(),
+            config.fcr.as_ref().and_then(|_| {
+                redis_reconciliation_adapter
+                    .as_ref()
+                    .map(|adapter| adapter.fcr_reporter())
+            }),
         )?)
     } else {
         None
@@ -291,6 +318,22 @@ pub fn init_sub_services(
             |config| config.da_deploy_height,
         ),
     };
+
+    #[cfg(feature = "relayer")]
+    let _ = importer_adapter.fcr_relayer.set(relayer_adapter.clone());
+
+    #[cfg(feature = "relayer")]
+    if config
+        .relayer
+        .as_ref()
+        .is_some_and(|config| config.fcr.is_some())
+        && let (Some(adapter), Some(shared)) = (
+            &mut redis_reconciliation_adapter,
+            &relayer_adapter.relayer_synced,
+        )
+    {
+        adapter.set_fcr_shared(shared.clone());
+    }
 
     let genesis_block_height = *genesis_block.header().height();
     let settings = chain_state_info_provider.clone();
@@ -425,6 +468,18 @@ pub fn init_sub_services(
         })
         .transpose()?;
 
+    #[cfg(feature = "relayer")]
+    if config
+        .relayer
+        .as_ref()
+        .is_some_and(|config| config.fcr.is_some())
+    {
+        anyhow::ensure!(
+            !production_enabled || config.leader_lock.is_some(),
+            "FCR production requires a Redis leader lock"
+        );
+    }
+
     let ready_signal_for_graphql = block_production_ready_signal.clone();
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
@@ -495,6 +550,13 @@ pub fn init_sub_services(
 
     let schema = crate::schema::dap::init(build_schema(), config.debug)
         .data(database.on_chain().clone());
+
+    #[cfg(feature = "relayer")]
+    let schema = if let Some(relayer) = &relayer_service {
+        schema.data(relayer.shared.clone())
+    } else {
+        schema
+    };
 
     let graphql_block_importer =
         GraphQLBlockImporter::new(importer_adapter.clone(), import_result_provider);

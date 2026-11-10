@@ -162,6 +162,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
             match &self.relayer_synced {
                 Some(sync) => {
                     sync.await_at_least_synced(height).await?;
+                    sync.ensure_production_allowed()?;
                     let highest = sync.get_finalized_da_height();
                     Ok(highest)
                 }

@@ -45,6 +45,18 @@ impl DatabaseDescription for Relayer {
         0
     }
 
+    fn preserve_activation_on_rollback() -> bool {
+        true
+    }
+
+    fn accepts_version(version: u32) -> bool {
+        version == 0 || (cfg!(feature = "relayer") && version == 1)
+    }
+
+    fn version_for_update(previous: Option<u32>) -> u32 {
+        previous.unwrap_or(0)
+    }
+
     fn name() -> String {
         "relayer".to_string()
     }

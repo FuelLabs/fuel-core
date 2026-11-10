@@ -13,6 +13,47 @@ use fuel_core_types::fuel_types::Bytes20;
 
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {
+    /// Wrapped HTTP routes paired with --relayer. Enables early Ethereum ingestion.
+    #[arg(long, value_delimiter = ',', env, requires = "fcr_state")]
+    pub relayer_fcr_rpc: Vec<url::Url>,
+    /// Safety file on the database PVC; required when using FCR.
+    #[arg(long = "relayer-fcr-state", env = "RELAYER_FCR_STATE")]
+    pub fcr_state: Option<std::path::PathBuf>,
+    /// Expected Ethereum chain ID for FCR (1 or 11155111).
+    #[arg(
+        long = "relayer-fcr-chain-id",
+        env = "RELAYER_FCR_CHAIN_ID",
+        default_value_t = 1
+    )]
+    pub fcr_chain_id: u64,
+    /// Recovery generation. A changed generation requires offline recovery of stored state.
+    #[arg(
+        long = "relayer-fcr-generation",
+        env = "RELAYER_FCR_GENERATION",
+        default_value = "0"
+    )]
+    pub fcr_generation: String,
+    /// Maximum unchecked early block exposure.
+    #[arg(
+        long = "relayer-fcr-max-unchecked-blocks",
+        env = "RELAYER_FCR_MAX_UNCHECKED_BLOCKS",
+        default_value_t = 128
+    )]
+    pub fcr_max_unchecked_blocks: u64,
+    /// Disable early admission while retaining FCR checking and safety state.
+    #[arg(
+        long = "relayer-fcr-finalized-only",
+        env = "RELAYER_FCR_FINALIZED_ONLY"
+    )]
+    pub fcr_finalized_only: bool,
+    /// Maximum seconds of unchecked early exposure before freezing new early admission.
+    #[arg(
+        long = "relayer-fcr-max-unchecked-seconds",
+        env = "RELAYER_FCR_MAX_UNCHECKED_SECONDS",
+        default_value_t = 1800
+    )]
+    pub fcr_max_unchecked_seconds: u64,
+
     /// Enable the Relayer. By default, the Relayer is disabled, even when the binary is compiled
     /// with the "relayer" feature flag. Providing `--enable-relayer` will enable the relayer
     /// service.
@@ -66,7 +107,21 @@ impl RelayerArgs {
             return None;
         }
 
+        let fcr = if self.relayer_fcr_rpc.is_empty() {
+            None
+        } else {
+            Some(fuel_core::relayer::fcr::Config {
+                rpc: self.relayer_fcr_rpc,
+                state_path: self.fcr_state.expect("clap requires FCR state"),
+                chain_id: self.fcr_chain_id,
+                generation: self.fcr_generation,
+                max_unchecked_blocks: self.fcr_max_unchecked_blocks,
+                finalized_only: self.fcr_finalized_only,
+                max_unchecked_seconds: self.fcr_max_unchecked_seconds,
+            })
+        };
         let config = Config {
+            fcr,
             da_deploy_height: DaBlockHeight(self.da_deploy_height),
             relayer: self.relayer,
             eth_v2_listening_contracts: self

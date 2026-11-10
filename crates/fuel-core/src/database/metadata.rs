@@ -58,7 +58,7 @@ where
             return Ok(());
         };
 
-        if metadata.version() != Description::version() {
+        if !Description::accepts_version(metadata.version()) {
             return Err(DatabaseError::InvalidDatabaseVersion {
                 found: metadata.version(),
                 expected: Description::version(),

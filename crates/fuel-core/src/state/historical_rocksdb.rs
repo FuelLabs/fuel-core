@@ -41,6 +41,7 @@ use fuel_core_storage::{
     kv_store::{
         KVItem,
         KeyValueInspect,
+        KeyValueMutate,
         Value,
         WriteOperation,
     },
@@ -341,6 +342,24 @@ where
     }
 
     fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
+        // The relayer's one-way activation marker must survive a rollback atomically.
+        let metadata_column = Column::OriginalColumn(Description::metadata_column());
+        let preserve_activation = if Description::preserve_activation_on_rollback() {
+            self.db
+                .get(&[], metadata_column)?
+                .map(|bytes| {
+                    postcard::from_bytes::<
+                        crate::database::database_description::DatabaseMetadata<
+                            Description::Height,
+                        >,
+                    >(&bytes)
+                })
+                .transpose()
+                .map_err(|error| anyhow::anyhow!(error))?
+                .is_some_and(|metadata| metadata.version() == 1)
+        } else {
+            false
+        };
         let mut storage_transaction = self.db.read_transaction();
 
         let last_changes = multiversion_take(
@@ -362,6 +381,31 @@ where
             last_changes,
         )
         .commit()?;
+
+        if preserve_activation {
+            let bytes =
+                storage_transaction
+                    .get(&[], metadata_column)?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Cannot erase an activated FCR database anchor")
+                    })?;
+            let mut metadata: crate::database::database_description::DatabaseMetadata<
+                Description::Height,
+            > = postcard::from_bytes(&bytes).map_err(|error| anyhow::anyhow!(error))?;
+            match &mut metadata {
+                crate::database::database_description::DatabaseMetadata::V1 {
+                    version,
+                    ..
+                }
+                | crate::database::database_description::DatabaseMetadata::V2 {
+                    version,
+                    ..
+                } => *version = 1,
+            }
+            let encoded = postcard::to_allocvec(&metadata)
+                .map_err(|error| anyhow::anyhow!(error))?;
+            storage_transaction.write(&[], metadata_column, &encoded)?;
+        }
 
         self.db
             .commit_changes(&storage_transaction.into_changes().into())?;
