@@ -432,13 +432,21 @@ where
             _ = shutdown.while_started() => {
                 Err(anyhow::anyhow!("The relayer got a stop signal"))
             },
-            block = self.eth_node.get_block(BlockId::Number(BlockNumberOrTag::Finalized)) => {
-                let block = block.map_err(|err| anyhow::anyhow!("Failed to fetch finalized block: {err:?}"))?;
-                let number = block
-                    .map(|b| b.header.number)
-                    .ok_or_else(|| anyhow::anyhow!("Finalized block is pending"))?;
-                Ok(number)
-            }
+            number = async {
+                if self.config.use_fcr {
+                    let confirmed = self.eth_node.raw_request::<_, Option<alloy_primitives::U64>>(
+                        "eth_blockNumber".into(), ("confirmed",),
+                    ).await;
+                    match confirmed {
+                        Ok(Some(number)) => return Ok(number.to::<u64>()),
+                        result => tracing::warn!(?result, "FCR head unavailable; falling back to finalized"),
+                    }
+                }
+                let block = self.eth_node.get_block(BlockId::Number(BlockNumberOrTag::Finalized)).await
+                    .map_err(|err| anyhow::anyhow!("Failed to fetch finalized block: {err:?}"))?;
+                block.map(|b| b.header.number)
+                    .ok_or_else(|| anyhow::anyhow!("Finalized block is pending"))
+            } => number,
         }
     }
 }

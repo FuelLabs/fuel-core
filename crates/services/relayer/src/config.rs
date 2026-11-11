@@ -18,6 +18,8 @@ pub(crate) static ETH_FORCED_TX: Lazy<B256> =
 #[derive(Clone, Debug)]
 /// Configuration settings for the Relayer.
 pub struct Config {
+    /// Use the FCR wrapper's confirmed head instead of waiting for finality.
+    pub use_fcr: bool,
     /// The da block to which the contract was deployed.
     pub da_deploy_height: DaBlockHeight,
     /// Uri addresses to ethereum client.
@@ -58,6 +60,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            use_fcr: false,
             da_deploy_height: DaBlockHeight::from(Self::DEFAULT_DA_DEPLOY_HEIGHT),
             relayer: None,
             eth_v2_listening_contracts: vec![

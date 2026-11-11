@@ -13,6 +13,10 @@ use fuel_core_types::fuel_types::Bytes20;
 
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {
+    /// Use the confirmed head from --relayer endpoints that support tagged eth_blockNumber.
+    /// Log ingestion is unchanged; unavailable confirmations fall back to finalized.
+    #[arg(long = "relayer-use-fcr", env = "RELAYER_USE_FCR")]
+    pub use_fcr: bool,
     /// Enable the Relayer. By default, the Relayer is disabled, even when the binary is compiled
     /// with the "relayer" feature flag. Providing `--enable-relayer` will enable the relayer
     /// service.
@@ -67,6 +71,7 @@ impl RelayerArgs {
         }
 
         let config = Config {
+            use_fcr: self.use_fcr,
             da_deploy_height: DaBlockHeight(self.da_deploy_height),
             relayer: self.relayer,
             eth_v2_listening_contracts: self
@@ -95,6 +100,25 @@ mod tests {
     pub struct Command {
         #[clap(flatten)]
         relayer: RelayerArgs,
+    }
+
+    #[test_case(false; "finalized default")]
+    #[test_case(true; "FCR opt in")]
+    fn selects_fcr(use_fcr: bool) {
+        let mut args = vec![
+            "",
+            "--enable-relayer",
+            "--relayer=https://wrapper.test/provider",
+        ];
+        if use_fcr {
+            args.push("--relayer-use-fcr");
+        }
+        let config = Command::try_parse_from(args)
+            .unwrap()
+            .relayer
+            .into_config()
+            .unwrap();
+        assert_eq!(config.use_fcr, use_fcr);
     }
 
     #[test_case(&[""] => Ok(None); "no args")]

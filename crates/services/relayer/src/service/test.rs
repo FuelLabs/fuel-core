@@ -33,6 +33,42 @@ use alloy_provider::{
 };
 use alloy_rpc_types_eth::Log;
 
+#[test_case(false, "unused", 8; "finalized by default")]
+#[test_case(true, "confirmed", 10; "accepts confirmed height")]
+#[test_case(true, "null", 8; "null confirmation falls back")]
+#[test_case(true, "error", 8; "RPC error falls back")]
+#[test_case(true, "malformed", 8; "malformed confirmation falls back")]
+#[tokio::test]
+async fn selected_ingestion_head(use_fcr: bool, response: &str, expected: u64) {
+    let asserter = Asserter::new();
+    if use_fcr {
+        match response {
+            "confirmed" => asserter.push_success(&"0xa"),
+            "null" => asserter.push_success(&Option::<u64>::None),
+            "malformed" => asserter.push_success(&"invalid"),
+            _ => asserter.push_failure_msg("unsupported block tag"),
+        }
+    }
+    let mut finalized: alloy_rpc_types_eth::Block = Default::default();
+    finalized.header.number = 8;
+    asserter.push_success(&finalized);
+    let provider = ProviderBuilder::new().connect_mocked_client(asserter);
+    let config = Config {
+        use_fcr,
+        ..Default::default()
+    };
+    let task = NotInitializedTask::new(
+        provider,
+        crate::mock_db::MockDb::default(),
+        config,
+        false,
+    )
+    .into_task(&StateWatcher::started(), ())
+    .await
+    .unwrap();
+    assert_eq!(state::EthRemote::finalized(&task).await.unwrap(), expected);
+}
+
 #[tokio::test]
 async fn can_download_logs() {
     let asserter = Asserter::new();
