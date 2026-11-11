@@ -27,7 +27,6 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 once_cell = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

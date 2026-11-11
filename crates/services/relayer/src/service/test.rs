@@ -34,7 +34,7 @@ use alloy_provider::{
 use alloy_rpc_types_eth::Log;
 
 #[test_case(false, "unused", 8; "finalized by default")]
-#[test_case(true, "confirmed", 10; "accepts minimal wrapper block")]
+#[test_case(true, "confirmed", 10; "accepts confirmed height")]
 #[test_case(true, "null", 8; "null confirmation falls back")]
 #[test_case(true, "error", 8; "RPC error falls back")]
 #[test_case(true, "malformed", 8; "malformed confirmation falls back")]
@@ -43,16 +43,9 @@ async fn selected_ingestion_head(use_fcr: bool, response: &str, expected: u64) {
     let asserter = Asserter::new();
     if use_fcr {
         match response {
-            "confirmed" => asserter.push_success(&std::collections::BTreeMap::from([
-                ("number", "0xa"),
-                (
-                    "hash",
-                    "0x1111111111111111111111111111111111111111111111111111111111111111",
-                ),
-            ])),
+            "confirmed" => asserter.push_success(&"0xa"),
             "null" => asserter.push_success(&Option::<u64>::None),
-            "malformed" => asserter
-                .push_success(&std::collections::BTreeMap::from([("number", "invalid")])),
+            "malformed" => asserter.push_success(&"invalid"),
             _ => asserter.push_failure_msg("unsupported block tag"),
         }
     }

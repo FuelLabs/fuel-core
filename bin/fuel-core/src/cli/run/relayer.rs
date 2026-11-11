@@ -13,7 +13,7 @@ use fuel_core_types::fuel_types::Bytes20;
 
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {
-    /// Use the confirmed head from FCR-wrapped --relayer endpoints.
+    /// Use the confirmed head from --relayer endpoints that support tagged eth_blockNumber.
     /// Log ingestion is unchanged; unavailable confirmations fall back to finalized.
     #[arg(long = "relayer-use-fcr", env = "RELAYER_USE_FCR")]
     pub use_fcr: bool,

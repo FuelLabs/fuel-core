@@ -434,16 +434,11 @@ where
             },
             number = async {
                 if self.config.use_fcr {
-                    // The wrapper may return only {number, hash}, not a full block.
-                    #[derive(Debug, serde::Deserialize)]
-                    struct ConfirmedBlock {
-                        number: alloy_primitives::U64,
-                    }
-                    let confirmed = self.eth_node.raw_request::<_, Option<ConfirmedBlock>>(
-                        "eth_getBlockByNumber".into(), ("confirmed", false),
+                    let confirmed = self.eth_node.raw_request::<_, Option<alloy_primitives::U64>>(
+                        "eth_blockNumber".into(), ("confirmed",),
                     ).await;
                     match confirmed {
-                        Ok(Some(block)) => return Ok(block.number.to::<u64>()),
+                        Ok(Some(number)) => return Ok(number.to::<u64>()),
                         result => tracing::warn!(?result, "FCR head unavailable; falling back to finalized"),
                     }
                 }

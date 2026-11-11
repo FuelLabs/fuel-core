@@ -4716,7 +4716,6 @@ dependencies = [
  "futures",
  "mockall",
  "once_cell",
- "serde",
  "strum 0.28.0",
  "strum_macros 0.28.0",
  "test-case",
