@@ -158,6 +158,21 @@ where
         .ok_or_else(|| anyhow::anyhow!("Tendermint RPC response has no result"))
 }
 
+/// Resolves a REST `path` against the configured REST API URL.
+///
+/// `Url::parse` accepts non-hierarchical URLs such as `mailto:foo`, but those
+/// cannot be used as a base for [`Url::join`]; joining against them fails with
+/// `ParseError::RelativeUrlWithCannotBeABaseBase`. The error is propagated so a
+/// misconfigured endpoint is reported to the caller instead of panicking.
+fn join_rest_url(api_url: &str, path: &str) -> anyhow::Result<Url> {
+    let base = Url::parse(api_url)
+        .with_context(|| format!("invalid shared sequencer REST API URL `{api_url}`"))?;
+
+    base.join(path).with_context(|| {
+        format!("cannot resolve `{path}` against shared sequencer REST API URL `{base}`")
+    })
+}
+
 #[derive(Copy, Clone, Debug, Default)]
 pub struct AccountMetadata {
     pub account_number: u64,
@@ -179,7 +194,7 @@ pub async fn estimate_transaction(
         tx_bytes: tx_bytes.to_string(),
     };
     let path = "/cosmos/tx/v1beta1/simulate";
-    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let full_url = join_rest_url(api_url, path)?;
     let r = http.post(full_url).json(&request).send().await?;
     let text = r.text().await?;
     let resp: api_types::SimulateResponse =
@@ -192,7 +207,7 @@ pub async fn get_account_prefix(
     api_url: &str,
 ) -> anyhow::Result<String> {
     let path = "/cosmos/auth/v1beta1/bech32";
-    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let full_url = join_rest_url(api_url, path)?;
     let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::AccountPrefix =
@@ -202,7 +217,7 @@ pub async fn get_account_prefix(
 
 pub async fn chain_id(http: &reqwest::Client, api_url: &str) -> anyhow::Result<String> {
     let path = "/cosmos/base/tendermint/v1beta1/node_info";
-    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let full_url = join_rest_url(api_url, path)?;
     let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::NodeInfo =
@@ -215,7 +230,7 @@ pub async fn config(
     api_url: &str,
 ) -> anyhow::Result<api_types::Config> {
     let path = "/cosmos/base/node/v1beta1/config";
-    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let full_url = join_rest_url(api_url, path)?;
     let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::Config =
@@ -225,7 +240,7 @@ pub async fn config(
 
 pub async fn coin_denom(http: &reqwest::Client, api_url: &str) -> anyhow::Result<String> {
     let path = "/cosmos/staking/v1beta1/params";
-    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let full_url = join_rest_url(api_url, path)?;
     let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::StakingParams =
@@ -257,7 +272,7 @@ pub async fn get_account(
     id: AccountId,
 ) -> anyhow::Result<AccountMetadata> {
     let path = format!("/cosmos/auth/v1beta1/accounts/{id}");
-    let full_url = Url::parse(api_url)?.join(&path).unwrap();
+    let full_url = join_rest_url(api_url, &path)?;
     let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::AccountResponse =
@@ -291,7 +306,7 @@ pub async fn get_topic(
 ) -> anyhow::Result<Option<TopicInfo>> {
     let id_b64 = BASE64_STANDARD.encode(id);
     let path = format!("/fuelsequencer/sequencing/v1/topic/{id_b64}");
-    let full_url = Url::parse(api_url)?.join(&path).unwrap();
+    let full_url = join_rest_url(api_url, &path)?;
     let r = http.get(full_url).send().await?;
     if r.status() == 404 {
         return Ok(None);
@@ -427,5 +442,68 @@ mod tests {
 
         assert!(err.to_string().contains("HTTP status 201"));
         mock.assert_async().await;
+    }
+
+    #[test]
+    fn join_rest_url_resolves_paths_against_the_base_url() {
+        let base = "http://127.0.0.1:1317";
+        let url = join_rest_url(base, "/cosmos/base/node/v1beta1/config")
+            .expect("hierarchical base URL should resolve");
+
+        assert_eq!(
+            url.as_str(),
+            "http://127.0.0.1:1317/cosmos/base/node/v1beta1/config"
+        );
+    }
+
+    #[test]
+    fn join_rest_url_rejects_urls_that_cannot_be_a_base() {
+        // `Url::parse` accepts all of these, but none of them can be used as a
+        // base for `Url::join`.
+        for api_url in [
+            "mailto:foo",
+            "data:text/plain,hello",
+            "urn:isbn:0451450523",
+            "about:blank",
+        ] {
+            let err = join_rest_url(api_url, "/cosmos/base/node/v1beta1/config")
+                .expect_err("non-base REST URL must return an error");
+
+            assert!(
+                err.to_string().contains("cannot resolve"),
+                "unexpected error for `{api_url}`: {err}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn rest_helpers_reject_non_base_api_url() {
+        let http = reqwest::Client::new();
+
+        // Every REST helper must surface the misconfiguration as an error
+        // instead of panicking on `Url::join`.
+        config(&http, "mailto:foo")
+            .await
+            .expect_err("non-base REST URL must return an error");
+        chain_id(&http, "mailto:foo")
+            .await
+            .expect_err("non-base REST URL must return an error");
+        coin_denom(&http, "mailto:foo")
+            .await
+            .expect_err("non-base REST URL must return an error");
+        get_account_prefix(&http, "mailto:foo")
+            .await
+            .expect_err("non-base REST URL must return an error");
+        estimate_transaction(&http, "mailto:foo", vec![1, 2, 3])
+            .await
+            .expect_err("non-base REST URL must return an error");
+        get_topic(&http, "mailto:foo", [0; 32])
+            .await
+            .expect_err("non-base REST URL must return an error");
+
+        let account = AccountId::new("fuel", &[1; 20]).expect("valid account id");
+        get_account(&http, "mailto:foo", account)
+            .await
+            .expect_err("non-base REST URL must return an error");
     }
 }
