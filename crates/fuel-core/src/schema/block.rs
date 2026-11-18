@@ -7,7 +7,6 @@ use super::scalars::{
 use crate::{
     fuel_core_graphql_api::{
         Config as GraphQLConfig,
-        IntoApiResult,
         api_service::ConsensusModule,
         database::ReadView,
         query_costs,
@@ -40,6 +39,7 @@ use async_graphql::{
     },
 };
 use fuel_core_storage::{
+    IsNotFound,
     Result as StorageResult,
     iter::IterDirection,
 };
@@ -294,9 +294,20 @@ impl BlockQuery {
             }
         };
 
-        height
-            .and_then(|height| query.block(&height))
-            .into_api_result()
+        match height.and_then(|height| query.block(&height)) {
+            Ok(block) => Ok(Some(block.into())),
+            Err(err) if err.is_not_found() => {
+                let config = ctx.data_unchecked::<crate::fuel_core_graphql_api::Config>();
+                if let Some(retention) = config.history_retention {
+                    Err(crate::fuel_core_graphql_api::history_retention_block_error(
+                        retention,
+                    ))
+                } else {
+                    Ok(None)
+                }
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 
     #[graphql(complexity = "{\

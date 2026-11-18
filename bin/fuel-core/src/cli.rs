@@ -660,6 +660,54 @@ mod tests {
         }
 
         #[test]
+        fn can_set_history_retention() {
+            // given
+            let line = "./core run --history-retention 30d";
+
+            // when
+            let command = super::parse_cli(line, "")
+                .expect("should parse the run command")
+                .command;
+
+            // then
+            let super::Fuel::Run(run::Command {
+                history_retention: Some(retention),
+                db_prune,
+                ..
+            }) = command
+            else {
+                panic!("Expected a run command with history retention");
+            };
+
+            assert_eq!(
+                std::time::Duration::from(retention),
+                std::time::Duration::from_secs(2_592_000)
+            );
+            // Orthogonal to --db-prune (full wipe).
+            assert!(!db_prune);
+        }
+
+        #[test]
+        fn history_retention_off_by_default() {
+            // given
+            let line = "./core run";
+
+            // when
+            let command = super::parse_cli(line, "")
+                .expect("should parse the run command")
+                .command;
+
+            // then
+            let super::Fuel::Run(run::Command {
+                history_retention: None,
+                ..
+            }) = command
+            else {
+                panic!("Expected history retention unset by default");
+            };
+        }
+
+        #[test]
         fn can_give_a_snapshot() {
             // given
             let line = "./core run --snapshot ./some/path";
@@ -695,6 +743,32 @@ mod tests {
             let super::Fuel::Run(run::Command { snapshot: None, .. }) = command else {
                 panic!("Expected a run command without a snapshot");
             };
+        }
+    }
+
+    #[cfg(feature = "rocksdb")]
+    mod archive_arg_tests {
+        #[test]
+        fn backup_accepts_history_retention() {
+            // given
+            let line =
+                "./core archive backup --from ./db --to ./backup --history-retention 30d";
+
+            // when
+            let command = super::parse_cli(line, "")
+                .expect("should parse the archive backup command")
+                .command;
+
+            // then
+            let super::Fuel::Archive(crate::cli::archive::Command::Backup(args)) =
+                command
+            else {
+                panic!("Expected archive backup");
+            };
+            assert_eq!(
+                args.history_retention.map(std::time::Duration::from),
+                Some(std::time::Duration::from_secs(2_592_000))
+            );
         }
     }
 }

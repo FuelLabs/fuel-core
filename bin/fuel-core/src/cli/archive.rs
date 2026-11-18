@@ -3,6 +3,7 @@ use clap::{
     Subcommand,
 };
 use fuel_core::combined_database::CombinedDatabase;
+use fuel_core_types::tai64::Tai64;
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
@@ -33,6 +34,13 @@ pub struct BackupArgs {
         help = "The name of the tar file to create"
     )]
     pub file_name: String,
+
+    /// Offline prune history older than this duration before backup (e.g. `30d`).
+    /// Deletes offchain indexes/statuses and aged onchain blocks/txs (scope B);
+    /// keeps live Coins/Contracts/UTXO. Never use `--db-prune` for retention
+    /// (that flag destroys the DB). Full Archive must leave this unset.
+    #[arg(long = "history-retention", env)]
+    pub history_retention: Option<humantime::Duration>,
 }
 
 #[derive(Debug, Parser)]
@@ -48,13 +56,40 @@ pub struct RestoreArgs {
 
 pub fn exec(command: Command) -> anyhow::Result<()> {
     match command {
-        Command::Backup(args) => backup(&args.from, &args.to, &args.file_name),
+        Command::Backup(args) => backup(
+            &args.from,
+            &args.to,
+            &args.file_name,
+            args.history_retention.map(Into::into),
+        ),
         Command::Restore(args) => restore(&args.to, &args.from),
     }
 }
 
+fn maybe_prune_before_backup(
+    db_dir: &str,
+    history_retention: Option<std::time::Duration>,
+) -> anyhow::Result<()> {
+    if let Some(retention) = history_retention {
+        tracing::info!(
+            retention = ?retention,
+            "Pruning history (scope B) before archive backup"
+        );
+        let report =
+            CombinedDatabase::prune_history_at(db_dir.as_ref(), retention, Tai64::now())?;
+        tracing::info!(?report, "History prune complete");
+    }
+    Ok(())
+}
+
 #[cfg(not(feature = "archive"))]
-pub fn backup(db_dir: &str, backup_path: &str, _: &str) -> anyhow::Result<()> {
+pub fn backup(
+    db_dir: &str,
+    backup_path: &str,
+    _: &str,
+    history_retention: Option<std::time::Duration>,
+) -> anyhow::Result<()> {
+    maybe_prune_before_backup(db_dir, history_retention)?;
     CombinedDatabase::backup(db_dir.as_ref(), backup_path.as_ref())?;
     Ok(())
 }
@@ -64,7 +99,9 @@ pub fn backup(
     db_dir: &str,
     backup_path: &str,
     tar_file_name: &str,
+    history_retention: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
+    maybe_prune_before_backup(db_dir, history_retention)?;
     let tmp_dir = tempfile::TempDir::new()?;
     CombinedDatabase::backup(db_dir.as_ref(), tmp_dir.path())?;
     archiver::add_to_archive(tmp_dir.path(), backup_path.as_ref(), tar_file_name)?;

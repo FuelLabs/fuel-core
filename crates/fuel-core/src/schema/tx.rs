@@ -8,7 +8,6 @@ use crate::{
     coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
         Config as GraphQLConfig,
-        IntoApiResult,
         api_service::{
             BlockProducer,
             ChainInfoProvider,
@@ -209,10 +208,30 @@ impl TxQuery {
 
         match txpool.transaction(id).await? {
             Some(transaction) => Ok(Some(Transaction(transaction, id))),
-            _ => query
-                .transaction(&id)
-                .map(|tx| Transaction::from_tx(id, tx))
-                .into_api_result(),
+            _ => {
+                let result = query.transaction(&id);
+                if result.is_not_found() {
+                    let config =
+                        ctx.data_unchecked::<crate::fuel_core_graphql_api::Config>();
+                    if let Some(retention) = config.history_retention {
+                        // Named retention error when flag set. Cannot cheaply tell
+                        // never-existed vs pruned without an extra durable index;
+                        // clients on pruned nodes should treat this as past-window.
+                        Err(
+                            crate::fuel_core_graphql_api::history_retention_transaction_error(
+                                retention,
+                            ),
+                        )
+                    } else {
+                        Ok(None)
+                    }
+                } else {
+                    result
+                        .map(|tx| Transaction::from_tx(id, tx))
+                        .map(Some)
+                        .map_err(Into::into)
+                }
+            }
         }
     }
 
