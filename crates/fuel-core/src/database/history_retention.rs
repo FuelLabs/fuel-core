@@ -106,7 +106,9 @@ pub fn cutoff_time(now: Tai64, retention: Duration) -> Tai64 {
 }
 
 /// Latest on-chain block height from stored `FuelBlocks`, if any.
-pub fn on_chain_tip_height(on_chain: &Database<OnChain>) -> StorageResult<Option<BlockHeight>> {
+pub fn on_chain_tip_height(
+    on_chain: &Database<OnChain>,
+) -> StorageResult<Option<BlockHeight>> {
     on_chain
         .iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
         .next()
@@ -130,7 +132,10 @@ fn height_after_old_block(height: BlockHeight) -> BlockHeight {
     BlockHeight::from(u32::from(height).saturating_add(1))
 }
 
-fn merge_prune_before(a: Option<BlockHeight>, b: Option<BlockHeight>) -> Option<BlockHeight> {
+fn merge_prune_before(
+    a: Option<BlockHeight>,
+    b: Option<BlockHeight>,
+) -> Option<BlockHeight> {
     match (a, b) {
         (Some(x), Some(y)) => Some(if x > y { x } else { y }),
         (Some(x), None) => Some(x),
@@ -165,36 +170,29 @@ pub fn prune_before_height(
     Ok(prune_before.map(|before| cap_prune_before_respecting_tip(before, tip)))
 }
 
-/// Offchain `Old*` / statuses can retain pre-regenesis history absent from onchain `FuelBlocks`.
+/// Offchain `Old*` can retain pre-regenesis history absent from onchain `FuelBlocks`.
+///
+/// Uses a **contiguous height prefix** scan (same shape as `prune_before_height`).
+/// Stops at the first in-window block or a gap in heights — an isolated high
+/// `OldFuelBlocks` row with an ancient timestamp must not widen onchain deletes.
 pub fn prune_before_from_offchain_history(
     off_chain: &Database<OffChain>,
     cutoff: Tai64,
 ) -> StorageResult<Option<BlockHeight>> {
     let mut prune_before: Option<BlockHeight> = None;
+    let mut expected: Option<BlockHeight> = None;
     for result in off_chain.iter_all::<OldFuelBlocks>(Some(IterDirection::Forward)) {
         let (height, block) = result?;
-        if block.header().time() < cutoff {
-            prune_before = merge_prune_before(
-                prune_before,
-                Some(height_after_old_block(height)),
-            );
-        }
-    }
-
-    use fuel_core_types::services::transaction_status::TransactionExecutionStatus;
-    for result in off_chain.iter_all::<TransactionStatuses>(Some(IterDirection::Forward)) {
-        let (_tx_id, status) = result?;
-        let (height, time) = match status.as_ref() {
-            TransactionExecutionStatus::Success { block_height, time, .. }
-            | TransactionExecutionStatus::Failed { block_height, time, .. } => {
-                (*block_height, *time)
+        if let Some(next) = expected {
+            if height != next {
+                break;
             }
-            TransactionExecutionStatus::Submitted { time } => (BlockHeight::from(0u32), *time),
-            TransactionExecutionStatus::SqueezedOut { .. } => continue,
-        };
-        if time < cutoff {
-            prune_before =
-                merge_prune_before(prune_before, Some(height_after_old_block(height)));
+        }
+        if block.header().time() < cutoff {
+            prune_before = Some(height_after_old_block(height));
+            expected = Some(height_after_old_block(height));
+        } else {
+            break;
         }
     }
 
@@ -208,7 +206,9 @@ pub fn prune_before_from_owned_index_gaps(
     tip: BlockHeight,
 ) -> StorageResult<Option<BlockHeight>> {
     let mut max_orphan_height: Option<BlockHeight> = None;
-    for result in off_chain.iter_all_keys::<OwnedTransactions>(Some(IterDirection::Forward)) {
+    for result in
+        off_chain.iter_all_keys::<OwnedTransactions>(Some(IterDirection::Forward))
+    {
         let key = result?;
         if key.block_height >= tip {
             continue;
@@ -281,9 +281,22 @@ pub fn prune_history(
 
     for chunk in heights.chunks(DELETE_BATCH_HEIGHTS) {
         prune_height_batch(on_chain, off_chain, chunk, &mut report)?;
+        let Some(&last) = chunk.last() else {
+            continue;
+        };
+        let chunk_exclusive = height_after_old_block(last);
+        let capped = if chunk_exclusive > prune_before {
+            prune_before
+        } else {
+            chunk_exclusive
+        };
+        report.deleted_owned_transactions = report
+            .deleted_owned_transactions
+            .saturating_add(prune_owned_transactions_before(off_chain, capped)?);
     }
 
     prune_offchain_history_by_cutoff(off_chain, cutoff, prune_before, &mut report)?;
+    prune_stale_transaction_statuses(off_chain, cutoff, &mut report)?;
 
     report.deleted_owned_transactions = report
         .deleted_owned_transactions
@@ -328,6 +341,57 @@ fn prune_offchain_history_by_cutoff(
         prune_offchain_height_batch(off_chain, chunk, report)?;
     }
 
+    Ok(())
+}
+
+fn transaction_status_time(
+    status: &fuel_core_types::services::transaction_status::TransactionExecutionStatus,
+) -> Option<Tai64> {
+    use fuel_core_types::services::transaction_status::TransactionExecutionStatus;
+    match status {
+        TransactionExecutionStatus::Success { time, .. }
+        | TransactionExecutionStatus::Failed { time, .. }
+        | TransactionExecutionStatus::Submitted { time, .. } => Some(*time),
+        TransactionExecutionStatus::SqueezedOut { .. } => None,
+    }
+}
+
+/// Delete any status older than `cutoff` (incl. `Submitted` without `OldFuelBlocks`).
+fn prune_stale_transaction_statuses(
+    off_chain: &mut Database<OffChain>,
+    cutoff: Tai64,
+    report: &mut HistoryPruneReport,
+) -> StorageResult<()> {
+    let tx_ids: Vec<_> = off_chain
+        .iter_all::<TransactionStatuses>(Some(IterDirection::Forward))
+        .filter_map(|result| match result {
+            Ok((tx_id, status)) => transaction_status_time(status.as_ref())
+                .filter(|time| *time < cutoff)
+                .map(|_| Ok(tx_id)),
+            Err(e) => Some(Err(e)),
+        })
+        .collect::<StorageResult<Vec<_>>>()?;
+
+    for chunk in tx_ids.chunks(DELETE_BATCH_HEIGHTS.saturating_mul(16)) {
+        let mut transaction = StorageTransaction::transaction(
+            off_chain.as_ref(),
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
+        for tx_id in chunk {
+            if transaction
+                .storage_as_mut::<TransactionStatuses>()
+                .take(tx_id)?
+                .is_some()
+            {
+                report.deleted_transaction_statuses =
+                    report.deleted_transaction_statuses.saturating_add(1);
+            }
+        }
+        off_chain
+            .data
+            .commit_changes(None, StorageChanges::Changes(transaction.into_changes()))?;
+    }
     Ok(())
 }
 
@@ -394,8 +458,7 @@ fn prune_offchain_height_batch(
             .take(height)?
             .is_some()
         {
-            report.deleted_old_consensus =
-                report.deleted_old_consensus.saturating_add(1);
+            report.deleted_old_consensus = report.deleted_old_consensus.saturating_add(1);
         }
     }
 
@@ -861,7 +924,10 @@ mod tests {
         {
             let mut txn = on_chain.write_transaction();
             txn.storage_as_mut::<FuelBlocks>()
-                .insert(&100u32.into(), &block_at(100, t_keep, vec![Bytes32::from([5; 32])]))
+                .insert(
+                    &100u32.into(),
+                    &block_at(100, t_keep, vec![Bytes32::from([5; 32])]),
+                )
                 .unwrap();
             txn.commit().unwrap();
         }
