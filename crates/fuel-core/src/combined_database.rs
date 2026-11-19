@@ -412,7 +412,8 @@ impl CombinedDatabase {
         };
 
         let cutoff = cutoff_time(now, retention);
-        let Some(prune_before) = resolve_prune_before(&self.on_chain, &self.off_chain, cutoff)?
+        let Some(prune_before) =
+            resolve_prune_before(&self.on_chain, &self.off_chain, cutoff)?
         else {
             return Ok(Default::default());
         };

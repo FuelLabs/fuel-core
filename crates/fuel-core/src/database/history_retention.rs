@@ -36,7 +36,6 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
     StorageAsRef,
-    StorageInspect,
     iter::{
         IterDirection,
         IteratorOverTable,
@@ -84,7 +83,7 @@ pub struct HistoryPruneReport {
 
 /// Format a retention duration for operator-facing / GraphQL errors.
 ///
-/// Prefers `Nd` / `Nh` when the value is an exact multiple; otherwise `Ns`.
+/// Prefers day/hour suffix when the value is an exact multiple; otherwise seconds.
 pub fn format_retention_duration(retention: Duration) -> String {
     let secs = retention.as_secs();
     const DAY: u64 = 86_400;
@@ -281,22 +280,10 @@ pub fn prune_history(
 
     for chunk in heights.chunks(DELETE_BATCH_HEIGHTS) {
         prune_height_batch(on_chain, off_chain, chunk, &mut report)?;
-        let Some(&last) = chunk.last() else {
-            continue;
-        };
-        let chunk_exclusive = height_after_old_block(last);
-        let capped = if chunk_exclusive > prune_before {
-            prune_before
-        } else {
-            chunk_exclusive
-        };
-        report.deleted_owned_transactions = report
-            .deleted_owned_transactions
-            .saturating_add(prune_owned_transactions_before(off_chain, capped)?);
     }
 
     prune_offchain_history_by_cutoff(off_chain, cutoff, prune_before, &mut report)?;
-    prune_stale_transaction_statuses(off_chain, cutoff, &mut report)?;
+    prune_stale_transaction_statuses(off_chain, cutoff, prune_before, &mut report)?;
 
     report.deleted_owned_transactions = report
         .deleted_owned_transactions
@@ -356,18 +343,47 @@ fn transaction_status_time(
     }
 }
 
-/// Delete any status older than `cutoff` (incl. `Submitted` without `OldFuelBlocks`).
+fn should_prune_transaction_status(
+    status: &fuel_core_types::services::transaction_status::TransactionExecutionStatus,
+    cutoff: Tai64,
+    prune_before: BlockHeight,
+) -> bool {
+    use fuel_core_types::services::transaction_status::TransactionExecutionStatus;
+    let Some(time) = transaction_status_time(status) else {
+        return false;
+    };
+    if time >= cutoff {
+        return false;
+    }
+    match status {
+        TransactionExecutionStatus::Success { block_height, .. }
+        | TransactionExecutionStatus::Failed { block_height, .. } => {
+            *block_height < prune_before
+        }
+        TransactionExecutionStatus::Submitted { .. } => true,
+        TransactionExecutionStatus::SqueezedOut { .. } => false,
+    }
+}
+
+/// Delete aged statuses without `OldFuelBlocks` (`Submitted`, pre-regenesis leftovers).
+/// Never removes statuses for blocks still retained at the tip.
 fn prune_stale_transaction_statuses(
     off_chain: &mut Database<OffChain>,
     cutoff: Tai64,
+    prune_before: BlockHeight,
     report: &mut HistoryPruneReport,
 ) -> StorageResult<()> {
     let tx_ids: Vec<_> = off_chain
         .iter_all::<TransactionStatuses>(Some(IterDirection::Forward))
         .filter_map(|result| match result {
-            Ok((tx_id, status)) => transaction_status_time(status.as_ref())
-                .filter(|time| *time < cutoff)
-                .map(|_| Ok(tx_id)),
+            Ok((tx_id, status)) => {
+                if should_prune_transaction_status(&status, cutoff, prune_before)
+                {
+                    Some(Ok(tx_id))
+                } else {
+                    None
+                }
+            }
             Err(e) => Some(Err(e)),
         })
         .collect::<StorageResult<Vec<_>>>()?;
