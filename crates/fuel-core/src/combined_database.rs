@@ -407,15 +407,21 @@ impl CombinedDatabase {
     ) -> StorageResult<crate::database::history_retention::HistoryPruneReport> {
         use crate::database::history_retention::{
             cutoff_time,
-            prune_before_height,
             prune_history,
+            resolve_prune_before,
         };
 
         let cutoff = cutoff_time(now, retention);
-        let Some(prune_before) = prune_before_height(&self.on_chain, cutoff)? else {
+        let Some(prune_before) = resolve_prune_before(&self.on_chain, &self.off_chain, cutoff)?
+        else {
             return Ok(Default::default());
         };
-        prune_history(&mut self.on_chain, &mut self.off_chain, prune_before)
+        prune_history(
+            &mut self.on_chain,
+            &mut self.off_chain,
+            prune_before,
+            cutoff,
+        )
     }
 
     /// Backward-compatible alias for [`Self::prune_history`].
