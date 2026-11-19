@@ -2,6 +2,27 @@
 ignore = [
     "RUSTSEC-2026-0118", # hickory-proto 0.25 via libp2p-dns 0.44; advisory has no fixed release
     "RUSTSEC-2026-0119", # https://github.com/FuelLabs/fuel-core/issues/3296 — libp2p-dns 0.44 pins hickory-proto 0.25
+    # hickory-proto / hickory-resolver 0.25.x still pulled by libp2p-dns 0.44 (#3296).
+    "RUSTSEC-2026-0487",
+    "RUSTSEC-2026-0489",
+    "RUSTSEC-2026-0490",
+    "RUSTSEC-2026-0491",
+    "RUSTSEC-2026-0504",
+    "RUSTSEC-2026-0505",
+    "RUSTSEC-2026-0511",
+    "RUSTSEC-2026-0512",
+    "RUSTSEC-2026-0513",
+    "RUSTSEC-2026-0514",
+    "RUSTSEC-2026-0515",
+    "RUSTSEC-2026-0516",
+    "RUSTSEC-2026-0530",
+    "RUSTSEC-2026-0531",
+    "RUSTSEC-2026-0532",
+    "RUSTSEC-2026-0549",
+    "RUSTSEC-2026-0550",
+    "RUSTSEC-2026-0551",
+    # libp2p-gossipsub 0.49.5; fix requires 0.50.1 (manifest still pins ^0.49.4).
+    "RUSTSEC-2026-0534",
     # Thrift 0.17 is only used by parquet 58.1.0. Its file readers use the
     # compact protocol, not the affected TBinaryInputProtocol::read_bytes/read_string.
     # Reassess if another Thrift consumer or binary-protocol reader is introduced.
