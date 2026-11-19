@@ -377,8 +377,7 @@ fn prune_stale_transaction_statuses(
         .iter_all::<TransactionStatuses>(Some(IterDirection::Forward))
         .filter_map(|result| match result {
             Ok((tx_id, status)) => {
-                if should_prune_transaction_status(&status, cutoff, prune_before)
-                {
+                if should_prune_transaction_status(&status, cutoff, prune_before) {
                     Some(Ok(tx_id))
                 } else {
                     None
