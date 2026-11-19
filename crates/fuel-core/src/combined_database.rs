@@ -395,6 +395,86 @@ impl CombinedDatabase {
         &mut self.off_chain
     }
 
+    /// Offline prune of history older than `retention` (relative to `now`).
+    ///
+    /// Delete scope **B**: offchain indexes/statuses/`Old*` **and** aged onchain
+    /// `FuelBlocks` / `Transactions` / sealed consensus. Keeps live Coins /
+    /// Contracts* / UTXO. See [`crate::database::history_retention`].
+    pub fn prune_history(
+        &mut self,
+        retention: std::time::Duration,
+        now: fuel_core_types::tai64::Tai64,
+    ) -> StorageResult<crate::database::history_retention::HistoryPruneReport> {
+        use crate::database::history_retention::{
+            cutoff_time,
+            prune_history,
+            resolve_prune_before,
+        };
+
+        let cutoff = cutoff_time(now, retention);
+        let Some(prune_before) =
+            resolve_prune_before(&self.on_chain, &self.off_chain, cutoff)?
+        else {
+            return Ok(Default::default());
+        };
+        prune_history(
+            &mut self.on_chain,
+            &mut self.off_chain,
+            prune_before,
+            cutoff,
+        )
+    }
+
+    /// Backward-compatible alias for [`Self::prune_history`].
+    pub fn prune_offchain_history(
+        &mut self,
+        retention: std::time::Duration,
+        now: fuel_core_types::tai64::Tai64,
+    ) -> StorageResult<crate::database::history_retention::HistoryPruneReport> {
+        self.prune_history(retention, now)
+    }
+
+    /// Open RocksDB at `path`, prune history (scope B), then shut down handles.
+    ///
+    /// Intended for prune-before-`archive backup`. Node must not hold the DB open.
+    #[cfg(feature = "rocksdb")]
+    pub fn prune_history_at(
+        path: &std::path::Path,
+        retention: std::time::Duration,
+        now: fuel_core_types::tai64::Tai64,
+    ) -> anyhow::Result<crate::database::history_retention::HistoryPruneReport> {
+        use crate::state::{
+            historical_rocksdb::StateRewindPolicy,
+            rocks_db::{
+                ColumnsPolicy,
+                DatabaseConfig,
+            },
+        };
+
+        let mut db = Self::open(
+            path,
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig {
+                cache_capacity: Some(64 * 1024 * 1024),
+                max_fds: -1,
+                columns_policy: ColumnsPolicy::Lazy,
+            },
+        )?;
+        let report = db.prune_history(retention, now)?;
+        db.shutdown();
+        Ok(report)
+    }
+
+    /// Backward-compatible alias for [`Self::prune_history_at`].
+    #[cfg(feature = "rocksdb")]
+    pub fn prune_offchain_history_at(
+        path: &std::path::Path,
+        retention: std::time::Duration,
+        now: fuel_core_types::tai64::Tai64,
+    ) -> anyhow::Result<crate::database::history_retention::HistoryPruneReport> {
+        Self::prune_history_at(path, retention, now)
+    }
+
     pub fn relayer(&self) -> &Database<Relayer> {
         &self.relayer
     }

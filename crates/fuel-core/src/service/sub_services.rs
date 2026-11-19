@@ -517,6 +517,7 @@ pub fn init_sub_services(
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         historical_execution: config.historical_execution,
+        history_retention: config.history_retention,
         allow_syscall: config.allow_syscall,
         expensive_subscriptions: config.expensive_subscriptions,
         max_tx: config.txpool.pool_limits.max_txs,

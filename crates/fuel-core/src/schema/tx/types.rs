@@ -784,15 +784,31 @@ impl Transaction {
 
         let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
 
-        get_tx_status(
+        let status = get_tx_status(
             &id,
             query.as_ref(),
             tx_status_manager,
             include_preconfirmation.unwrap_or(false),
         )
         .await
-        .map(|status| status.map(|status| TransactionStatus::new(id, status)))
-        .map_err(Into::into)
+        .map_err(Into::<async_graphql::Error>::into)?;
+
+        match status {
+            Some(status) => Ok(Some(TransactionStatus::new(id, status))),
+            None => {
+                let config = ctx.data_unchecked::<crate::fuel_core_graphql_api::Config>();
+                if let Some(retention) = config.history_retention {
+                    // Transaction object exists (onchain) but status missing → pruned.
+                    Err(
+                        crate::fuel_core_graphql_api::history_retention_status_error(
+                            retention,
+                        ),
+                    )
+                } else {
+                    Ok(None)
+                }
+            }
+        }
     }
 
     async fn script(&self) -> Option<HexString> {

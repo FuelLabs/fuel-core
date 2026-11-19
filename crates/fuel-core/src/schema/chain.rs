@@ -1150,6 +1150,7 @@ mod tests {
             debug: false,
             allow_syscall: false,
             historical_execution: false,
+            history_retention: None,
             expensive_subscriptions: false,
             max_tx: 1,
             max_gas: 1,

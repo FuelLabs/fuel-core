@@ -191,6 +191,17 @@ pub struct Command {
     #[arg(name = "DB_PRUNE", long = "db-prune", env, default_value = "false")]
     pub db_prune: bool,
 
+    /// Keep historical chain/GraphQL data for this duration (e.g. `30d`). When set,
+    /// GraphQL returns a retention-named error for pruned txs/blocks/statuses.
+    /// Offline prune (scope B) deletes aged offchain indexes **and** onchain
+    /// blocks/txs; keeps live Coins/Contracts/UTXO. Not the same as `--db-prune`
+    /// (full wipe). Full Archive must leave unset.
+    ///
+    /// Online continuous prune worker is a fast follow; use
+    /// `archive backup --history-retention` for offline prune-before-backup.
+    #[arg(long = "history-retention", env)]
+    pub history_retention: Option<humantime::Duration>,
+
     /// The determines whether to continue the services on internal error or not.
     #[clap(long = "continue-services-on-error", default_value = "false", env)]
     pub continue_on_error: bool,
@@ -360,6 +371,7 @@ impl Command {
             #[cfg(feature = "rocksdb")]
             state_rewind_duration,
             db_prune,
+            history_retention,
             snapshot,
             continue_on_error,
             vm_backtrace: _,
@@ -745,6 +757,7 @@ impl Command {
             snapshot_reader,
             debug,
             historical_execution,
+            history_retention: history_retention.map(Into::into),
             expensive_subscriptions,
             native_executor_version,
             continue_on_error,

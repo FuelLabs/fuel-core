@@ -25,6 +25,9 @@ pub struct Config {
     pub debug: bool,
     pub allow_syscall: bool,
     pub historical_execution: bool,
+    /// When set, missing txs/blocks/statuses are treated as outside the
+    /// retention window (named error) instead of soft `null`.
+    pub history_retention: Option<Duration>,
     pub expensive_subscriptions: bool,
     pub max_tx: usize,
     pub max_gas: u64,
@@ -197,4 +200,27 @@ pub fn require_expensive_subscriptions(ctx: &Context<'_>) -> async_graphql::Resu
             "`--expensive-subscriptions` is required for this operation",
         ))
     }
+}
+
+/// Error when GraphQL status/receipts were pruned by history retention.
+pub fn history_retention_status_error(retention: Duration) -> async_graphql::Error {
+    async_graphql::Error::new(
+        crate::database::history_retention::retention_window_error_message(retention),
+    )
+}
+
+/// Error when a transaction body was pruned by history retention.
+pub fn history_retention_transaction_error(retention: Duration) -> async_graphql::Error {
+    async_graphql::Error::new(
+        crate::database::history_retention::retention_transaction_error_message(
+            retention,
+        ),
+    )
+}
+
+/// Error when a block was pruned by history retention.
+pub fn history_retention_block_error(retention: Duration) -> async_graphql::Error {
+    async_graphql::Error::new(
+        crate::database::history_retention::retention_block_error_message(retention),
+    )
 }
