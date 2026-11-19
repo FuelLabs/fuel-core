@@ -182,10 +182,10 @@ pub fn prune_before_from_offchain_history(
     let mut expected: Option<BlockHeight> = None;
     for result in off_chain.iter_all::<OldFuelBlocks>(Some(IterDirection::Forward)) {
         let (height, block) = result?;
-        if let Some(next) = expected {
-            if height != next {
-                break;
-            }
+        if let Some(next) = expected
+            && height != next
+        {
+            break;
         }
         if block.header().time() < cutoff {
             prune_before = Some(height_after_old_block(height));

@@ -399,7 +399,7 @@ impl CombinedDatabase {
     ///
     /// Delete scope **B**: offchain indexes/statuses/`Old*` **and** aged onchain
     /// `FuelBlocks` / `Transactions` / sealed consensus. Keeps live Coins /
-    /// Contracts* / UTXO. See [`database::history_retention`].
+    /// Contracts* / UTXO. See [`crate::database::history_retention`].
     pub fn prune_history(
         &mut self,
         retention: std::time::Duration,
