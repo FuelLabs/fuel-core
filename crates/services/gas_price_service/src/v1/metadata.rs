@@ -1,5 +1,8 @@
 use crate::v0::metadata::V0Metadata;
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    ClampedPercentage,
+    fuel_types::BlockHeight,
+};
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     L2ActivityTracker,
@@ -78,7 +81,7 @@ pub struct V1AlgorithmConfig {
     pub new_exec_gas_price: u64,
     pub min_exec_gas_price: u64,
     pub exec_gas_price_change_percent: u16,
-    pub l2_block_fullness_threshold_percent: u8,
+    pub l2_block_fullness_threshold_percent: ClampedPercentage,
     // TODO:We don't need this after we implement
     // https://github.com/FuelLabs/fuel-core/issues/2481
     pub gas_price_factor: NonZeroU64,
@@ -90,7 +93,7 @@ pub struct V1AlgorithmConfig {
     pub normal_range_size: u16,
     pub capped_range_size: u16,
     pub decrease_range_size: u16,
-    pub block_activity_threshold: u8,
+    pub block_activity_threshold: ClampedPercentage,
     /// The interval at which the `DaSourceService` polls for new data
     pub da_poll_interval: Option<Duration>,
     pub starting_recorded_height: Option<BlockHeight>,
@@ -105,7 +108,7 @@ pub fn updater_from_config(
         value.normal_range_size,
         value.capped_range_size,
         value.decrease_range_size,
-        value.block_activity_threshold.into(),
+        value.block_activity_threshold,
     );
     let unrecorded_blocks_bytes = 0;
     AlgorithmUpdaterV1 {
@@ -126,9 +129,7 @@ pub fn updater_from_config(
         l2_activity,
         min_exec_gas_price: value.min_exec_gas_price,
         exec_gas_price_change_percent: value.exec_gas_price_change_percent,
-        l2_block_fullness_threshold_percent: value
-            .l2_block_fullness_threshold_percent
-            .into(),
+        l2_block_fullness_threshold_percent: value.l2_block_fullness_threshold_percent,
         min_da_gas_price: value.min_da_gas_price,
         max_da_gas_price: value.max_da_gas_price,
         max_da_gas_price_change_percent: value.max_da_gas_price_change_percent,
@@ -163,7 +164,7 @@ pub fn v1_algorithm_from_metadata(
         config.normal_range_size,
         config.capped_range_size,
         config.decrease_range_size,
-        config.block_activity_threshold.into(),
+        config.block_activity_threshold,
     );
     let unrecorded_blocks_bytes: u128 = metadata.unrecorded_block_bytes;
     let projected_portion =
@@ -185,9 +186,7 @@ pub fn v1_algorithm_from_metadata(
         l2_activity,
         min_exec_gas_price: config.min_exec_gas_price,
         exec_gas_price_change_percent: config.exec_gas_price_change_percent,
-        l2_block_fullness_threshold_percent: config
-            .l2_block_fullness_threshold_percent
-            .into(),
+        l2_block_fullness_threshold_percent: config.l2_block_fullness_threshold_percent,
         min_da_gas_price: config.min_da_gas_price,
         max_da_gas_price: config.max_da_gas_price,
         max_da_gas_price_change_percent: config.max_da_gas_price_change_percent,
