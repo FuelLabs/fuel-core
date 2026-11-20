@@ -33,7 +33,7 @@ subscriptions = [
     "dep:postcard",
     "fuel-core-types/serde",
 ]
-fault-proving = ["fuel-core-types/fault-proving"]
+fault-proving = ["fuel-core-types/fault-proving", "fuel-core-block-aggregator-api?/fault-proving"]
 
 [dependencies]
 anyhow = { workspace = true }

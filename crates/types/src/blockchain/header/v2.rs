@@ -7,7 +7,10 @@ use crate::{
             GeneratedConsensusFields,
             generate_txns_root,
         },
-        primitives::BlockId,
+        primitives::{
+            BlockId,
+            Empty,
+        },
     },
     fuel_crypto,
     fuel_tx::{
@@ -59,6 +62,30 @@ pub struct BlockHeaderV2 {
 }
 
 impl BlockHeaderV2 {
+    /// Creates a header from generated application fields and consensus data.
+    ///
+    /// Recalculates the application hash and block ID. The supplied generated
+    /// fields are not validated against transactions or receipts.
+    pub fn from_generated_fields(
+        application: ApplicationHeader<GeneratedApplicationFieldsV2>,
+        consensus: ConsensusHeader<Empty>,
+    ) -> Self {
+        let mut header = Self {
+            application,
+            consensus: ConsensusHeader {
+                prev_root: consensus.prev_root,
+                height: consensus.height,
+                time: consensus.time,
+                generated: GeneratedConsensusFields {
+                    application_hash: Default::default(),
+                },
+            },
+            metadata: None,
+        };
+        header.recalculate_metadata();
+        header
+    }
+
     pub(crate) fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
         &self.consensus
     }

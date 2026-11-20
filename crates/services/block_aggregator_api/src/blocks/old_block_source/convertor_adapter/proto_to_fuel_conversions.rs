@@ -27,6 +27,12 @@ use crate::{
     result::Error,
 };
 use anyhow::anyhow;
+#[cfg(feature = "fault-proving")]
+use fuel_core_types::blockchain::header::{
+    BlockHeader,
+    BlockHeaderV1,
+    BlockHeaderV2,
+};
 use fuel_core_types::{
     blockchain::{
         block::Block as FuelBlock,
@@ -505,14 +511,12 @@ pub fn fuel_block_from_protobuf(
         .versioned_block
         .ok_or_else(|| anyhow::anyhow!("Missing protobuf versioned_block"))
         .map_err(Error::Serialization)?;
-    let (partial_header, event_inbox_root, txs, receipts) = match versioned_block {
+    let (proto_header, txs, receipts) = match versioned_block {
         ProtoVersionedBlock::V1(v1_inner) => {
             let proto_header = v1_inner
                 .header
                 .ok_or_else(|| anyhow::anyhow!("Missing protobuf header"))
                 .map_err(Error::Serialization)?;
-            let (partial_header, event_inbox_root) =
-                partial_header_from_proto_header(&proto_header)?;
             let txs = v1_inner
                 .transactions
                 .iter()
@@ -528,9 +532,11 @@ pub fn fuel_block_from_protobuf(
                         .collect::<crate::result::Result<Vec<_>>>()
                 })
                 .collect::<crate::result::Result<Vec<_>>>()?;
-            (partial_header, event_inbox_root, txs, receipts)
+            (proto_header, txs, receipts)
         }
     };
+    let (partial_header, event_inbox_root) =
+        partial_header_from_proto_header(&proto_header)?;
 
     let mut msg_ids = Vec::new();
     for receipts in &receipts {
@@ -553,6 +559,46 @@ pub fn fuel_block_from_protobuf(
     )
     .map_err(|e| anyhow!(e))
     .map_err(Error::Serialization)?;
+
+    #[cfg(feature = "fault-proving")]
+    let block = {
+        let (header, transactions) = block.into_inner();
+        // Keep regenerating common fields from transactions and receipts, but
+        // preserve the wire version and the chain-dependent commitment.
+        let mut application = match &header {
+            BlockHeader::V2(header) => *header.application(),
+            BlockHeader::V1(_) => {
+                return Err(Error::Serialization(anyhow!(
+                    "Expected a generated V2 header"
+                )));
+            }
+        };
+        let consensus = header.as_empty_consensus_header();
+        let header = match proto_header.versioned_header {
+            Some(ProtoVersionedHeader::V1(_)) => BlockHeader::V1(
+                BlockHeaderV1::from_generated_fields((&application).into(), consensus),
+            ),
+            Some(ProtoVersionedHeader::V2(proto_header)) => {
+                application.generated.tx_id_commitment =
+                    Bytes32::try_from(proto_header.tx_id_commitment.as_slice())
+                        .map_err(|e| Error::Serialization(anyhow!(e)))?;
+                BlockHeader::V2(BlockHeaderV2::from_generated_fields(
+                    application,
+                    consensus,
+                ))
+            }
+            None => {
+                return Err(Error::Serialization(anyhow!(
+                    "Missing protobuf versioned_header"
+                )))
+            }
+        };
+        FuelBlock::try_from_executed(header, transactions).ok_or_else(|| {
+            Error::Serialization(anyhow!(
+                "Transactions do not match the generated header"
+            ))
+        })?
+    };
     Ok((block, receipts))
 }
 
