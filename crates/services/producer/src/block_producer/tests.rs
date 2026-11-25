@@ -842,7 +842,10 @@ mod dry_run {
     }
 }
 
-use fuel_core_types::fuel_tx::field::MintGasPrice;
+use fuel_core_types::fuel_tx::field::{
+    MintAssetId,
+    MintGasPrice,
+};
 use proptest::{
     prop_compose,
     proptest,
@@ -858,8 +861,13 @@ prop_compose! {
             ..Default::default()
         };
 
-        let mint = Transaction::Mint(inner_mint);
-        txs.push(mint);
+        if height % 2 == 0 {
+            let mut announcement = inner_mint.clone();
+            *announcement.mint_asset_id_mut() = [1; 32].into();
+            *announcement.gas_price_mut() = 5;
+            txs.push(Transaction::Mint(announcement));
+        }
+        txs.push(Transaction::Mint(inner_mint));
         let header = PartialBlockHeader {
             consensus: ConsensusHeader {
                 height: (height as u32).into(),
@@ -986,7 +994,13 @@ proptest! {
 
         // then
         let captured = executor.captured.lock().unwrap();
-        let txs_source = &captured.as_ref().unwrap().transactions_source;
+        let component = captured.as_ref().unwrap();
+        for mint in block.transactions().iter().rev().skip(1).map_while(Transaction::as_mint) {
+            let price = &component.fee_asset_gas_prices[mint.mint_asset_id()];
+            assert!(price.announce);
+            assert_eq!(price.gas_price, *mint.gas_price());
+        }
+        let txs_source = &component.transactions_source;
         let has_a_mint = txs_source.iter().any(|tx| matches!(tx, Transaction::Mint(_)));
         assert!(!has_a_mint);
     }

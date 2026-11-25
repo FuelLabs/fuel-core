@@ -95,21 +95,14 @@ where
     )
     .await?;
 
-    let transaction_count = transactions.len();
-
-    // patch mint transaction
-    let mint_tx = transactions
-        .last_mut()
-        .ok_or_else(|| anyhow::anyhow!("No transactions"))?;
-    if let Transaction::Mint(mint) = mint_tx {
-        let tx_pointer = mint.tx_pointer_mut();
-        *tx_pointer = FuelTxPointer::new(
-            block.consensus_header().height,
-            #[allow(clippy::arithmetic_side_effects)]
-            u16::try_from(transaction_count - 1)?,
-        );
-    } else {
-        anyhow::bail!("Last transaction is not a mint");
+    anyhow::ensure!(
+        matches!(transactions.last(), Some(Transaction::Mint(_))),
+        "Missing terminal Mint"
+    );
+    for (index, tx) in transactions.iter_mut().enumerate().rev() {
+        let Transaction::Mint(mint) = tx else { break };
+        *mint.tx_pointer_mut() =
+            FuelTxPointer::new(block.consensus_header().height, index.try_into()?);
     }
 
     #[cfg(feature = "fault-proving")]
@@ -270,7 +263,7 @@ where
         ctx: &DecompressCtx<D>,
     ) -> anyhow::Result<Self> {
         Ok(Transaction::mint(
-            Default::default(), // TODO: what should we do with this?
+            Default::default(), // Restored from the block height and transaction index.
             c.input_contract.decompress(ctx).await?,
             c.output_contract.decompress(ctx).await?,
             c.mint_amount.decompress(ctx).await?,

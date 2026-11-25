@@ -141,6 +141,13 @@ pub fn init_sub_services(
     block_production_ready_signal: ReadySignal,
 ) -> anyhow::Result<(SubServices, SharedState)> {
     let chain_config = config.snapshot_reader.chain_config();
+    anyhow::ensure!(
+        !config
+            .block_producer
+            .fee_asset_rates
+            .contains_key(chain_config.consensus_parameters.base_asset_id()),
+        "The base asset already has its own gas price"
+    );
     let chain_id = chain_config.consensus_parameters.chain_id();
     let chain_name = chain_config.chain_name.clone();
     let on_chain_view = database.on_chain().latest_view()?;
@@ -323,10 +330,14 @@ pub fn init_sub_services(
         .gas_price_config
         .exec_gas_price_change_percent
         .max(config.gas_price_config.max_da_gas_price_change_percent);
-    let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
+    let mut universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
         latest_gas_price,
         gas_price_change_percent,
     );
+
+    universal_gas_price_provider
+        .fee_asset_rates
+        .clone_from(&config.block_producer.fee_asset_rates);
 
     let producer_gas_price_provider = FuelGasPriceProvider::new(
         gas_price_algo.clone(),

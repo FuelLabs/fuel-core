@@ -529,11 +529,11 @@ impl Instance<Relayer> {
         components: Components<()>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Instance<InputData>> {
-        let input = InputSerializationType::V1 {
-            block: WasmSerializationBlockTypes::Production(components),
+        self.add_execution_input(
+            components,
             options,
-        };
-        self.add_input_data(input)
+            WasmSerializationBlockTypes::Production,
+        )
     }
 
     pub fn add_dry_run_input_data(
@@ -541,9 +541,25 @@ impl Instance<Relayer> {
         components: Components<()>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Instance<InputData>> {
-        let input = InputSerializationType::V1 {
-            block: WasmSerializationBlockTypes::DryRun(components),
-            options,
+        self.add_execution_input(components, options, WasmSerializationBlockTypes::DryRun)
+    }
+
+    fn add_execution_input(
+        self,
+        mut components: Components<()>,
+        options: ExecutionOptions,
+        mode: impl FnOnce(Components<()>) -> WasmSerializationBlockTypes<'static, ()>,
+    ) -> ExecutorResult<Instance<InputData>> {
+        let prices = std::mem::take(&mut components.fee_asset_gas_prices);
+        let block = mode(components);
+        let input = if prices.is_empty() {
+            InputSerializationType::V1 { block, options }
+        } else {
+            InputSerializationType::V2 {
+                block,
+                options,
+                fee_asset_gas_prices: prices,
+            }
         };
         self.add_input_data(input)
     }

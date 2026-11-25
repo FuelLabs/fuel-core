@@ -30,7 +30,10 @@ use fuel_vm_private::{
     fuel_types::BlockHeight,
     prelude::field::Expiration,
 };
-use std::sync::Arc;
+use std::{
+    num::NonZeroU64,
+    sync::Arc,
+};
 
 /// Pool transaction wrapped in an Arc for thread-safe sharing
 pub type ArcPoolTx = Arc<PoolTransaction>;
@@ -41,6 +44,7 @@ pub struct Metadata {
     version: ConsensusParametersVersion,
     size: Option<usize>,
     max_gas_price: Word,
+    fee_asset_rate: NonZeroU64,
     #[cfg(feature = "test-helpers")]
     max_gas: Option<Word>,
     #[cfg(feature = "test-helpers")]
@@ -57,6 +61,7 @@ impl Metadata {
         Self {
             version,
             size: Some(size),
+            fee_asset_rate: NonZeroU64::MIN,
             max_gas_price,
             #[cfg(feature = "test-helpers")]
             max_gas: None,
@@ -75,13 +80,21 @@ impl Metadata {
         Self {
             version,
             size: None,
+            fee_asset_rate: NonZeroU64::MIN,
             max_gas_price: 0,
             max_gas,
             tx_id,
         }
     }
 
-    /// Returns the max gas price for the transaction.
+    /// Normalizes a maximum alternate-asset gas price for base-priced pool comparisons.
+    pub fn with_fee_asset_rate(mut self, rate: NonZeroU64) -> Self {
+        self.max_gas_price /= rate;
+        self.fee_asset_rate = rate;
+        self
+    }
+
+    /// Returns the maximum gas price in base-asset units.
     pub fn max_gas_price(&self) -> Word {
         self.max_gas_price
     }
@@ -124,7 +137,7 @@ impl PoolTransaction {
         }
     }
 
-    /// Returns the maximum gas price for the transaction.
+    /// Returns the maximum gas price in base-asset units.
     pub fn max_gas_price(&self) -> Word {
         match self {
             PoolTransaction::Script(_, metadata) => metadata.max_gas_price,
@@ -240,6 +253,11 @@ impl PoolTransaction {
             PoolTransaction::Upload(_, _) => None,
             PoolTransaction::Blob(_, _) => None,
         }
+    }
+
+    /// Tip in whole base-asset units for priority comparisons.
+    pub fn base_asset_tip(&self) -> Word {
+        self.tip() / self.metadata_inner().fee_asset_rate
     }
 
     pub fn tip(&self) -> Word {

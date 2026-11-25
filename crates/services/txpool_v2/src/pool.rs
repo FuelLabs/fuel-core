@@ -592,7 +592,7 @@ where
 
         // Here the transaction has no dependencies that mean that it's an executable transaction,
         // and we want to make space for it
-        let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
+        let new_tx_ratio = Ratio::new(tx.base_asset_tip(), tx.max_gas());
 
         // We want to go over executable transactions and remove the less profitable ones.
         // It is imported to go over executable transactions, not dependent ones, because we

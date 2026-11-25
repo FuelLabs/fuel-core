@@ -875,6 +875,115 @@ fn get_sorted_out_tx_by_creation_instant() {
 }
 
 #[test]
+fn fee_asset_admission_uses_the_configured_rate_and_signed_fee_cap() {
+    use crate::{
+        ports::GasPriceProvider,
+        service::verifications::Verification,
+        tests::mocks::{
+            MockChainStateInfoProvider,
+            MockDBProvider,
+            MockDb,
+        },
+    };
+    use fuel_core_types::{
+        fuel_tx::{
+            Finalizable,
+            field::{
+                MaxFeeLimit,
+                Policies,
+            },
+            policies::PolicyType,
+        },
+        services::executor::memory::MemoryPool,
+    };
+    use std::{
+        num::NonZeroU64,
+        sync::Arc,
+    };
+
+    let asset = AssetId::from([3; 32]);
+    struct Prices(AssetId);
+    impl GasPriceProvider for Prices {
+        fn next_gas_price(&self) -> u64 {
+            4
+        }
+        fn fee_asset_rate(&self, asset: &AssetId) -> Option<NonZeroU64> {
+            NonZeroU64::new(3).filter(|_| *asset == self.0)
+        }
+    }
+
+    let mut params = ConsensusParameters::standard();
+    params.set_fee_params(params.fee_params().with_gas_price_factor(1));
+    let verify = |asset: AssetId, accepted: AssetId, activated, discount| {
+        let mut chain = MockChainStateInfoProvider::default();
+        let params_for_verifier = params.clone();
+        chain
+            .expect_latest_consensus_parameters()
+            .returning(move || (0, Arc::new(params_for_verifier.clone())));
+        chain.expect_fee_assets_enabled().return_const(activated);
+        let verifier = Verification {
+            persistent_storage_provider: Arc::new(MockDBProvider(MockDb::default())),
+            chain_state_info_provider: Arc::new(chain),
+            gas_price_provider: Arc::new(Prices(accepted)),
+            wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
+            memory_pool: MemoryPool::new(),
+            blacklist: Default::default(),
+        };
+
+        let mut tx = TransactionBuilder::script(vec![], vec![])
+            .script_gas_limit(100)
+            .tip(6)
+            .add_input(Input::coin_signed(
+                Default::default(),
+                Default::default(),
+                u64::MAX,
+                asset,
+                Default::default(),
+                0,
+            ))
+            .add_output(Output::change(Default::default(), 0, asset))
+            .add_witness(Default::default())
+            .finalize_without_signature();
+        tx.policies_mut().set(PolicyType::FeeAsset, Some(0));
+        let fee = u64::try_from(tx.max_fee(params.gas_costs(), params.fee_params(), 12))
+            .unwrap();
+        tx.set_max_fee_limit(fee.checked_sub(discount).unwrap());
+        verifier.perform_all_verifications(tx.into(), 1u32.into(), false, false)
+    };
+
+    let pooled = verify(asset, asset, true, 0).unwrap();
+    assert_eq!(pooled.tip(), 6);
+    assert_eq!(pooled.base_asset_tip(), 2);
+    assert_eq!(pooled.max_gas_price(), 4);
+    let mut universe = TestPoolUniverse::default();
+    universe.config.utxo_validation = false;
+    universe.build_pool();
+    let pool = universe.get_pool();
+    let mut pool = pool.write();
+    pool.insert(Arc::new(pooled), universe.database()).unwrap();
+    let select = |minimal_gas_price| Constraints {
+        minimal_gas_price,
+        max_gas: u64::MAX,
+        maximum_txs: u16::MAX,
+        maximum_block_size: u32::MAX,
+        excluded_contracts: Default::default(),
+    };
+    assert!(pool.extract_transactions_for_block(select(5)).is_empty());
+    assert_eq!(pool.extract_transactions_for_block(select(4)).len(), 1);
+    assert!(matches!(
+        verify(asset, asset, true, 1),
+        Err(Error::InsufficientMaxFee { .. })
+    ));
+    assert!(
+        matches!(verify(asset, AssetId::zeroed(), true, 0), Err(Error::UnsupportedFeeAsset(id)) if id == asset)
+    );
+    assert!(matches!(
+        verify(*params.base_asset_id(), asset, false, 0),
+        Err(Error::FeeAssetsNotActivated)
+    ));
+}
+
+#[test]
 fn insert_tx_at_least_min_gas_price() {
     // Given
     let gas_price = 10;

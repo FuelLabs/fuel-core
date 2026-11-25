@@ -417,8 +417,11 @@ pub type ConsensusParametersVersion = u32;
 /// The type representing the version of the state transition bytecode.
 pub type StateTransitionBytecodeVersion = u32;
 
+/// Local prototype STF introducing the FeeAsset policy and per-asset Mints.
+pub const FEE_ASSET_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 35;
 /// The latest version of the state transition bytecode.
-pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 34;
+pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion =
+    FEE_ASSET_STATE_TRANSITION_VERSION;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

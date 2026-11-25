@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core-upgradable-executor"
-version = { workspace = true }
+version = "0.48.4+feeassets"
 authors = { workspace = true }
 edition = { workspace = true }
 homepage = { workspace = true }

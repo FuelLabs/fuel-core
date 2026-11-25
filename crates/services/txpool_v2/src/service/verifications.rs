@@ -17,17 +17,21 @@ use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
+        AssetId,
         ConsensusParameters,
         Transaction,
         UpgradePurpose,
         field::{
             MaxFeeLimit,
+            Tip,
             UpgradePurpose as _,
         },
+        policies::PolicyType,
     },
     fuel_types::BlockHeight,
     fuel_vm::{
         checked_transaction::{
+            CheckError,
             CheckPredicateParams,
             CheckPredicates,
             Checked,
@@ -36,6 +40,7 @@ use fuel_core_types::{
             IntoChecked,
         },
         interpreter::{
+            CheckedMetadata,
             ExecutableTransaction,
             Memory,
         },
@@ -79,8 +84,20 @@ where
         let basically_verified_tx =
             unverified.perform_basic_verifications(current_height, &consensus_params)?;
 
-        let metadata =
+        let (mut metadata, fee_asset) =
             calculate_metadata(&basically_verified_tx.0, &consensus_params, version)?;
+        if let Some(asset) = fee_asset {
+            if !self.chain_state_info_provider.fee_assets_enabled() {
+                return Err(Error::FeeAssetsNotActivated);
+            }
+            if asset != *consensus_params.base_asset_id() {
+                let rate = self
+                    .gas_price_provider
+                    .fee_asset_rate(&asset)
+                    .ok_or(Error::UnsupportedFeeAsset(asset))?;
+                metadata = metadata.with_fee_asset_rate(rate);
+            }
+        }
 
         let gas_price_verified_tx = basically_verified_tx
             .perform_gas_price_verifications(
@@ -238,34 +255,27 @@ fn calculate_metadata(
     tx: &CheckedTransaction,
     consensus_params: &ConsensusParameters,
     version: ConsensusParametersVersion,
-) -> Result<Metadata, Error> {
-    let metadata = match tx {
+) -> Result<(Metadata, Option<AssetId>), Error> {
+    match tx {
         CheckedTransaction::Script(tx) => metadata_for_tx(tx, consensus_params, version),
         CheckedTransaction::Create(tx) => metadata_for_tx(tx, consensus_params, version),
-        CheckedTransaction::Mint(_) => {
-            return Err(Error::MintIsDisallowed);
-        }
+        CheckedTransaction::Mint(_) => Err(Error::MintIsDisallowed),
         CheckedTransaction::Upgrade(tx) => metadata_for_tx(tx, consensus_params, version),
         CheckedTransaction::Upload(tx) => metadata_for_tx(tx, consensus_params, version),
         CheckedTransaction::Blob(tx) => metadata_for_tx(tx, consensus_params, version),
-    };
-
-    Ok(metadata)
+    }
 }
 
 fn metadata_for_tx<Tx>(
     tx: &Checked<Tx>,
     consensus_params: &ConsensusParameters,
     version: ConsensusParametersVersion,
-) -> Metadata
+) -> Result<(Metadata, Option<AssetId>), Error>
 where
     Tx: ExecutableTransaction,
+    Tx::Metadata: CheckedMetadata,
 {
     // `max_fee_limit` is always set for `Checked<Tx>`
-    //
-    // gas * gas_price / gas_price_factor = fee
-    // gas_price = fee * gas_price_factor / gas
-    // max_gas_price = max_fee * gas_price_factor / max_gas
     let gas_costs = consensus_params.gas_costs();
     let fee_parameters = consensus_params.fee_params();
     let max_gas = tx.transaction().max_gas(gas_costs, fee_parameters) as u128;
@@ -273,23 +283,46 @@ where
 
     #[cfg(debug_assertions)]
     {
-        use fuel_core_types::fuel_tx::policies::PolicyType;
         let policy = tx.transaction().policies().get(PolicyType::MaxFee);
         assert!(policy.is_some(), "MaxFee policy is not set");
     }
 
-    let max_fee = tx.transaction().max_fee_limit() as u128;
+    let max_fee = tx.transaction().max_fee_limit();
 
-    let max_gas_price = max_fee
-        .saturating_mul(gas_price_factor)
-        .div_ceil(max_gas.max(1));
+    let fee_asset = tx
+        .transaction()
+        .policies()
+        .is_set(PolicyType::FeeAsset)
+        .then(|| tx.metadata().fee_asset_id(consensus_params.base_asset_id()));
+    let max_gas_price = if fee_asset.is_some() {
+        // The tip consumes part of MaxFee, and the VM rounds the gas charge up.
+        let tip = tx.transaction().tip();
+        let gas_budget =
+            max_fee
+                .checked_sub(tip)
+                .ok_or(CheckError::InsufficientMaxFee {
+                    max_fee_from_policies: max_fee,
+                    max_fee_from_gas_price: tip,
+                })?;
+        u128::from(gas_budget)
+            .saturating_mul(gas_price_factor)
+            .checked_div(max_gas)
+            .unwrap_or(u128::MAX)
+    } else {
+        u128::from(max_fee)
+            .saturating_mul(gas_price_factor)
+            .div_ceil(max_gas.max(1))
+    };
     let metered_bytes_size = tx.transaction().metered_bytes_size();
 
-    Metadata::new(
-        version,
-        metered_bytes_size,
-        Word::try_from(max_gas_price).unwrap_or(Word::MAX),
-    )
+    Ok((
+        Metadata::new(
+            version,
+            metered_bytes_size,
+            Word::try_from(max_gas_price).unwrap_or(Word::MAX),
+        ),
+        fee_asset,
+    ))
 }
 
 pub fn checked_tx_into_pool(

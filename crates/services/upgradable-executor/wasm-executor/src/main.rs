@@ -72,30 +72,29 @@ pub fn execute_without_commit(input_len: u32) -> ReturnType {
         }
     };
 
-    let (block, options) = match input {
+    let (block, options, prices) = match input {
         InputDeserializationType::V1 { block, options } => {
-            let block = match block {
-                WasmDeserializationBlockTypes::DryRun(c) => {
-                    WasmDeserializationBlockTypes::DryRun(use_wasm_tx_source(c))
-                }
-                WasmDeserializationBlockTypes::Production(c) => {
-                    WasmDeserializationBlockTypes::Production(use_wasm_tx_source(c))
-                }
-                WasmDeserializationBlockTypes::Validation(c) => {
-                    WasmDeserializationBlockTypes::Validation(c)
-                }
-            };
-
-            (block, options)
+            (block, options, Default::default())
         }
+        InputDeserializationType::V2 {
+            block,
+            options,
+            fee_asset_gas_prices,
+        } => (block, options, fee_asset_gas_prices),
     };
 
     let instance =
         ExecutionInstance::new(WasmRelayer, WasmStorage, options, MemoryInstance::new());
 
     match block {
-        WasmDeserializationBlockTypes::DryRun(c) => execute_dry_run(instance, c),
-        WasmDeserializationBlockTypes::Production(c) => execute_production(instance, c),
+        WasmDeserializationBlockTypes::DryRun(mut c) => {
+            c.fee_asset_gas_prices = prices;
+            execute_dry_run(instance, use_wasm_tx_source(c))
+        }
+        WasmDeserializationBlockTypes::Production(mut c) => {
+            c.fee_asset_gas_prices = prices;
+            execute_production(instance, use_wasm_tx_source(c))
+        }
         WasmDeserializationBlockTypes::Validation(c) => execute_validation(instance, c),
     }
 }
@@ -133,6 +132,7 @@ fn use_wasm_tx_source(component: Components<()>) -> Components<WasmTxSource> {
     let Components {
         header_to_produce,
         gas_price,
+        fee_asset_gas_prices,
         coinbase_recipient,
         ..
     } = component;
@@ -140,6 +140,7 @@ fn use_wasm_tx_source(component: Components<()>) -> Components<WasmTxSource> {
     Components {
         header_to_produce,
         gas_price,
+        fee_asset_gas_prices,
         transactions_source: WasmTxSource::new(),
         coinbase_recipient,
     }

@@ -254,6 +254,7 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
             ),
             coinbase_recipient: Default::default(),
             gas_price: 0,
+            fee_asset_gas_prices: Default::default(),
         })
         .await
         .unwrap()
@@ -291,6 +292,7 @@ async fn execute__simple_independent_transactions_sorted() {
         transactions_source,
         coinbase_recipient: Default::default(),
         gas_price: 0,
+        fee_asset_gas_prices: Default::default(),
     });
 
     // Request for a thread
@@ -367,6 +369,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
         transactions_source,
         coinbase_recipient: Default::default(),
         gas_price: 0,
+        fee_asset_gas_prices: Default::default(),
     });
 
     // Request for a thread
@@ -479,6 +482,7 @@ async fn execute__gas_left_updated_when_state_merges() {
         transactions_source,
         coinbase_recipient: Default::default(),
         gas_price: 0,
+        fee_asset_gas_prices: Default::default(),
     });
 
     // Request for one of the threads
@@ -566,6 +570,7 @@ async fn execute__utxo_ordering_kept() {
         transactions_source,
         coinbase_recipient: Default::default(),
         gas_price: 0,
+        fee_asset_gas_prices: Default::default(),
     });
 
     // Request for one of the threads
