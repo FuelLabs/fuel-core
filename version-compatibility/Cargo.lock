@@ -4711,7 +4711,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 dependencies = [
  "bitflags 2.13.1",
  "fuel-types 0.66.4",
@@ -4722,7 +4722,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 dependencies = [
  "fuel-derive 0.66.4",
  "fuel-types 0.66.4",
@@ -5870,7 +5870,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 dependencies = [
  "base64ct",
  "coins-bip32",
@@ -5938,7 +5938,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6017,7 +6017,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 dependencies = [
  "derive_more 0.99.20",
  "digest 0.10.7",
@@ -6055,7 +6055,7 @@ checksum = "96b949407d2390bfcbbc43c09a8997572a28c1a64b0d1f1b20a2d6af1ad4046b"
 [[package]]
 name = "fuel-storage"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 
 [[package]]
 name = "fuel-tx"
@@ -6149,7 +6149,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 dependencies = [
  "bitflags 2.13.1",
  "derive_more 1.0.0",
@@ -6217,7 +6217,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 dependencies = [
  "educe",
  "fuel-derive 0.66.4",
@@ -6327,7 +6327,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.66.4"
-source = "git+https://github.com/FuelLabs/fuel-vm?rev=dcfc425c1cd16a72680de80e7816371e70ef0ace#dcfc425c1cd16a72680de80e7816371e70ef0ace"
+source = "git+https://github.com/FuelLabs/fuel-vm?rev=ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed#ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed"
 dependencies = [
  "anyhow",
  "async-trait",
