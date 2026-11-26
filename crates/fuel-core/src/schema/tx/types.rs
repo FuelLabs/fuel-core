@@ -41,6 +41,7 @@ use async_graphql::{
     Context,
     Enum,
     Object,
+    SimpleObject,
     Union,
 };
 use fuel_core_storage::Error as StorageError;
@@ -152,13 +153,40 @@ pub enum TransactionStatus {
 }
 
 #[derive(Debug)]
-pub struct SubmittedStatus(pub Tai64);
+pub struct SubmittedStatus {
+    tx_id: TxId,
+    time: Tai64,
+}
 
 #[Object]
 impl SubmittedStatus {
     async fn time(&self) -> Tai64Timestamp {
-        Tai64Timestamp(self.0)
+        Tai64Timestamp(self.time)
     }
+
+    async fn status_details(&self) -> TransactionStatusDetails {
+        TransactionStatusDetails {
+            tx_pointer: None,
+            time: Some(Tai64Timestamp(self.time)),
+            total_fee: None,
+            total_gas: None,
+            transaction_id: Some(self.tx_id.into()),
+            receipts: None,
+            resolved_outputs: None,
+        }
+    }
+}
+
+/// Common transaction status fields. Values are nullable when a status does not provide them.
+#[derive(SimpleObject)]
+pub struct TransactionStatusDetails {
+    tx_pointer: Option<TxPointer>,
+    time: Option<Tai64Timestamp>,
+    total_fee: Option<U64>,
+    total_gas: Option<U64>,
+    transaction_id: Option<TransactionId>,
+    receipts: Option<Vec<Receipt>>,
+    resolved_outputs: Option<Vec<ResolvedOutput>>,
 }
 
 #[derive(Debug)]
@@ -169,6 +197,18 @@ pub struct SuccessStatus {
 
 #[Object]
 impl SuccessStatus {
+    async fn status_details(&self) -> TransactionStatusDetails {
+        TransactionStatusDetails {
+            tx_pointer: None,
+            time: Some(Tai64Timestamp(self.status.block_timestamp)),
+            total_fee: Some(self.status.total_fee.into()),
+            total_gas: Some(self.status.total_gas.into()),
+            transaction_id: Some(self.tx_id.into()),
+            receipts: Some(self.status.receipts.iter().map(Into::into).collect()),
+            resolved_outputs: None,
+        }
+    }
+
     async fn transaction_id(&self) -> TransactionId {
         self.tx_id.into()
     }
@@ -220,6 +260,26 @@ pub struct PreconfirmationSuccessStatus {
 
 #[Object]
 impl PreconfirmationSuccessStatus {
+    async fn status_details(&self) -> TransactionStatusDetails {
+        TransactionStatusDetails {
+            tx_pointer: Some(self.status.tx_pointer.into()),
+            time: None,
+            total_fee: Some(self.status.total_fee.into()),
+            total_gas: Some(self.status.total_gas.into()),
+            transaction_id: Some(self.tx_id.into()),
+            receipts: self
+                .status
+                .receipts
+                .as_ref()
+                .map(|receipts| receipts.iter().map(Into::into).collect()),
+            resolved_outputs: self
+                .status
+                .resolved_outputs
+                .as_ref()
+                .map(|outputs| outputs.iter().map(|&x| x.into()).collect()),
+        }
+    }
+
     async fn tx_pointer(&self) -> TxPointer {
         self.status.tx_pointer.into()
     }
@@ -276,6 +336,18 @@ pub struct FailureStatus {
 
 #[Object]
 impl FailureStatus {
+    async fn status_details(&self) -> TransactionStatusDetails {
+        TransactionStatusDetails {
+            tx_pointer: None,
+            time: Some(Tai64Timestamp(self.status.block_timestamp)),
+            total_fee: Some(self.status.total_fee.into()),
+            total_gas: Some(self.status.total_gas.into()),
+            transaction_id: Some(self.tx_id.into()),
+            receipts: Some(self.status.receipts.iter().map(Into::into).collect()),
+            resolved_outputs: None,
+        }
+    }
+
     async fn transaction_id(&self) -> TransactionId {
         self.tx_id.into()
     }
@@ -334,6 +406,26 @@ pub struct PreconfirmationFailureStatus {
 
 #[Object]
 impl PreconfirmationFailureStatus {
+    async fn status_details(&self) -> TransactionStatusDetails {
+        TransactionStatusDetails {
+            tx_pointer: Some(self.status.tx_pointer.into()),
+            time: None,
+            total_fee: Some(self.status.total_fee.into()),
+            total_gas: Some(self.status.total_gas.into()),
+            transaction_id: Some(self.tx_id.into()),
+            receipts: self
+                .status
+                .receipts
+                .as_ref()
+                .map(|receipts| receipts.iter().map(Into::into).collect()),
+            resolved_outputs: self
+                .status
+                .resolved_outputs
+                .as_ref()
+                .map(|outputs| outputs.iter().map(|&x| x.into()).collect()),
+        }
+    }
+
     async fn reason(&self) -> String {
         self.status.reason.clone()
     }
@@ -394,6 +486,18 @@ pub struct SqueezedOutStatus {
 
 #[Object]
 impl SqueezedOutStatus {
+    async fn status_details(&self) -> TransactionStatusDetails {
+        TransactionStatusDetails {
+            tx_pointer: None,
+            time: None,
+            total_fee: None,
+            total_gas: None,
+            transaction_id: Some(self.tx_id.into()),
+            receipts: None,
+            resolved_outputs: None,
+        }
+    }
+
     async fn transaction_id(&self) -> TransactionId {
         self.tx_id.into()
     }
@@ -407,7 +511,10 @@ impl TransactionStatus {
     pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
         match tx_status {
             TxStatus::Submitted(status) => {
-                TransactionStatus::Submitted(SubmittedStatus(status.timestamp))
+                TransactionStatus::Submitted(SubmittedStatus {
+                    tx_id,
+                    time: status.timestamp,
+                })
             }
             TxStatus::Success(status) => {
                 TransactionStatus::Success(SuccessStatus { tx_id, status })
@@ -456,6 +563,50 @@ impl TransactionStatus {
             TransactionStatus::PreconfirmationSuccess(_)
                 | TransactionStatus::PreconfirmationFailure(_)
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_types::services::transaction_status::statuses;
+
+    #[tokio::test]
+    async fn status_details_include_fields_available_during_preconfirmation() {
+        let tx_id = TxId::zeroed();
+        let status = PreconfirmationSuccessStatus {
+            tx_id,
+            status: Arc::new(statuses::PreConfirmationSuccess::default()),
+        };
+
+        let details = status.status_details().await;
+
+        assert_eq!(details.transaction_id, Some(tx_id.into()));
+        assert!(details.tx_pointer.is_some());
+        assert!(details.time.is_none());
+        assert_eq!(details.total_fee, Some(0u64.into()));
+        assert_eq!(details.total_gas, Some(0u64.into()));
+        assert!(details.receipts.is_none());
+        assert!(details.resolved_outputs.is_none());
+    }
+
+    #[tokio::test]
+    async fn status_details_include_fields_available_after_confirmation() {
+        let tx_id = TxId::zeroed();
+        let status = SuccessStatus {
+            tx_id,
+            status: Arc::new(statuses::Success::default()),
+        };
+
+        let details = status.status_details().await;
+
+        assert_eq!(details.transaction_id, Some(tx_id.into()));
+        assert!(details.tx_pointer.is_none());
+        assert_eq!(details.time, Some(Tai64Timestamp(Tai64::UNIX_EPOCH)));
+        assert_eq!(details.total_fee, Some(0u64.into()));
+        assert_eq!(details.total_gas, Some(0u64.into()));
+        assert!(details.receipts.is_some());
+        assert!(details.resolved_outputs.is_none());
     }
 }
 

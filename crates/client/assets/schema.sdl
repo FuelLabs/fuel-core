@@ -367,6 +367,7 @@ input ExcludeInput {
 }
 
 type FailureStatus {
+	statusDetails: TransactionStatusDetails!
 	transactionId: TransactionId!
 	blockHeight: U32!
 	block: Block!
@@ -899,6 +900,7 @@ type Policies {
 }
 
 type PreconfirmationFailureStatus {
+	statusDetails: TransactionStatusDetails!
 	reason: String!
 	txPointer: TxPointer!
 	totalGas: U64!
@@ -910,6 +912,7 @@ type PreconfirmationFailureStatus {
 }
 
 type PreconfirmationSuccessStatus {
+	statusDetails: TransactionStatusDetails!
 	txPointer: TxPointer!
 	totalGas: U64!
 	totalFee: U64!
@@ -1301,6 +1304,7 @@ input SpendQueryElementInput {
 }
 
 type SqueezedOutStatus {
+	statusDetails: TransactionStatusDetails!
 	transactionId: TransactionId!
 	reason: String!
 }
@@ -1329,6 +1333,7 @@ scalar SubId
 
 type SubmittedStatus {
 	time: Tai64Timestamp!
+	statusDetails: TransactionStatusDetails!
 }
 
 type Subscription {
@@ -1373,6 +1378,7 @@ type Subscription {
 }
 
 type SuccessStatus {
+	statusDetails: TransactionStatusDetails!
 	transactionId: TransactionId!
 	blockHeight: U32!
 	block: Block!
@@ -1459,6 +1465,16 @@ type TransactionEdge {
 scalar TransactionId
 
 union TransactionStatus = SubmittedStatus | SuccessStatus | PreconfirmationSuccessStatus | SqueezedOutStatus | FailureStatus | PreconfirmationFailureStatus
+
+type TransactionStatusDetails {
+	txPointer: TxPointer
+	time: Tai64Timestamp
+	totalFee: U64
+	totalGas: U64
+	transactionId: TransactionId
+	receipts: [Receipt!]
+	resolvedOutputs: [ResolvedOutput!]
+}
 
 type TxParameters {
 	version: TxParametersVersion!
