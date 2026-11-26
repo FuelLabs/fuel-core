@@ -123,7 +123,7 @@ fuel-core-types = { version = "0.48.4", path = "./crates/types", default-feature
 fuel-core-upgradable-executor = { version = "0.48.4", path = "./crates/services/upgradable-executor" }
 fuel-core-wasm-executor = { version = "0.48.4", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-gas-price-algorithm = { version = "0.48.4", path = "crates/fuel-gas-price-algorithm" }
-fuel-vm-private = { git = "https://github.com/FuelLabs/fuel-vm", rev = "ccbdc9f4b683036a2d6dc3b37f282be2a52f94ed", version = "0.66.4", package = "fuel-vm", default-features = false }
+fuel-vm-private = { git = "https://github.com/FuelLabs/fuel-vm", rev = "6820c5917df86bdf773a937d0382ed8b7e1a27a5", version = "0.66.4", package = "fuel-vm", default-features = false }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "1.7", features = ["http1", "http2", "server"] }
