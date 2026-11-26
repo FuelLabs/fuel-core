@@ -45,8 +45,11 @@ use async_graphql::{
 };
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
+    blockchain::block::CompressedBlock,
     fuel_tx::{
         self,
+        Chargeable,
+        ConsensusParameters,
         Executable,
         TxId,
         field::{
@@ -71,13 +74,18 @@ use fuel_core_types::{
             StorageSlots,
             SubsectionIndex,
             SubsectionsNumber,
+            Tip,
             TxPointer as TxPointerField,
             UpgradePurpose as UpgradePurposeField,
             Witnesses,
         },
         policies::PolicyType,
     },
-    fuel_types::canonical::Serialize,
+    fuel_types::{
+        self,
+        BlockHeight,
+        canonical::Serialize,
+    },
     fuel_vm::ProgramState as VmProgramState,
     services::{
         executor::{
@@ -95,6 +103,71 @@ use std::{
     sync::Arc,
     vec::IntoIter,
 };
+
+struct FinalizedFee {
+    asset: fuel_types::AssetId,
+    tip: u64,
+    block: CompressedBlock,
+    params: Arc<ConsensusParameters>,
+}
+
+impl FinalizedFee {
+    fn load(
+        ctx: &Context<'_>,
+        view: &ReadView,
+        tx_id: &TxId,
+        height: &BlockHeight,
+    ) -> async_graphql::Result<Self> {
+        let block = view.block(height)?;
+        let params = ctx
+            .data_unchecked::<ChainInfoProvider>()
+            .consensus_params_at_version(
+                &block.header().consensus_parameters_version(),
+            )?;
+        let base = params.base_asset_id();
+        let (asset, tip) = match view.transaction(tx_id)? {
+            fuel_tx::Transaction::Script(script) => (
+                script
+                    .fee_asset_id(base)
+                    .map_err(|err| format!("{err:?}"))?,
+                script.tip(),
+            ),
+            _ => (*base, 0),
+        };
+        Ok(Self {
+            asset,
+            tip,
+            block,
+            params,
+        })
+    }
+
+    fn amount(
+        &self,
+        view: &ReadView,
+        total_gas: u64,
+        base_fee: u64,
+    ) -> async_graphql::Result<U64> {
+        if &self.asset == self.params.base_asset_id() {
+            return Ok(base_fee.into());
+        }
+        for mint_id in self.block.transactions().iter().rev().skip(1) {
+            let fuel_tx::Transaction::Mint(mint) = view.transaction(mint_id)? else {
+                break
+            };
+            if mint.mint_asset_id() == &self.asset {
+                let fee = fuel_tx::gas_to_fee(
+                    total_gas,
+                    *mint.gas_price(),
+                    self.params.fee_params().gas_price_factor(),
+                )
+                .saturating_add(u128::from(self.tip));
+                return Ok(u64::try_from(fee)?.into());
+            }
+        }
+        Err("Missing Mint for the transaction's fee asset".into())
+    }
+}
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -210,6 +283,30 @@ impl SuccessStatus {
     async fn total_fee(&self) -> U64 {
         self.status.total_fee.into()
     }
+
+    /// Asset in which the transaction paid its fee.
+    #[graphql(
+        complexity = "query_costs().block_header + query_costs().storage_read + child_complexity"
+    )]
+    async fn fee_asset_id(&self, ctx: &Context<'_>) -> async_graphql::Result<AssetId> {
+        let view = ctx.read_view()?;
+        Ok(
+            FinalizedFee::load(ctx, &view, &self.tx_id, &self.status.block_height)?
+                .asset
+                .into(),
+        )
+    }
+
+    /// Exact fee in the smallest units of the fee asset.
+    #[graphql(complexity = "query_costs().block_transactions + child_complexity")]
+    async fn fee_in_asset(&self, ctx: &Context<'_>) -> async_graphql::Result<U64> {
+        let view = ctx.read_view()?;
+        FinalizedFee::load(ctx, &view, &self.tx_id, &self.status.block_height)?.amount(
+            &view,
+            self.status.total_gas,
+            self.status.total_fee,
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -323,6 +420,30 @@ impl FailureStatus {
 
     async fn total_fee(&self) -> U64 {
         self.status.total_fee.into()
+    }
+
+    /// Asset in which the transaction paid its fee.
+    #[graphql(
+        complexity = "query_costs().block_header + query_costs().storage_read + child_complexity"
+    )]
+    async fn fee_asset_id(&self, ctx: &Context<'_>) -> async_graphql::Result<AssetId> {
+        let view = ctx.read_view()?;
+        Ok(
+            FinalizedFee::load(ctx, &view, &self.tx_id, &self.status.block_height)?
+                .asset
+                .into(),
+        )
+    }
+
+    /// Exact fee in the smallest units of the fee asset.
+    #[graphql(complexity = "query_costs().block_transactions + child_complexity")]
+    async fn fee_in_asset(&self, ctx: &Context<'_>) -> async_graphql::Result<U64> {
+        let view = ctx.read_view()?;
+        FinalizedFee::load(ctx, &view, &self.tx_id, &self.status.block_height)?.amount(
+            &view,
+            self.status.total_gas,
+            self.status.total_fee,
+        )
     }
 }
 
@@ -476,6 +597,11 @@ impl Policies {
             .get(PolicyType::Maturity)
             .and_then(|value| u32::try_from(value).ok())
             .map(Into::into)
+    }
+
+    /// Index of the Change output selecting the fee asset.
+    async fn fee_asset(&self) -> Option<U64> {
+        self.0.get(PolicyType::FeeAsset).map(Into::into)
     }
 
     async fn max_fee(&self) -> Option<U64> {

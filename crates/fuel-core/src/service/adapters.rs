@@ -1,4 +1,6 @@
 use std::{
+    collections::BTreeMap,
+    num::NonZeroU64,
     ops::Deref,
     sync::Arc,
 };
@@ -34,6 +36,7 @@ use fuel_core_types::{
         },
     },
     fuel_tx::{
+        AssetId,
         Bytes32,
         Transaction,
     },
@@ -243,6 +246,7 @@ mod universal_gas_price_provider_tests {
 /// `GasPrice` refers to the gas price at the last updated block
 #[derive(Debug)]
 pub struct UniversalGasPriceProvider<Height, GasPrice> {
+    pub(crate) fee_asset_rates: BTreeMap<AssetId, NonZeroU64>,
     /// Shared state of latest gas price data
     latest_gas_price: LatestGasPrice<Height, GasPrice>,
     /// The max percentage the gas price can increase per block
@@ -253,6 +257,7 @@ impl<Height, GasPrice> Clone for UniversalGasPriceProvider<Height, GasPrice> {
     fn clone(&self) -> Self {
         Self {
             latest_gas_price: self.latest_gas_price.clone(),
+            fee_asset_rates: self.fee_asset_rates.clone(),
             percentage: self.percentage,
         }
     }
@@ -263,6 +268,7 @@ impl<Height, GasPrice> UniversalGasPriceProvider<Height, GasPrice> {
     pub fn new(height: Height, price: GasPrice, percentage: u16) -> Self {
         let latest_gas_price = LatestGasPrice::new(height, price);
         Self {
+            fee_asset_rates: BTreeMap::new(),
             latest_gas_price,
             percentage,
         }
@@ -273,6 +279,7 @@ impl<Height, GasPrice> UniversalGasPriceProvider<Height, GasPrice> {
         percentage: u16,
     ) -> Self {
         Self {
+            fee_asset_rates: BTreeMap::new(),
             latest_gas_price: inner,
             percentage,
         }
@@ -299,12 +306,20 @@ impl UniversalGasPriceProvider<u32, u64> {
 }
 
 impl TxPoolGasPriceProvider for UniversalGasPriceProvider<u32, u64> {
+    fn fee_asset_rate(&self, asset_id: &AssetId) -> Option<NonZeroU64> {
+        self.fee_asset_rates.get(asset_id).copied()
+    }
+
     fn next_gas_price(&self) -> fuel_core_txpool::GasPrice {
         self.inner_next_gas_price()
     }
 }
 
 impl GasPriceEstimate for UniversalGasPriceProvider<u32, u64> {
+    fn fee_asset_rates(&self) -> &BTreeMap<AssetId, NonZeroU64> {
+        &self.fee_asset_rates
+    }
+
     fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
         let (best_height, best_gas_price) = self.get_height_and_gas_price();
         let percentage = self.percentage;
@@ -411,6 +426,7 @@ impl ExecutorAdapter {
                 component.transactions_source,
             ),
             gas_price: component.gas_price,
+            fee_asset_gas_prices: component.fee_asset_gas_prices,
             coinbase_recipient: component.coinbase_recipient,
         };
 

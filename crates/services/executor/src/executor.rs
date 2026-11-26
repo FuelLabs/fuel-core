@@ -136,7 +136,10 @@ use fuel_core_types::{
         verification,
     },
     services::{
-        block_producer::Components,
+        block_producer::{
+            Components,
+            FeeAssetGasPrice,
+        },
         executor::{
             Error as ExecutorError,
             Event as ExecutorEvent,
@@ -191,8 +194,7 @@ use fuel_core_types::{
     services::preconfirmation::SqueezedOut,
 };
 
-/// The maximum amount of transactions that can be included in a block,
-/// excluding the mint transaction.
+/// Maximum number of transactions before the final base-asset Mint.
 #[cfg(not(feature = "limited-tx-count"))]
 pub const fn max_tx_count() -> u16 {
     u16::MAX.saturating_sub(1)
@@ -321,11 +323,10 @@ pub fn convert_tx_execution_result_to_preconfirmation(
 /// Data that is generated after executing all transactions.
 #[derive(Default)]
 pub struct ExecutionData {
-    coinbase: u64,
+    coinbase: BTreeMap<AssetId, u64>,
     used_gas: u64,
     used_size: u32,
     tx_count: u16,
-    found_mint: bool,
     message_ids: Vec<MessageId>,
     tx_status: Vec<TransactionExecutionStatus>,
     events: Vec<ExecutorEvent>,
@@ -337,11 +338,10 @@ pub struct ExecutionData {
 impl ExecutionData {
     pub fn new() -> Self {
         ExecutionData {
-            coinbase: 0,
+            coinbase: Default::default(),
             used_gas: 0,
             used_size: 0,
             tx_count: 0,
-            found_mint: false,
             message_ids: Vec::new(),
             tx_status: Vec::new(),
             events: Vec::new(),
@@ -450,7 +450,7 @@ where
         let finalized_block_id = block.id();
 
         debug!(
-            "Block {:#x} fees: {} gas: {} tx_size: {}",
+            "Block {:#x} fees: {:?} gas: {} tx_size: {}",
             finalized_block_id, coinbase, used_gas, used_size
         );
 
@@ -489,7 +489,7 @@ where
         let finalized_block_id = block.id();
 
         debug!(
-            "Block {:#x} fees: {} gas: {} tx_size: {}",
+            "Block {:#x} fees: {:?} gas: {} tx_size: {}",
             finalized_block_id, coinbase, used_gas, used_size
         );
 
@@ -536,6 +536,7 @@ type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransa
 pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
     relayer: R,
     consensus_params: ConsensusParameters,
+    fee_asset_gas_prices: BTreeMap<AssetId, FeeAssetGasPrice>,
     options: ExecutionOptionsInner,
     new_tx_waiter: TxWaiter,
     preconfirmation_sender: PreconfirmationSender,
@@ -555,6 +556,7 @@ impl<R, TxWaiter, PreconfirmationSender>
         Ok(Self {
             relayer,
             consensus_params,
+            fee_asset_gas_prices: Default::default(),
             options: ExecutionOptionsInner {
                 forbid_fake_coins: options.forbid_fake_coins,
                 allow_syscall: options.allow_syscall,
@@ -573,8 +575,8 @@ where
     P: PreconfirmationSenderPort,
 {
     async fn execute<TxSource, D>(
-        self,
-        components: Components<TxSource>,
+        mut self,
+        mut components: Components<TxSource>,
         block_storage_tx: BlockStorageTransaction<D>,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
@@ -582,6 +584,13 @@ where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column>,
     {
+        self.fee_asset_gas_prices = core::mem::take(&mut components.fee_asset_gas_prices);
+        if self
+            .fee_asset_gas_prices
+            .contains_key(self.consensus_params.base_asset_id())
+        {
+            return Err(ExecutorError::MintMismatch);
+        }
         if self.options.dry_run {
             self.dry_run_block(components, block_storage_tx, memory)
                 .await
@@ -632,23 +641,40 @@ where
             }
         }
 
-        self.produce_mint_tx(
-            &mut partial_block,
-            &components,
-            &mut block_storage_tx,
-            &mut data,
-            memory,
-        )?;
-        debug_assert!(data.found_mint, "Mint transaction is not found");
+        let base = self.consensus_params.base_asset_id();
+        let mint_assets = self
+            .fee_asset_gas_prices
+            .iter()
+            .map(|(asset, price)| (*asset, price.gas_price, price.announce))
+            .chain(core::iter::once((*base, components.gas_price, false)));
+        for (asset, price, announce) in mint_assets {
+            if asset == *base
+                || data.coinbase.contains_key(&asset)
+                || (announce && data.tx_count < max_tx_count())
+            {
+                self.produce_mint_tx(
+                    &mut partial_block,
+                    components.coinbase_recipient,
+                    asset,
+                    price,
+                    &mut block_storage_tx,
+                    &mut data,
+                    memory,
+                )?;
+            }
+        }
 
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
     }
 
-    fn produce_mint_tx<TxSource, T>(
+    #[allow(clippy::too_many_arguments)]
+    fn produce_mint_tx<T>(
         &self,
         block: &mut PartialFuelBlock,
-        components: &Components<TxSource>,
+        coinbase_contract_id: ContractId,
+        asset_id: AssetId,
+        gas_price: Word,
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
         memory: &mut MemoryInstance,
@@ -656,14 +682,8 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        let Components {
-            coinbase_recipient: coinbase_contract_id,
-            gas_price,
-            ..
-        } = *components;
-
         let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
-            data.coinbase
+            data.coinbase.get(&asset_id).copied().unwrap_or_default()
         } else {
             0
         };
@@ -684,7 +704,7 @@ where
                 state_root: Bytes32::zeroed(),
             },
             amount_to_mint,
-            *self.consensus_params.base_asset_id(),
+            asset_id,
             gas_price,
         );
 
@@ -791,11 +811,12 @@ where
         let mut remaining_block_transaction_size_limit =
             block_transaction_size_limit.saturating_sub(data.used_size);
 
-        // We allow at most u16::MAX transactions in a block, including the mint transaction.
-        // When processing l2 transactions, we must take into account transactions from the l1
-        // that have been included in the block already (stored in `data.tx_count`), as well
-        // as the final mint transaction.
-        let mut remaining_tx_count = max_tx_count().saturating_sub(data.tx_count);
+        // max_tx_count() already reserves the base Mint. Leave a slot for
+        // each additional asset that could collect fees in this block.
+        let mint_slots =
+            u16::try_from(self.fee_asset_gas_prices.len()).unwrap_or(u16::MAX);
+        let regular_tx_limit = max_tx_count().saturating_sub(mint_slots);
+        let mut remaining_tx_count = regular_tx_limit.saturating_sub(data.tx_count);
 
         let mut regular_tx_iter = l2_tx_source
             .next(
@@ -865,7 +886,7 @@ where
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
                     block_transaction_size_limit.saturating_sub(data.used_size);
-                remaining_tx_count = max_tx_count().saturating_sub(data.tx_count);
+                remaining_tx_count = regular_tx_limit.saturating_sub(data.tx_count);
             }
 
             regular_tx_iter = l2_tx_source
@@ -899,30 +920,34 @@ where
     where
         W: KeyValueInspect<Column = Column>,
     {
-        let tx_count = execution_data.tx_count;
+        let next_tx_count = execution_data
+            .tx_count
+            .checked_add(1)
+            .ok_or(ExecutorError::TooManyTransactions)?;
         let tx = {
             let mut tx_st_transaction = storage_tx
                 .write_transaction()
                 .with_policy(ConflictPolicy::Overwrite);
             let tx_id = tx.id(&self.consensus_params.chain_id());
-            let tx = self.execute_transaction(
-                tx,
-                &tx_id,
-                &block.header,
-                coinbase_contract_id,
-                gas_price,
-                execution_data,
-                &mut tx_st_transaction,
-                memory,
-            )?;
+            let event_count = execution_data.events.len();
+            let tx = self
+                .execute_transaction(
+                    tx,
+                    &tx_id,
+                    &block.header,
+                    coinbase_contract_id,
+                    gas_price,
+                    execution_data,
+                    &mut tx_st_transaction,
+                    memory,
+                )
+                .inspect_err(|_| execution_data.events.truncate(event_count))?;
             tx_st_transaction.commit()?;
             tx
         };
 
         block.transactions.push(tx);
-        execution_data.tx_count = tx_count
-            .checked_add(1)
-            .ok_or(ExecutorError::TooManyTransactions)?;
+        execution_data.tx_count = next_tx_count;
 
         Ok(())
     }
@@ -943,8 +968,7 @@ where
         let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
         let transactions = block.transactions();
 
-        let (gas_price, coinbase_contract_id) =
-            Self::get_coinbase_info_from_mint_tx(transactions)?;
+        let (gas_price, coinbase_contract_id) = self.read_mint_prices(transactions)?;
 
         self.process_l1_txs(
             &mut partial_block,
@@ -975,14 +999,49 @@ where
         Ok(data)
     }
 
-    fn get_coinbase_info_from_mint_tx(
+    /// The base Mint stays last. Earlier Mints form a sorted, unique suffix
+    /// and announce the prices used to execute the preceding transactions.
+    fn read_mint_prices(
+        &mut self,
         transactions: &[Transaction],
-    ) -> ExecutorResult<(u64, ContractId)> {
-        if let Some(Transaction::Mint(mint)) = transactions.last() {
-            Ok((*mint.gas_price(), mint.input_contract().contract_id))
-        } else {
-            Err(ExecutorError::MintMissing)
+    ) -> ExecutorResult<(Word, ContractId)> {
+        let Some((Transaction::Mint(base_mint), preceding)) = transactions.split_last()
+        else {
+            return Err(ExecutorError::MintMissing);
+        };
+        let base = self.consensus_params.base_asset_id();
+        if base_mint.mint_asset_id() != base {
+            return Err(
+                fuel_core_types::fuel_tx::ValidityError::TransactionMintNonBaseAsset
+                    .into(),
+            );
         }
+        let recipient = base_mint.input_contract().contract_id;
+        for tx in preceding.iter().skip_while(|tx| !tx.is_mint()) {
+            let Transaction::Mint(mint) = tx else {
+                return Err(ExecutorError::MintIsNotLastTransaction);
+            };
+            let asset = *mint.mint_asset_id();
+            if asset == *base {
+                return Err(ExecutorError::MintIsNotLastTransaction);
+            }
+            if self
+                .fee_asset_gas_prices
+                .last_key_value()
+                .is_some_and(|(previous, _)| asset <= *previous)
+                || mint.input_contract().contract_id != recipient
+            {
+                return Err(ExecutorError::MintMismatch);
+            }
+            self.fee_asset_gas_prices.insert(
+                asset,
+                FeeAssetGasPrice {
+                    gas_price: *mint.gas_price(),
+                    announce: false,
+                },
+            );
+        }
+        Ok((*base_mint.gas_price(), recipient))
     }
 
     const RELAYED_GAS_PRICE: Word = 0;
@@ -1009,24 +1068,26 @@ where
                 consensus_parameters_version,
             );
             let tx_id = maybe_checked_transaction.id(&self.consensus_params.chain_id());
-            match self.execute_transaction_and_commit(
-                partial_block,
-                storage_tx,
-                data,
-                maybe_checked_transaction,
-                Self::RELAYED_GAS_PRICE,
-                coinbase_contract_id,
-                memory,
-            ) {
-                Ok(_) => {}
-                Err(err) => {
-                    let event = ExecutorEvent::ForcedTransactionFailed {
-                        id: tx_id.into(),
-                        block_height: *block_height,
-                        failure: err.to_string(),
-                    };
-                    data.events.push(event);
-                }
+            // Forced transactions can use the base asset only. Reserve its Mint slot.
+            let result = if data.tx_count >= max_tx_count() {
+                Err(ExecutorError::TooManyTransactions)
+            } else {
+                self.execute_transaction_and_commit(
+                    partial_block,
+                    storage_tx,
+                    data,
+                    maybe_checked_transaction,
+                    Self::RELAYED_GAS_PRICE,
+                    coinbase_contract_id,
+                    memory,
+                )
+            };
+            if let Err(err) = result {
+                data.events.push(ExecutorEvent::ForcedTransactionFailed {
+                    id: tx_id.into(),
+                    block_height: *block_height,
+                    failure: err.to_string(),
+                });
             }
         }
         Ok(())
@@ -1219,7 +1280,13 @@ where
             memory,
             block_storage_tx,
         )?;
-        Ok(CheckedTransaction::from(checked_tx))
+        let checked_tx = CheckedTransaction::from(checked_tx);
+        if let CheckedTransaction::Script(tx) = &checked_tx
+            && tx.metadata().fee_asset_id != *consensus_params.base_asset_id()
+        {
+            return Err(ForcedTransactionFailure::InvalidTransactionType);
+        }
+        Ok(checked_tx)
     }
 
     fn parse_tx_bytes(
@@ -1296,7 +1363,6 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        Self::check_mint_is_not_found(execution_data)?;
         Self::check_tx_is_not_duplicate(tx_id, storage_tx)?;
         let checked_tx = self.convert_maybe_checked_tx_to_checked_tx(tx, header)?;
 
@@ -1323,7 +1389,6 @@ where
                 mint,
                 header,
                 coinbase_contract_id,
-                gas_price,
                 execution_data,
                 storage_tx,
             ),
@@ -1355,13 +1420,6 @@ where
                 memory,
             ),
         }
-    }
-
-    fn check_mint_is_not_found(execution_data: &ExecutionData) -> ExecutorResult<()> {
-        if execution_data.found_mint {
-            return Err(ExecutorError::MintIsNotLastTransaction)
-        }
-        Ok(())
     }
 
     fn check_tx_is_not_duplicate<T>(
@@ -1420,25 +1478,26 @@ where
         checked_mint: Checked<Mint>,
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
-        gas_price: Word,
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<Transaction>
     where
         T: KeyValueInspect<Column = Column>,
     {
-        execution_data.found_mint = true;
-
         Self::check_mint_has_expected_index(&checked_mint, execution_data)?;
 
         let coinbase_id = checked_mint.id();
         let (mut mint, _) = checked_mint.into();
 
-        Self::check_gas_price(&mint, gas_price)?;
         if mint.input_contract().contract_id == ContractId::zeroed() {
             Self::verify_mint_for_empty_contract(&mint)?;
         } else {
-            Self::check_mint_amount(&mint, execution_data.coinbase)?;
+            let collected = execution_data
+                .coinbase
+                .get(mint.mint_asset_id())
+                .copied()
+                .unwrap_or_default();
+            Self::check_mint_amount(&mint, collected)?;
 
             let mut input = Input::Contract(mint.input_contract().clone());
 
@@ -1473,7 +1532,7 @@ where
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
-        gas_price: Word,
+        base_gas_price: Word,
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
@@ -1484,6 +1543,16 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();
+        let base = self.consensus_params.base_asset_id();
+        let fee_asset = checked_tx.metadata().fee_asset_id(base);
+        let gas_price = if fee_asset == *base {
+            base_gas_price
+        } else {
+            self.fee_asset_gas_prices
+                .get(&fee_asset)
+                .ok_or(ExecutorError::MissingFeeAssetPrice(fee_asset))?
+                .gas_price
+        };
 
         if self.options.forbid_fake_coins {
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
@@ -1518,6 +1587,8 @@ where
             execution_data,
             receipts,
             gas_price,
+            base_gas_price,
+            fee_asset,
             reverted,
             state,
             tx_id,
@@ -1529,13 +1600,6 @@ where
     fn check_mint_amount(mint: &Mint, expected_amount: u64) -> ExecutorResult<()> {
         if *mint.mint_amount() != expected_amount {
             return Err(ExecutorError::CoinbaseAmountMismatch)
-        }
-        Ok(())
-    }
-
-    fn check_gas_price(mint: &Mint, expected_gas_price: Word) -> ExecutorResult<()> {
-        if *mint.gas_price() != expected_gas_price {
-            return Err(ExecutorError::CoinbaseGasPriceMismatch)
         }
         Ok(())
     }
@@ -1702,6 +1766,8 @@ where
         execution_data: &mut ExecutionData,
         receipts: Arc<Vec<Receipt>>,
         gas_price: Word,
+        base_gas_price: Word,
+        fee_asset: AssetId,
         reverted: bool,
         state: ProgramState,
         tx_id: TxId,
@@ -1709,24 +1775,27 @@ where
         let (used_gas, tx_fee) = self.total_fee_paid(tx, &receipts, gas_price)?;
         let used_size = tx.metered_bytes_size().try_into().unwrap_or(u32::MAX);
 
-        execution_data.coinbase = execution_data
-            .coinbase
-            .checked_add(tx_fee)
-            .ok_or(ExecutorError::FeeOverflow)?;
-        execution_data.used_gas = execution_data
-            .used_gas
-            .checked_add(used_gas)
-            .ok_or_else(|| {
-                ExecutorError::GasOverflow(
-                    "Execution used gas overflowed.".into(),
-                    execution_data.used_gas,
-                    used_gas,
-                )
-            })?;
-        execution_data.used_size = execution_data
+        let next_used_gas =
+            execution_data
+                .used_gas
+                .checked_add(used_gas)
+                .ok_or_else(|| {
+                    ExecutorError::GasOverflow(
+                        "Execution used gas overflowed.".into(),
+                        execution_data.used_gas,
+                        used_gas,
+                    )
+                })?;
+        let next_used_size = execution_data
             .used_size
             .checked_add(used_size)
             .ok_or(ExecutorError::TxSizeOverflow)?;
+        let collected = execution_data.coinbase.entry(fee_asset).or_default();
+        *collected = collected
+            .checked_add(tx_fee)
+            .ok_or(ExecutorError::FeeOverflow)?;
+        execution_data.used_gas = next_used_gas;
+        execution_data.used_size = next_used_size;
 
         if !reverted {
             execution_data
@@ -1734,12 +1803,21 @@ where
                 .extend(receipts.iter().filter_map(|r| r.message_id()));
         }
 
+        let total_fee = if &fee_asset == self.consensus_params.base_asset_id() {
+            tx_fee
+        } else {
+            fuel_core_types::services::executor::non_base_fee_value(
+                tx_fee,
+                gas_price,
+                base_gas_price,
+            )
+        };
         let status = if reverted {
             TransactionExecutionResult::Failed {
                 result: Some(state),
                 receipts,
                 total_gas: used_gas,
-                total_fee: tx_fee,
+                total_fee,
             }
         } else {
             // else tx was a success
@@ -1747,7 +1825,7 @@ where
                 result: Some(state),
                 receipts,
                 total_gas: used_gas,
-                total_fee: tx_fee,
+                total_fee,
             }
         };
 

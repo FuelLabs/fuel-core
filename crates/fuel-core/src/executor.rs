@@ -403,6 +403,158 @@ mod tests {
         use fuel_core_types::services::graphql_api::ContractBalance;
 
         #[test]
+        fn mixed_fee_assets_replay_and_refund() {
+            use fuel_core_storage::tables::ContractsLatestUtxo;
+            use fuel_core_types::entities::coins::coin::Coin;
+            use std::collections::BTreeMap;
+
+            const INPUT: u64 = 2_000_000;
+            const CAP: u64 = 1_000_000;
+            const TIP: u64 = 17;
+            let eth = AssetId::BASE;
+            let fuel = AssetId::from([42; 32]);
+            let recipient = Contract::EMPTY_CONTRACT_ID;
+            let mut rng = StdRng::seed_from_u64(123);
+            let key = SecretKey::random(&mut rng);
+            let owner = Input::owner(&key.public_key());
+            let mut coins = vec![];
+            let mut transactions = vec![];
+            for (asset, instruction) in
+                [(eth, op::ret(1)), (fuel, op::ret(1)), (fuel, op::rvrt(1))]
+            {
+                let coin = Coin {
+                    utxo_id: rng.r#gen(),
+                    owner,
+                    amount: INPUT,
+                    asset_id: asset,
+                    tx_pointer: Default::default(),
+                };
+                let mut builder =
+                    TransactionBuilder::script(instruction.to_bytes().to_vec(), vec![]);
+                builder
+                    .add_unsigned_coin_input(
+                        key,
+                        coin.utxo_id,
+                        INPUT,
+                        asset,
+                        coin.tx_pointer,
+                    )
+                    .add_output(Output::change(owner, 0, asset))
+                    .script_gas_limit(100)
+                    .max_fee_limit(CAP)
+                    .tip(TIP);
+                if asset == fuel {
+                    builder.fee_asset(0);
+                }
+                coins.push(coin);
+                transactions.push(builder.finalize_as_transaction());
+            }
+            let new_node = || {
+                let mut db = Database::default();
+                let mut genesis = db.write_transaction();
+                genesis
+                    .storage_as_mut::<ContractsRawCode>()
+                    .insert(&recipient, &[])
+                    .unwrap();
+                genesis
+                    .storage_as_mut::<ContractsLatestUtxo>()
+                    .insert(&recipient, &Default::default())
+                    .unwrap();
+                for coin in &coins {
+                    genesis
+                        .storage_as_mut::<Coins>()
+                        .insert(&coin.utxo_id, &coin.compress())
+                        .unwrap();
+                }
+                genesis.commit().unwrap();
+                let mut config = Config {
+                    forbid_fake_coins_default: true,
+                    ..Default::default()
+                };
+                config
+                    .consensus_parameters
+                    .set_fee_params(FeeParameters::default().with_gas_price_factor(1));
+                create_executor(db, config)
+            };
+            let producer = new_node();
+            let mut validator = new_node();
+            let result = producer
+                .produce_without_commit_with_source_direct_resolve(Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(transactions),
+                    coinbase_recipient: recipient,
+                    gas_price: 2,
+                    fee_asset_gas_prices: [(
+                        fuel,
+                        fuel_core_types::services::block_producer::FeeAssetGasPrice {
+                            gas_price: 5,
+                            announce: false,
+                        },
+                    )]
+                    .into(),
+                })
+                .unwrap()
+                .into_result();
+            assert!(
+                result.skipped_transactions.is_empty(),
+                "{:?}",
+                result.skipped_transactions
+            );
+            let block = result.block;
+            assert_eq!(block.transactions().len(), 5);
+            let mut totals = BTreeMap::new();
+            for (index, (asset, price)) in
+                [(eth, 2), (fuel, 5), (fuel, 5)].into_iter().enumerate()
+            {
+                let status = &result.tx_status[index].result;
+                assert_eq!(
+                    matches!(status, TransactionExecutionResult::Failed { .. }),
+                    index == 2
+                );
+                let fee = status.total_gas() * price + TIP;
+                assert_eq!(*status.total_fee(), fee * 2 / price);
+                assert!(fee < CAP);
+                let script = block.transactions()[index].as_script().unwrap();
+                assert_eq!(
+                    script.outputs(),
+                    &[Output::change(owner, INPUT - fee, asset)]
+                );
+                *totals.entry(asset).or_insert(0) += fee;
+            }
+            for (mint, (asset, price)) in
+                block.transactions()[3..].iter().zip([(fuel, 5), (eth, 2)])
+            {
+                let mint = mint.as_mint().unwrap();
+                assert_eq!(
+                    (
+                        *mint.mint_asset_id(),
+                        *mint.gas_price(),
+                        *mint.mint_amount()
+                    ),
+                    (asset, price, totals[&asset])
+                );
+            }
+
+            let mut missing_price = block.clone();
+            missing_price.transactions_mut().remove(3);
+            assert!(
+                matches!(validator.validate(&missing_price), Err(ExecutorError::MissingFeeAssetPrice(asset)) if asset == fuel)
+            );
+            validator.validate_and_commit(&block).unwrap();
+            let balances = validator
+                .storage_view_provider
+                .latest_view()
+                .unwrap()
+                .contract_balances(recipient, None, IterDirection::Forward)
+                .map(|entry| {
+                    let entry = entry.unwrap();
+                    (entry.asset_id, entry.amount)
+                })
+                .collect::<BTreeMap<_, _>>();
+            assert_eq!(balances, totals);
+        }
+
+        #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_generation() {
             // The test verifies the correctness of the coinbase contract update.
             // The test generates two blocks with a non-zero fee.
@@ -474,6 +626,7 @@ mod tests {
                         invalid_duplicate_tx,
                     ]),
                     gas_price: price,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: recipient,
                 })
                 .unwrap()
@@ -567,6 +720,7 @@ mod tests {
                     header_to_produce: header,
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     gas_price: price,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: recipient,
                 })
                 .unwrap()
@@ -644,6 +798,7 @@ mod tests {
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     coinbase_recipient: recipient,
                     gas_price: 0,
+                    fee_asset_gas_prices: Default::default(),
                 })
                 .unwrap();
             let ExecutionResult { block, .. } = result.into_result();
@@ -693,6 +848,7 @@ mod tests {
                     header_to_produce: PartialBlockHeader::default(),
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     gas_price: price,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: recipient,
                 })
                 .unwrap()
@@ -834,6 +990,103 @@ mod tests {
                 validation_err,
                 ExecutorError::MintHasUnexpectedIndex
             ));
+        }
+
+        #[test]
+        fn unused_fee_asset_prices_are_announced_only_on_request() {
+            use fuel_core_types::services::block_producer::FeeAssetGasPrice;
+            let asset = AssetId::from([3; 32]);
+            let producer = create_executor(Default::default(), Default::default());
+            let result = producer
+                .produce_without_commit_with_source_direct_resolve(Components {
+                    transactions_source: OnceTransactionsSource::new(vec![]),
+                    header_to_produce: Default::default(),
+                    coinbase_recipient: Default::default(),
+                    gas_price: 2,
+                    fee_asset_gas_prices: [
+                        (
+                            asset,
+                            FeeAssetGasPrice {
+                                gas_price: 7,
+                                announce: true,
+                            },
+                        ),
+                        (
+                            [5; 32].into(),
+                            FeeAssetGasPrice {
+                                gas_price: 9,
+                                announce: false,
+                            },
+                        ),
+                    ]
+                    .into(),
+                })
+                .unwrap()
+                .into_result();
+            let [Transaction::Mint(announcement), Transaction::Mint(_)] =
+                result.block.transactions()
+            else {
+                panic!("expected a fee asset announcement and a base Mint")
+            };
+            assert_eq!(
+                (
+                    *announcement.mint_asset_id(),
+                    *announcement.mint_amount(),
+                    *announcement.gas_price()
+                ),
+                (asset, 0, 7)
+            );
+            let _ = create_executor(Default::default(), Default::default())
+                .validate(&result.block)
+                .unwrap();
+        }
+
+        #[test]
+        fn fee_asset_mint_suffix_validation() {
+            let mint = |asset: u8, index: u16, amount, recipient: u8| {
+                Transaction::mint(
+                    TxPointer::new(Default::default(), index),
+                    contract::Contract {
+                        contract_id: ContractId::from([recipient; 32]),
+                        ..Default::default()
+                    },
+                    Default::default(),
+                    amount,
+                    AssetId::from([asset; 32]),
+                    5,
+                )
+                .into()
+            };
+            for (suffix, expected) in [
+                (vec![mint(1, 0, 0, 0)], Ok(())),
+                (
+                    vec![mint(1, 0, 0, 0), mint(1, 1, 0, 0)],
+                    Err(ExecutorError::MintMismatch),
+                ),
+                (
+                    vec![mint(2, 0, 0, 0), mint(1, 1, 0, 0)],
+                    Err(ExecutorError::MintMismatch),
+                ),
+                (vec![mint(1, 0, 0, 1)], Err(ExecutorError::MintMismatch)),
+                (
+                    vec![mint(1, 0, 1, 0)],
+                    Err(ExecutorError::CoinbaseAmountMismatch),
+                ),
+            ] {
+                let mut transactions = suffix;
+                let base_index = u16::try_from(transactions.len()).unwrap();
+                transactions.push(mint(0, base_index, 0, 0));
+                let block = PartialFuelBlock::new(Default::default(), transactions)
+                    .generate(
+                        &[],
+                        Default::default(),
+                        #[cfg(feature = "fault-proving")]
+                        &Default::default(),
+                    )
+                    .unwrap();
+                let validator = create_executor(Default::default(), Default::default());
+                assert_eq!(validator.validate(&block).map(|_| ()), expected);
+            }
         }
 
         #[test]
@@ -3592,6 +3845,7 @@ mod tests {
                 transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                 coinbase_recipient: Default::default(),
                 gas_price: 1,
+                fee_asset_gas_prices: Default::default(),
             })
             .unwrap()
             .into_result();
@@ -3677,6 +3931,7 @@ mod tests {
                 ]),
                 coinbase_recipient: Default::default(),
                 gas_price: 1,
+                fee_asset_gas_prices: Default::default(),
             })
             .unwrap()
             .into_result();
@@ -3736,6 +3991,7 @@ mod tests {
                     header_to_produce: Default::default(),
                     transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                     gas_price: 0,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: [1u8; 32].into(),
                 },
                 MockNewTransactionsTrigger { sender, counter: 0 },
@@ -3800,6 +4056,7 @@ mod tests {
                     header_to_produce: Default::default(),
                     transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                     gas_price: 0,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: [1u8; 32].into(),
                 },
                 TimeoutOnlyTxWaiter,
@@ -3878,6 +4135,7 @@ mod tests {
                     header_to_produce: Default::default(),
                     transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                     gas_price: 0,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: [1u8; 32].into(),
                 },
                 TimeoutOnlyTxWaiter,
@@ -3992,6 +4250,7 @@ mod tests {
                         tx3.into(),
                     ]),
                     gas_price: 0,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: [1u8; 32].into(),
                 },
                 TimeoutOnlyTxWaiter,
@@ -4091,6 +4350,7 @@ mod tests {
                     header_to_produce: Default::default(),
                     transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                     gas_price,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: [1u8; 32].into(),
                 },
                 TimeoutOnlyTxWaiter,
@@ -4146,6 +4406,7 @@ mod tests {
                     header_to_produce: Default::default(),
                     transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                     gas_price,
+                    fee_asset_gas_prices: Default::default(),
                     coinbase_recipient: [1u8; 32].into(),
                 },
                 TimeoutOnlyTxWaiter,
@@ -4266,6 +4527,7 @@ mod tests {
             ),
             coinbase_recipient: Default::default(),
             gas_price: 0,
+            fee_asset_gas_prices: Default::default(),
         };
 
         // When
@@ -4733,6 +4995,42 @@ mod tests {
             }
             .to_string();
             assert_eq!(expected, actual);
+        }
+
+        #[test]
+        fn relayed_non_base_fee_transaction_emits_failure() {
+            let asset = AssetId::from([7; 32]);
+            let key = SecretKey::random(&mut StdRng::seed_from_u64(7));
+            let tx = TransactionBuilder::script(op::ret(1).to_bytes().into(), vec![])
+                .add_unsigned_coin_input(
+                    key,
+                    Default::default(),
+                    100,
+                    asset,
+                    Default::default(),
+                )
+                .add_output(Output::change(Default::default(), 0, asset))
+                .fee_asset(0)
+                .max_fee_limit(0)
+                .script_gas_limit(100)
+                .finalize_as_transaction();
+            let producer = create_relayer_executor(
+                database_with_genesis_block(0),
+                relayer_db_with_specific_tx_for_relayed_tx(1, tx, u64::MAX),
+            );
+            let block = test_block(1u32.into(), 1u64.into(), 0);
+            let result = producer
+                .produce_without_commit(block.into())
+                .unwrap()
+                .into_result();
+            assert!(matches!(
+                result.block.transactions(),
+                [Transaction::Mint(_)]
+            ));
+            assert!(
+                matches!(result.events.as_slice(), [ExecutorEvent::ForcedTransactionFailed { failure, .. }]
+                if *failure == ForcedTransactionFailure::InvalidTransactionType.to_string())
+            );
         }
 
         fn relayer_db_with_specific_tx_for_relayed_tx(

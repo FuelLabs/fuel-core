@@ -577,11 +577,7 @@ pub fn tx_from_proto_tx(
 
     match variant {
         ProtoTransactionVariant::Script(proto_script) => {
-            let policies = proto_script
-                .policies
-                .clone()
-                .map(|p| policies_from_proto_policies(&p))
-                .unwrap_or_default();
+            let policies = policies_from_proto_policies(proto_script.policies.as_ref())?;
             let inputs = proto_script
                 .inputs
                 .iter()
@@ -619,11 +615,7 @@ pub fn tx_from_proto_tx(
             Ok(FuelTransaction::Script(script_tx))
         }
         ProtoTransactionVariant::Create(proto_create) => {
-            let policies = proto_create
-                .policies
-                .clone()
-                .map(|p| policies_from_proto_policies(&p))
-                .unwrap_or_default();
+            let policies = policies_from_proto_policies(proto_create.policies.as_ref())?;
             let inputs = proto_create
                 .inputs
                 .iter()
@@ -707,11 +699,7 @@ pub fn tx_from_proto_tx(
                 Error::Serialization(anyhow!("Missing purpose on upgrade transaction"))
             })?;
             let upgrade_purpose = upgrade_purpose_from_proto(purpose_proto)?;
-            let policies = proto_upgrade
-                .policies
-                .clone()
-                .map(|p| policies_from_proto_policies(&p))
-                .unwrap_or_default();
+            let policies = policies_from_proto_policies(proto_upgrade.policies.as_ref())?;
             let inputs = proto_upgrade
                 .inputs
                 .iter()
@@ -739,11 +727,7 @@ pub fn tx_from_proto_tx(
             Ok(FuelTransaction::Upgrade(upgrade_tx))
         }
         ProtoTransactionVariant::Upload(proto_upload) => {
-            let policies = proto_upload
-                .policies
-                .clone()
-                .map(|p| policies_from_proto_policies(&p))
-                .unwrap_or_default();
+            let policies = policies_from_proto_policies(proto_upload.policies.as_ref())?;
             let inputs = proto_upload
                 .inputs
                 .iter()
@@ -813,11 +797,7 @@ pub fn tx_from_proto_tx(
             Ok(FuelTransaction::Upload(upload_tx))
         }
         ProtoTransactionVariant::Blob(proto_blob) => {
-            let policies = proto_blob
-                .policies
-                .clone()
-                .map(|p| policies_from_proto_policies(&p))
-                .unwrap_or_default();
+            let policies = policies_from_proto_policies(proto_blob.policies.as_ref())?;
             let inputs = proto_blob
                 .inputs
                 .iter()
@@ -1075,42 +1055,26 @@ fn input_from_proto_input(proto_input: &ProtoInput) -> crate::result::Result<Inp
     }
 }
 
-fn policies_from_proto_policies(proto_policies: &ProtoPolicies) -> FuelPolicies {
-    let ProtoPolicies { bits, values } = proto_policies;
+fn policies_from_proto_policies(
+    proto: Option<&ProtoPolicies>,
+) -> crate::result::Result<FuelPolicies> {
     let mut policies = FuelPolicies::default();
-    let bits =
-        PoliciesBits::from_bits(*bits).expect("Should be able to create from `u32`");
-    if bits.contains(PoliciesBits::Tip)
-        && let Some(tip) = values.first()
-    {
-        policies.set(PolicyType::Tip, Some(*tip));
+    if let Some(ProtoPolicies { bits, values }) = proto {
+        let bits = PoliciesBits::from_bits(*bits)
+            .ok_or_else(|| Error::Serialization(anyhow!("Unknown policy bits")))?;
+        for policy in super::LEGACY_POLICIES
+            .into_iter()
+            .chain([PolicyType::FeeAsset])
+        {
+            if bits.contains(policy.bit()) {
+                let value = values.get(policy.index()).ok_or_else(|| {
+                    Error::Serialization(anyhow!("Missing value for {policy:?} policy"))
+                })?;
+                policies.set(policy, Some(*value));
+            }
+        }
     }
-    if bits.contains(PoliciesBits::WitnessLimit)
-        && let Some(witness_limit) = values.get(1)
-    {
-        policies.set(PolicyType::WitnessLimit, Some(*witness_limit));
-    }
-    if bits.contains(PoliciesBits::Maturity)
-        && let Some(maturity) = values.get(2)
-    {
-        policies.set(PolicyType::Maturity, Some(*maturity));
-    }
-    if bits.contains(PoliciesBits::MaxFee)
-        && let Some(max_fee) = values.get(3)
-    {
-        policies.set(PolicyType::MaxFee, Some(*max_fee));
-    }
-    if bits.contains(PoliciesBits::Expiration)
-        && let Some(expiration) = values.get(4)
-    {
-        policies.set(PolicyType::Expiration, Some(*expiration));
-    }
-    if bits.contains(PoliciesBits::Owner)
-        && let Some(owner) = values.get(5)
-    {
-        policies.set(PolicyType::Owner, Some(*owner));
-    }
-    policies
+    Ok(policies)
 }
 
 pub fn proto_header_to_empty_application_header(

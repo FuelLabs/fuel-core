@@ -377,6 +377,23 @@ type FailureStatus {
 	receipts: [Receipt!]!
 	totalGas: U64!
 	totalFee: U64!
+	"""
+	Asset in which the transaction paid its fee.
+	"""
+	feeAssetId: AssetId!
+	"""
+	Exact fee in the smallest units of the fee asset.
+	"""
+	feeInAsset: U64!
+}
+
+type FeeAssetQuote {
+	assetId: AssetId!
+	"""
+	Fee asset atomic units per base asset atomic unit (static rate source).
+	"""
+	rate: U64!
+	gasPrice: U64!
 }
 
 type FeeParameters {
@@ -895,6 +912,10 @@ type Policies {
 	tip: U64
 	witnessLimit: U64
 	maturity: U32
+	"""
+	Index of the Change output selecting the fee asset.
+	"""
+	feeAsset: U64
 	maxFee: U64
 }
 
@@ -1128,6 +1149,10 @@ type Query {
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	latestGasPrice: LatestGasPrice!
+	"""
+	Supplemental fee assets quoted by this node at the given block horizon.
+	"""
+	feeAssetQuotes(blockHorizon: U32): [FeeAssetQuote!]!
 	estimateGasPrice(
 		"""
 		Number of blocks into the future to estimate the gas price for
@@ -1382,6 +1407,14 @@ type SuccessStatus {
 	receipts: [Receipt!]!
 	totalGas: U64!
 	totalFee: U64!
+	"""
+	Asset in which the transaction paid its fee.
+	"""
+	feeAssetId: AssetId!
+	"""
+	Exact fee in the smallest units of the fee asset.
+	"""
+	feeInAsset: U64!
 }
 
 scalar Tai64Timestamp

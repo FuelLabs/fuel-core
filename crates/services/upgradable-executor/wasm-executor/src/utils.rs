@@ -46,6 +46,11 @@ pub fn unpack_exists_size_result(val: u64) -> (bool, u32, u16) {
     (exists, size, result)
 }
 
+type FeeAssetGasPrices = std::collections::BTreeMap<
+    fuel_core_types::fuel_types::AssetId,
+    fuel_core_types::services::block_producer::FeeAssetGasPrice,
+>;
+
 /// The input type for the WASM executor. Enum allows handling different
 /// versions of the input without introducing new host functions.
 #[derive(Debug, serde::Serialize)]
@@ -54,6 +59,11 @@ pub enum InputSerializationType<'a> {
         block: WasmSerializationBlockTypes<'a, ()>,
         options: ExecutionOptions,
     },
+    V2 {
+        block: WasmSerializationBlockTypes<'a, ()>,
+        options: ExecutionOptions,
+        fee_asset_gas_prices: FeeAssetGasPrices,
+    },
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -61,6 +71,11 @@ pub enum InputDeserializationType {
     V1 {
         block: WasmDeserializationBlockTypes<()>,
         options: ExecutionOptions,
+    },
+    V2 {
+        block: WasmDeserializationBlockTypes<()>,
+        options: ExecutionOptions,
+        fee_asset_gas_prices: FeeAssetGasPrices,
     },
 }
 

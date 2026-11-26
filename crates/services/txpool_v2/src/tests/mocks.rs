@@ -344,6 +344,7 @@ mockall::mock! {
     pub ChainStateInfoProvider {}
 
     impl ChainStateInfoProvider for ChainStateInfoProvider {
+        fn fee_assets_enabled(&self) -> bool;
         fn latest_consensus_parameters(&self) -> (ConsensusParametersVersion, Arc<ConsensusParameters>);
     }
 }

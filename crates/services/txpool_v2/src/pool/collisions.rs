@@ -73,7 +73,7 @@ fn is_better_than_collision<S>(
 where
     S: Storage,
 {
-    let new_tx_ratio = Ratio::new(tx.tip(), tx.max_gas());
+    let new_tx_ratio = Ratio::new(tx.base_asset_tip(), tx.max_gas());
     let colliding_tx = storage.get(collision).ok_or(CollisionReason::Unknown)?;
     let colliding_tx_ratio = Ratio::new(
         colliding_tx.dependents_cumulative_tip,

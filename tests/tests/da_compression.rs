@@ -27,9 +27,11 @@ use fuel_core_client::client::{
 };
 use fuel_core_compression::{
     VersionedCompressedBlock,
+    compress::compress,
     decompress::decompress,
 };
 use fuel_core_compression_service::temporal_registry::{
+    CompressionContext,
     CompressionStorageWrapper,
     DecompressionContext,
 };
@@ -39,14 +41,19 @@ use fuel_core_storage::transactional::{
     IntoTransaction,
 };
 use fuel_core_types::{
+    blockchain::block::PartialFuelBlock,
     fuel_asm::{
         RegId,
         op,
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
+        AssetId,
         Input,
+        Transaction,
+        TxPointer,
         UniqueIdentifier,
+        field::TxPointer as _,
     },
     fuel_types::BlockHeight,
     secrecy::Secret,
@@ -65,6 +72,68 @@ use test_helpers::{
     config_with_fee,
     fuel_core_driver::FuelCoreDriver,
 };
+
+#[tokio::test]
+async fn da_compression_restores_both_mint_pointers_and_block_id() {
+    let height = 42u32.into();
+    let chain_id = Default::default();
+    let mint = |index, asset, price| {
+        Transaction::Mint(Transaction::mint(
+            TxPointer::new(height, index),
+            Default::default(),
+            Default::default(),
+            0,
+            asset,
+            price,
+        ))
+    };
+    let transactions = vec![
+        mint(0, AssetId::from([7; 32]), 100),
+        mint(1, AssetId::default(), 20),
+    ];
+    let mut original = PartialFuelBlock::new(Default::default(), transactions);
+    original.header.consensus.height = height;
+    let generate = |block: PartialFuelBlock| {
+        block
+            .generate(
+                &[],
+                Default::default(),
+                #[cfg(feature = "fault-proving")]
+                &chain_id,
+            )
+            .unwrap()
+    };
+    let original = generate(original);
+
+    let db = CombinedDatabase::in_memory();
+    let config = fuel_core_compression::Config {
+        temporal_registry_retention: Duration::from_secs(3600),
+    };
+    let mut writer = db.compression().clone().into_transaction();
+    let ctx =
+        CompressionContext::create_from_block(&mut writer, &original, chain_id).unwrap();
+    let compressed = compress(&config, ctx, &original).await.unwrap();
+    let bytes = postcard::to_stdvec(&compressed).unwrap();
+
+    let mut reader = db.compression().clone().into_transaction();
+    let ctx = DecompressionContext {
+        compression_storage: CompressionStorageWrapper {
+            storage_tx: &mut reader,
+        },
+        onchain_db: db.on_chain().latest_view().unwrap(),
+    };
+    let recovered = decompress(config, ctx, postcard::from_bytes(&bytes).unwrap())
+        .await
+        .unwrap();
+    let [Transaction::Mint(first), Transaction::Mint(last)] =
+        recovered.transactions.as_slice()
+    else {
+        panic!("expected two Mints")
+    };
+    assert_eq!(*first.tx_pointer(), TxPointer::new(height, 0));
+    assert_eq!(*last.tx_pointer(), TxPointer::new(height, 1));
+    assert_eq!(generate(recovered).id(), original.id());
+}
 
 #[tokio::test]
 async fn can_fetch_da_compressed_block_from_graphql() {

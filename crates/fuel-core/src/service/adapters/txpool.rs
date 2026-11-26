@@ -239,6 +239,11 @@ impl GasPriceProvider for StaticGasPrice {
 }
 
 impl ChainStateInfoProviderTrait for ChainStateInfoProvider {
+    fn fee_assets_enabled(&self) -> bool {
+        self.shared_state.latest_stf_version()
+            >= fuel_core_types::blockchain::header::FEE_ASSET_STATE_TRANSITION_VERSION
+    }
+
     fn latest_consensus_parameters(
         &self,
     ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {

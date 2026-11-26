@@ -1,10 +1,14 @@
 use super::scalars::{
+    AssetId,
     U32,
     U64,
 };
 use crate::{
     graphql_api::{
-        api_service::GasPriceProvider,
+        api_service::{
+            ChainInfoProvider,
+            GasPriceProvider,
+        },
         query_costs,
     },
     schema::ReadViewProvider,
@@ -12,6 +16,7 @@ use crate::{
 use async_graphql::{
     Context,
     Object,
+    SimpleObject,
 };
 use fuel_core_types::{
     blockchain::block::Block,
@@ -78,8 +83,45 @@ impl EstimateGasPrice {
 #[derive(Default)]
 pub struct EstimateGasPriceQuery {}
 
+#[derive(SimpleObject)]
+struct FeeAssetQuote {
+    asset_id: AssetId,
+    /// Fee asset atomic units per base asset atomic unit (static rate source).
+    rate: U64,
+    gas_price: U64,
+}
+
 #[Object]
 impl EstimateGasPriceQuery {
+    /// Supplemental fee assets quoted by this node at the given block horizon.
+    #[graphql(complexity = "2 * query_costs().storage_read")]
+    async fn fee_asset_quotes(
+        &self,
+        ctx: &Context<'_>,
+        block_horizon: Option<U32>,
+    ) -> async_graphql::Result<Vec<FeeAssetQuote>> {
+        let chain = ctx.data_unchecked::<ChainInfoProvider>();
+        if chain.current_stf_version()
+            < fuel_core_types::blockchain::header::FEE_ASSET_STATE_TRANSITION_VERSION
+        {
+            return Ok(Vec::new());
+        }
+        let base_price =
+            ctx.estimate_gas_price(Some(block_horizon.unwrap_or(U32(1)).0))?;
+        Ok(ctx
+            .data_unchecked::<GasPriceProvider>()
+            .fee_asset_rates()
+            .iter()
+            .filter_map(|(asset, rate)| {
+                Some(FeeAssetQuote {
+                    asset_id: (*asset).into(),
+                    rate: rate.get().into(),
+                    gas_price: base_price.checked_mul(rate.get())?.into(),
+                })
+            })
+            .collect())
+    }
+
     #[graphql(complexity = "2 * query_costs().storage_read")]
     async fn estimate_gas_price(
         &self,

@@ -62,6 +62,76 @@ use test_helpers::{
     default_signing_wallet,
 };
 
+#[test_case::test_case(1000; "paid")]
+#[test_case::test_case(0; "free")]
+#[tokio::test]
+async fn assemble_and_submit_with_only_fee_asset_coins(starting_price: u64) {
+    let fuel = AssetId::from([42; 32]);
+    let wallet = default_signing_wallet();
+    let owner = wallet.owner();
+    let mut state = StateConfig::local_testnet();
+    state.coins.truncate(1);
+    state.coins[0].owner = owner.into();
+    state.coins[0].asset_id = fuel;
+    let starting_balance = state.coins[0].amount;
+    let mut config = Config::local_node_with_state_config(state);
+    config.utxo_validation = true;
+    config.txpool.utxo_validation = true;
+    config.gas_price_config.starting_exec_gas_price = starting_price;
+    config.gas_price_config.min_exec_gas_price = starting_price;
+    config
+        .block_producer
+        .fee_asset_rates
+        .insert(fuel, 5.try_into().unwrap());
+    let node = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(node.bound_address);
+    let graphql = async |query: String| {
+        let response: serde_json::Value = reqwest::Client::new()
+            .post(format!("http://{}/v1/graphql", node.bound_address))
+            .json(&serde_json::json!({ "query": query }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(response.get("errors").is_none(), "{response}");
+        response["data"].clone()
+    };
+    let data = graphql(r#"{ feeAssetQuotes { gasPrice rate } estimateGasPrice(blockHorizon: "1") { gasPrice } }"#.into()).await;
+    let quote = &data["feeAssetQuotes"][0];
+    assert_eq!(quote["rate"], "5");
+    let base_price: u64 = data["estimateGasPrice"]["gasPrice"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(quote["gasPrice"], (5 * base_price).to_string());
+
+    let script = TransactionBuilder::script(op::ret(1).to_bytes().to_vec(), vec![])
+        .fee_asset(0)
+        .add_output(Output::change(owner, 0, fuel))
+        .finalize_as_transaction();
+    let tx = client
+        .assemble_transaction(&script, wallet, vec![])
+        .await
+        .unwrap();
+    let id = client.submit(&tx).await.unwrap();
+    let status = client.await_transaction_commit(&id).await.unwrap();
+    assert!(
+        matches!(status, TransactionStatus::Success { .. }),
+        "{status:?}"
+    );
+    let paid =
+        u128::from(starting_balance) - client.balance(&owner, Some(&fuel)).await.unwrap();
+    assert_eq!(paid > 0, starting_price > 0);
+    let data = graphql(format!(r#"{{ transaction(id: "{id:#x}") {{ status {{ ... on SuccessStatus {{ feeAssetId feeInAsset totalFee }} }} }} }}"#)).await;
+    let finalized = &data["transaction"]["status"];
+    assert_eq!(finalized["feeAssetId"], format!("{fuel:#x}"));
+    assert_eq!(finalized["feeInAsset"], paid.to_string());
+    assert_eq!(finalized["totalFee"], (paid / 5).to_string());
+}
+
 #[tokio::test]
 async fn assemble_transaction__witness_limit() {
     let config = config_with_fee();

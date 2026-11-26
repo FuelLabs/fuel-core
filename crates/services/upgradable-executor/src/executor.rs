@@ -279,7 +279,8 @@ impl<S, R> Executor<S, R> {
         ("0-48-0", 33),
         // Changes between 0-48-1 and 0-48-4 are off-chain and don't require a state transition
         // upgrade.
-        ("0-48-4", LATEST_STATE_TRANSITION_VERSION),
+        ("0-48-4", 34),
+        ("0-48-4+feeassets", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
@@ -416,6 +417,7 @@ where
             transactions_source: OnceTransactionsSource::new(block.transactions),
             coinbase_recipient,
             gas_price,
+            fee_asset_gas_prices: Default::default(),
         };
 
         let options = self.config.as_ref().into();
@@ -519,6 +521,7 @@ where
             ),
             coinbase_recipient: Default::default(),
             gas_price: component.gas_price,
+            fee_asset_gas_prices: component.fee_asset_gas_prices,
         };
 
         let ProducedBlock {
@@ -879,6 +882,7 @@ where
             transactions_source,
             coinbase_recipient,
             gas_price,
+            fee_asset_gas_prices,
         } = component;
         self.trace_block_version_warning(
             header_to_produce.state_transition_bytecode_version,
@@ -891,6 +895,7 @@ where
             transactions_source: (),
             coinbase_recipient,
             gas_price,
+            fee_asset_gas_prices,
         };
 
         let db_height = match mode {
@@ -1354,13 +1359,13 @@ mod test {
         fn cmp(&self, other: &Self) -> Ordering {
             let self_parts: Vec<u32> = self
                 .0
-                .split('.')
+                .split(['.', '+'])
                 .map(|s| s.parse::<u32>().unwrap_or(0))
                 .collect();
 
             let other_parts: Vec<u32> = other
                 .0
-                .split('.')
+                .split(['.', '+'])
                 .map(|s| s.parse::<u32>().unwrap_or(0))
                 .collect();
 

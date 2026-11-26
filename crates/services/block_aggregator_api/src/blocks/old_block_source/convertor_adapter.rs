@@ -17,10 +17,23 @@ use crate::{
 use fuel_core_types::fuel_types::ChainId;
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
-    fuel_tx::Receipt as FuelReceipt,
+    fuel_tx::{
+        Receipt as FuelReceipt,
+        policies::PolicyType,
+    },
 };
 use prost::Message;
 use std::sync::Arc;
+
+// The original protobuf encoder always emitted these six positional values.
+const LEGACY_POLICIES: [PolicyType; 6] = [
+    PolicyType::Tip,
+    PolicyType::WitnessLimit,
+    PolicyType::Maturity,
+    PolicyType::MaxFee,
+    PolicyType::Expiration,
+    PolicyType::Owner,
+];
 
 #[derive(Clone)]
 pub struct ProtobufBlockConverter;

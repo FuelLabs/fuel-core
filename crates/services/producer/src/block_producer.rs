@@ -35,6 +35,7 @@ use fuel_core_types::{
         Transaction,
         field::{
             InputContract,
+            MintAssetId,
             MintGasPrice,
         },
     },
@@ -43,7 +44,10 @@ use fuel_core_types::{
         Bytes32,
     },
     services::{
-        block_producer::Components,
+        block_producer::{
+            Components,
+            FeeAssetGasPrice,
+        },
         executor::{
             DryRunResult,
             StorageReadReplayEvent,
@@ -173,7 +177,20 @@ where
         let gas_price = *mint_tx.gas_price();
         let coinbase_recipient = mint_tx.input_contract().contract_id;
 
+        let mut fee_asset_gas_prices = std::collections::BTreeMap::new();
+        while let Some(mint) = transactions_source.last().and_then(Transaction::as_mint) {
+            fee_asset_gas_prices.insert(
+                *mint.mint_asset_id(),
+                FeeAssetGasPrice {
+                    gas_price: *mint.gas_price(),
+                    announce: true,
+                },
+            );
+            transactions_source.pop();
+        }
+
         let component = Components {
+            fee_asset_gas_prices,
             header_to_produce,
             transactions_source,
             coinbase_recipient,
@@ -252,6 +269,10 @@ where
             .await?;
 
         let component = Components {
+            fee_asset_gas_prices: self.config.fee_asset_gas_prices(
+                header.state_transition_bytecode_version,
+                gas_price,
+            ),
             header_to_produce: header,
             transactions_source: source,
             coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
@@ -399,6 +420,10 @@ where
         // It is deterministic from the result perspective, plus it is more performant
         // because we don't need to wait for the relayer to sync.
         let component = Components {
+            fee_asset_gas_prices: self.config.fee_asset_gas_prices(
+                header.state_transition_bytecode_version,
+                gas_price,
+            ),
             header_to_produce: header,
             transactions_source: transactions.clone(),
             coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),

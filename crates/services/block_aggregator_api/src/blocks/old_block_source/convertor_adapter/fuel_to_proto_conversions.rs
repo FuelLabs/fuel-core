@@ -538,37 +538,14 @@ fn proto_upgrade_purpose(purpose: &UpgradePurpose) -> ProtoUpgradePurpose {
 fn proto_policies_from_policies(
     policies: &fuel_core_types::fuel_tx::policies::Policies,
 ) -> ProtoPolicies {
-    let mut values = [0u64; 6];
-    let mut truncated_len = 0;
-    if let Some(value) = policies.get(PolicyType::Tip) {
-        values[0] = value;
-        truncated_len = 1;
-    }
-    if let Some(value) = policies.get(PolicyType::WitnessLimit) {
-        values[1] = value;
-        truncated_len = 2;
-    }
-    if let Some(value) = policies.get(PolicyType::Maturity) {
-        values[2] = value;
-        truncated_len = 3;
-    }
-    if let Some(value) = policies.get(PolicyType::MaxFee) {
-        values[3] = value;
-        truncated_len = 4;
-    }
-    if let Some(value) = policies.get(PolicyType::Expiration) {
-        values[4] = value;
-        truncated_len = 5;
-    }
-    if let Some(value) = policies.get(PolicyType::Owner) {
-        values[5] = value;
-        truncated_len = 6;
-    }
-    let bits = policies.bits();
-    values[..truncated_len].to_vec();
+    let values = super::LEGACY_POLICIES
+        .map(|policy| policies.get(policy).unwrap_or_default())
+        .into_iter()
+        .chain(policies.get(PolicyType::FeeAsset))
+        .collect();
     ProtoPolicies {
-        bits,
-        values: values.to_vec(),
+        bits: policies.bits(),
+        values,
     }
 }
 
@@ -858,5 +835,55 @@ pub fn proto_receipt_from_receipt(receipt: &FuelReceipt) -> ProtoReceipt {
                 },
             )),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        super::proto_to_fuel_conversions::tx_from_proto_tx,
+        *,
+    };
+    use fuel_core_types::fuel_tx::{
+        Script,
+        UniqueIdentifier,
+        policies::Policies,
+    };
+    use prost::Message;
+
+    #[test]
+    fn fee_asset_policy_roundtrip() {
+        for fee_asset in [None, Some(0), Some(1)] {
+            let mut script = Script::default();
+            *script.policies_mut() = Policies::new().with_tip(2).with_max_fee(5);
+            script.policies_mut().set(PolicyType::FeeAsset, fee_asset);
+            for asset in [1, 2] {
+                script.outputs_mut().push(Output::change(
+                    Default::default(),
+                    0,
+                    [asset; 32].into(),
+                ));
+            }
+            let tx = FuelTransaction::Script(script);
+            let bytes = proto_tx_from_tx(&tx).encode_to_vec();
+            let mut proto = ProtoTransaction::decode(bytes.as_slice()).unwrap();
+            let restored = tx_from_proto_tx(&proto).unwrap();
+            assert_eq!(tx, restored);
+            assert_eq!(tx.id(&Default::default()), restored.id(&Default::default()));
+
+            let Some(ProtoTransactionVariant::Script(script)) = proto.variant.as_mut()
+            else {
+                panic!("expected script")
+            };
+            let policies = script.policies.as_mut().unwrap();
+            let mut expected = vec![2, 0, 0, 5, 0, 0];
+            expected.extend(fee_asset);
+            assert_eq!(policies.values, expected);
+            if fee_asset.is_some() {
+                // The prototype initially exported a set fee-asset bit without its index.
+                policies.values.pop();
+                assert!(tx_from_proto_tx(&proto).is_err());
+            }
+        }
     }
 }

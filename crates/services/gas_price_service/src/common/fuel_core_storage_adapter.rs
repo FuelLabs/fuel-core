@@ -177,7 +177,7 @@ pub fn get_block_info(
     block_gas_limit: u64,
 ) -> GasPriceResult<BlockInfo> {
     let (fee, gas_price) = mint_values(block)?;
-    let used_gas = block_used_gas(fee, gas_price, gas_price_factor, block_gas_limit)?;
+    let used_gas = block_used_gas(fee, gas_price, gas_price_factor, block_gas_limit);
     let info = BlockInfo::Block {
         height: (*block.header().height()).into(),
         gas_used: used_gas,
@@ -190,20 +190,23 @@ pub fn get_block_info(
 }
 
 pub(crate) fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u64)> {
-    let mint = block
+    let mut mints = block
         .transactions()
-        .last()
-        .and_then(|tx| tx.as_mint())
-        .ok_or(GasPriceError::CouldNotFetchL2Block {
-            source_error: anyhow!("Block has no mint transaction"),
-        })?;
-    Ok((*mint.mint_amount(), *mint.gas_price()))
-}
-
-// TODO: Don't take a direct dependency on `Postcard` as it's not guaranteed to be the encoding format
-// https://github.com/FuelLabs/fuel-core/issues/2443
-pub(crate) fn block_bytes(block: &Block<Transaction>) -> u64 {
-    Postcard::encode(block).len() as u64
+        .iter()
+        .rev()
+        .map_while(Transaction::as_mint);
+    let base = mints.next().ok_or(GasPriceError::CouldNotFetchL2Block {
+        source_error: anyhow!("Block has no mint transaction"),
+    })?;
+    let price = *base.gas_price();
+    let fees = mints.fold(*base.mint_amount(), |total, mint| {
+        total.saturating_add(fuel_core_types::services::executor::non_base_fee_value(
+            *mint.mint_amount(),
+            *mint.gas_price(),
+            price,
+        ))
+    });
+    Ok((fees, price))
 }
 
 fn block_used_gas(
@@ -211,16 +214,43 @@ fn block_used_gas(
     gas_price: u64,
     gas_price_factor: u64,
     max_used_gas: u64,
-) -> GasPriceResult<u64> {
-    let scaled_fee =
-        fee.checked_mul(gas_price_factor)
-            .ok_or(GasPriceError::CouldNotFetchL2Block {
-                source_error: anyhow!(
-                    "Failed to scale fee by gas price factor, overflow"
-                ),
-            })?;
-    // If gas price is zero, assume max used gas
-    let approximate = scaled_fee.checked_div(gas_price).unwrap_or(max_used_gas);
-    let used_gas = min(approximate, max_used_gas);
-    Ok(used_gas)
+) -> u64 {
+    let scaled_fee = u128::from(fee).saturating_mul(u128::from(gas_price_factor));
+    // If gas price is zero, assume max used gas.
+    let limit = u128::from(max_used_gas);
+    let approximate = scaled_fee
+        .checked_div(u128::from(gas_price))
+        .unwrap_or(limit);
+    u64::try_from(min(approximate, limit)).expect("bounded by max_used_gas")
+}
+
+#[cfg(test)]
+mod fee_tests {
+    use super::*;
+
+    #[test]
+    fn mixed_mints_are_valued_at_their_block_prices() {
+        let mint = |asset: u8, amount, price| {
+            Transaction::mint(
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                amount,
+                [asset; 32].into(),
+                price,
+            )
+            .into()
+        };
+        let mut block = Block::default();
+        *block.transactions_mut() = vec![
+            mint(1, 11, 5), // 11 * 2 / 5 rounds down to 4
+            mint(2, 23, 0), // unpriced tip has zero reporting value
+            mint(0, 17, 2),
+        ];
+        assert_eq!(mint_values(&block).unwrap(), (21, 2));
+        *block.transactions_mut() = vec![mint(1, 23, 0), mint(0, 17, 0)];
+        assert_eq!(mint_values(&block).unwrap(), (17, 0));
+        *block.transactions_mut() = vec![mint(1, u64::MAX, 1), mint(0, 1, u64::MAX)];
+        assert_eq!(mint_values(&block).unwrap(), (u64::MAX, u64::MAX));
+    }
 }

@@ -13,6 +13,7 @@ use crate::{
             BlockProducer,
             ChainInfoProvider,
             DynTxStatusManager,
+            GasPriceProvider,
             TxPool,
         },
         query_costs,
@@ -76,6 +77,7 @@ use fuel_core_types::{
         self,
         Bytes32,
         Cacheable,
+        Chargeable,
         Transaction as FuelTx,
         UniqueIdentifier,
     },
@@ -439,10 +441,27 @@ impl TxQuery {
             required_balances.into_iter().map(Into::into).collect();
         let exclude: Exclude = exclude_input.into();
 
-        let gas_price = ctx.estimate_gas_price(Some(block_horizon.into()))?;
+        let base_gas_price = ctx.estimate_gas_price(Some(block_horizon.into()))?;
         let config = &ctx.data_unchecked::<GraphQLConfig>().config;
 
         let tx = FuelTx::from_bytes(&tx.0)?;
+        let base_asset = consensus_parameters.base_asset_id();
+        let fee_asset_id = match tx.as_script() {
+            Some(script) => script.fee_asset_id(base_asset)?,
+            None => *base_asset,
+        };
+        let gas_price = if fee_asset_id == *base_asset {
+            base_gas_price
+        } else {
+            let provider = ctx.data_unchecked::<GasPriceProvider>();
+            provider
+                .fee_asset_rates()
+                .get(&fee_asset_id)
+                .and_then(|rate| base_gas_price.checked_mul(rate.get()))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("No fee quote available for {fee_asset_id}")
+                })?
+        };
 
         let read_view = Arc::new(ctx.read_view()?.into_owned());
         let block_producer = ctx.data_unchecked::<BlockProducer>();
@@ -450,6 +469,9 @@ impl TxQuery {
 
         let arguments = AssembleArguments {
             fee_index,
+            fee_asset_id,
+            fee_assets_enabled: ctx.data_unchecked::<ChainInfoProvider>().current_stf_version()
+                >= fuel_core_types::blockchain::header::FEE_ASSET_STATE_TRANSITION_VERSION,
             required_balances,
             exclude,
             estimate_predicates,
@@ -490,7 +512,7 @@ impl TxQuery {
                 None,
                 None,
                 Some(false),
-                Some(gas_price),
+                Some(base_gas_price),
                 false,
             )
             .await?

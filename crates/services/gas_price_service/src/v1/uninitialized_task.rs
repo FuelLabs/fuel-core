@@ -3,7 +3,6 @@ use crate::{
         fuel_core_storage_adapter::{
             GasPriceSettings,
             GasPriceSettingsProvider,
-            block_bytes,
             get_block_info,
             mint_values,
             storage::GasPriceColumn,
@@ -361,23 +360,22 @@ where
         } = settings.settings(&param_version)?;
         let block_gas_capacity = block_gas_limit.try_into()?;
 
-        let block_gas_used =
-            match get_block_info(&block, gas_price_factor, block_gas_limit)? {
-                BlockInfo::GenesisBlock => {
-                    Err(anyhow::anyhow!("should not be genesis block"))?
-                }
-                BlockInfo::Block { gas_used, .. } => gas_used,
-            };
-
-        let block_bytes = block_bytes(&block);
-        let (fee_gwei, _) = mint_values(&block)?;
-        let fee_wei = fee_gwei.saturating_mul(1_000_000_000);
+        let BlockInfo::Block {
+            gas_used,
+            block_bytes,
+            block_fees,
+            ..
+        } = get_block_info(&block, gas_price_factor, block_gas_limit)?
+        else {
+            anyhow::bail!("should not be genesis block");
+        };
+        let fee_wei = u128::from(block_fees).saturating_mul(1_000_000_000);
         updater.update_l2_block_data(
             height,
-            block_gas_used,
+            gas_used,
             block_gas_capacity,
             block_bytes,
-            fee_wei.into(),
+            fee_wei,
             &mut tx.as_unrecorded_blocks(),
         )?;
         let metadata: UpdaterMetadata = updater.clone().into();

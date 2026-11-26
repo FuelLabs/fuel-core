@@ -478,7 +478,7 @@ impl Storage for GraphStorage {
         let tx_id = transaction.id();
 
         // Add the new transaction to the graph and update the others in consequence
-        let tip = transaction.tip();
+        let tip = transaction.base_asset_tip();
         let gas = transaction.max_gas();
         let size = transaction.metered_bytes_size();
 
@@ -887,7 +887,7 @@ mod tests {
                 let dependent_data = self.graph.node_weight(*dependent).unwrap();
                 let dependent_resources = Resources {
                     gas: dependent_data.transaction.max_gas(),
-                    tip: dependent_data.transaction.tip(),
+                    tip: dependent_data.transaction.base_asset_tip(),
                     bytes: dependent_data.transaction.metered_bytes_size(),
                     number: 1,
                 };

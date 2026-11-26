@@ -46,6 +46,17 @@ use fuel_vm_private::prelude::Transaction;
 
 pub mod memory;
 
+/// Reporting value of a non-base fee, rounded down in base-asset units. The
+/// charge and producer credit are always in the original asset. An unpriced
+/// amount contributes zero, and a value outside the reporting word saturates.
+pub fn non_base_fee_value(amount: u64, asset_price: u64, base_price: u64) -> u64 {
+    let value = u128::from(amount)
+        .saturating_mul(u128::from(base_price))
+        .checked_div(u128::from(asset_price))
+        .unwrap_or_default();
+    u64::try_from(value).unwrap_or(u64::MAX)
+}
+
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
 /// The uncommitted result of the block production execution.
@@ -205,7 +216,7 @@ pub enum TransactionExecutionResult {
         receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction.
         total_gas: u64,
-        /// The total fee paid by the transaction.
+        /// The base-asset reporting value of the fee paid by the transaction.
         total_fee: u64,
     },
     /// The execution of the transaction failed.
@@ -216,7 +227,7 @@ pub enum TransactionExecutionResult {
         receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction.
         total_gas: u64,
-        /// The total fee paid by the transaction.
+        /// The base-asset reporting value of the fee paid by the transaction.
         total_fee: u64,
     },
 }
@@ -372,6 +383,8 @@ pub enum Error {
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display("Occurred untyped error: {_0}")]
     Other(String),
+    #[display("Block has no gas price for fee asset {_0:#x}")]
+    MissingFeeAssetPrice(crate::fuel_types::AssetId),
 }
 
 impl From<Error> for anyhow::Error {

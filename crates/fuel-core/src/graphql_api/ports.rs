@@ -77,7 +77,11 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    collections::BTreeMap,
+    num::NonZeroU64,
+    sync::Arc,
+};
 
 pub struct CoinsToSpendIndexIter<'a> {
     pub big_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>>,
@@ -314,6 +318,12 @@ pub trait P2pPort: Send + Sync {
 
 /// Trait for defining how to estimate gas price for future blocks
 pub trait GasPriceEstimate: Send + Sync {
+    /// Configured alternate fee assets and their atomic-unit exchange rates.
+    fn fee_asset_rates(&self) -> &BTreeMap<AssetId, NonZeroU64> {
+        static EMPTY: BTreeMap<AssetId, NonZeroU64> = BTreeMap::new();
+        &EMPTY
+    }
+
     /// The worst case scenario for gas price at a given horizon
     fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64>;
 }

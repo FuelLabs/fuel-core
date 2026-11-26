@@ -45,7 +45,10 @@ use fuel_core::{
         ServiceChannelLimits,
     },
     types::{
-        fuel_tx::ContractId,
+        fuel_tx::{
+            AssetId,
+            ContractId,
+        },
         fuel_vm::SecretKey,
         secrecy::Secret,
     },
@@ -83,6 +86,7 @@ use rlimit::{
     getrlimit,
 };
 use std::{
+    collections::BTreeMap,
     env,
     net,
     num::{
@@ -276,6 +280,10 @@ pub struct Command {
     #[arg(long = "coinbase-recipient", env)]
     pub coinbase_recipient: Option<ContractId>,
 
+    /// Static alternate fee rate in atomic units per base asset atomic unit. Repeat for multiple assets.
+    #[arg(long = "fee-asset-rate", value_name = "ASSET_ID=POSITIVE_INTEGER", value_parser = parse_fee_asset_rate)]
+    pub fee_asset_rates: Vec<(AssetId, NonZeroU64)>,
+
     /// The cli arguments supported by the `TxPool`.
     #[clap(flatten)]
     pub tx_pool: TxPoolArgs,
@@ -347,6 +355,13 @@ pub struct Command {
     pub profiling: profiling::ProfilingArgs,
 }
 
+fn parse_fee_asset_rate(value: &str) -> anyhow::Result<(AssetId, NonZeroU64)> {
+    let (asset, rate) = value
+        .split_once('=')
+        .context("expected ASSET_ID=POSITIVE_INTEGER")?;
+    Ok((asset.parse().map_err(anyhow::Error::msg)?, rate.parse()?))
+}
+
 impl Command {
     pub async fn get_config(self) -> anyhow::Result<Config> {
         #[allow(deprecated)]
@@ -380,6 +395,7 @@ impl Command {
             poa_trigger,
             predefined_blocks_path,
             coinbase_recipient,
+            fee_asset_rates,
             #[cfg(feature = "relayer")]
             relayer_args,
             #[cfg(feature = "p2p")]
@@ -405,6 +421,14 @@ impl Command {
             memory_pool_size,
             profiling: _,
         } = self;
+
+        let mut configured_rates = BTreeMap::new();
+        for (asset, rate) in fee_asset_rates {
+            anyhow::ensure!(
+                configured_rates.insert(asset, rate).is_none(),
+                "duplicate fee asset rate for {asset}"
+            );
+        }
 
         let GasPriceArgs {
             starting_gas_price,
@@ -771,6 +795,7 @@ impl Command {
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
+                fee_asset_rates: configured_rates,
                 metrics: metrics.is_enabled(Module::Producer),
             },
             gas_price_config,
@@ -909,6 +934,42 @@ mod tests {
 
     fn parse_command(args: &[&str]) -> anyhow::Result<Command> {
         Ok(Command::try_parse_from([""].iter().chain(args))?)
+    }
+
+    #[tokio::test]
+    async fn parse_fee_asset_rates() {
+        let first = AssetId::from([1; 32]);
+        let second = AssetId::from([2; 32]);
+        let args = [
+            "--fee-asset-rate",
+            &format!("{first}=3"),
+            "--fee-asset-rate",
+            &format!("{second}=7"),
+        ];
+        assert_eq!(
+            parse_command(&args).unwrap().fee_asset_rates,
+            vec![
+                (first, NonZeroU64::new(3).unwrap()),
+                (second, NonZeroU64::new(7).unwrap())
+            ]
+        );
+        let duplicate = format!("{first}=7");
+        let duplicate_config = parse_command(&[args[0], args[1], args[2], &duplicate])
+            .unwrap()
+            .get_config()
+            .await;
+        assert!(
+            duplicate_config
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate fee asset rate")
+        );
+        for invalid in ["0", "1.5", ""] {
+            assert!(
+                parse_command(&["--fee-asset-rate", &format!("{first}={invalid}")])
+                    .is_err()
+            );
+        }
     }
 
     #[test]

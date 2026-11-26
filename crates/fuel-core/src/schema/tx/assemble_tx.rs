@@ -23,7 +23,6 @@ use fuel_core_types::{
     entities::coins::CoinId,
     fuel_asm::{
         PanicReason,
-        Word,
         op,
     },
     fuel_crypto::Signature,
@@ -48,6 +47,7 @@ use fuel_core_types::{
             Tip,
             WitnessLimit,
         },
+        gas_to_fee,
         input::{
             coin::CoinSigned,
             message::{
@@ -86,6 +86,8 @@ pub struct AssembleArguments<'a> {
     pub estimate_predicates: bool,
     pub reserve_gas: u64,
     pub consensus_parameters: Arc<ConsensusParameters>,
+    pub fee_asset_id: AssetId,
+    pub fee_assets_enabled: bool,
     pub gas_price: u64,
     pub dry_run_limit: usize,
     pub estimate_predicates_limit: usize,
@@ -156,8 +158,8 @@ pub struct AssembleTx<'a, Tx> {
     change_output_policies: HashMap<AssetId, ChangePolicy>,
     set_change_outputs: HashSet<AssetId>,
     set_contracts: HashSet<ContractId>,
-    // The amount of the base asset that is reserved for the application logic
-    base_asset_reserved: u64,
+    // The amount of the fee asset that is reserved for the application logic
+    fee_asset_reserved: u64,
     has_predicates: bool,
     index_of_first_fake_variable_output: Option<u16>,
     original_max_fee: u64,
@@ -172,6 +174,9 @@ where
     Tx: ExecutableTransaction + Cacheable + Send + 'static,
 {
     pub fn new(tx: Tx, mut arguments: AssembleArguments<'a>) -> anyhow::Result<Self> {
+        if !arguments.fee_assets_enabled && tx.policies().is_set(PolicyType::FeeAsset) {
+            anyhow::bail!("FeeAsset policy is not active");
+        }
         let max_inputs = arguments.consensus_parameters.tx_params().max_inputs();
         let max_outputs = arguments.consensus_parameters.tx_params().max_outputs();
 
@@ -260,7 +265,7 @@ where
             }
         }
 
-        let mut base_asset_reserved: Option<u64> = None;
+        let mut fee_asset_reserved = 0;
 
         let fee_payer_account = arguments
             .required_balances
@@ -274,10 +279,10 @@ where
             let asset_id = required_balance.asset_id;
             requested_asset.insert(asset_id);
 
-            if asset_id == base_asset_id
+            if asset_id == arguments.fee_asset_id
                 && fee_payer_account.owner() == required_balance.account.owner()
             {
-                base_asset_reserved = Some(required_balance.amount);
+                fee_asset_reserved = required_balance.amount;
             }
         }
 
@@ -294,10 +299,6 @@ where
                     change_policy: ChangePolicy::Change(recipient),
                 });
             }
-        }
-
-        if base_asset_reserved.is_none() {
-            base_asset_reserved = Some(0);
         }
 
         for required_balance in &arguments.required_balances {
@@ -343,7 +344,7 @@ where
             change_output_policies,
             set_change_outputs,
             set_contracts,
-            base_asset_reserved: base_asset_reserved.expect("Set above; qed"),
+            fee_asset_reserved,
             has_predicates,
             index_of_first_fake_variable_output: None,
             original_max_fee,
@@ -908,7 +909,8 @@ where
         let gas_price_factor = fee_params.gas_price_factor();
         let fee_payer_account = self.fee_payer_account.clone();
 
-        let mut total_base_asset = 0u64;
+        let fee_asset_id = self.arguments.fee_asset_id;
+        let mut total_fee_asset = 0u64;
 
         for input in self.tx.inputs() {
             if input_is_spendable_as_fee(input) {
@@ -922,17 +924,21 @@ where
                     continue
                 };
 
-                if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
-                    total_base_asset =
-                        total_base_asset.checked_add(amount).ok_or_else(|| {
-                            anyhow::anyhow!(
-                        "The total base asset amount used by the transaction is too big"
-                    )
-                        })?;
+                if asset_id == &fee_asset_id && &fee_payer_account.owner() == owner {
+                    total_fee_asset = total_fee_asset
+                        .checked_add(amount)
+                        .ok_or_else(|| anyhow::anyhow!("Fee asset balance overflow"))?;
                 }
             }
         }
 
+        // A non-base change output needs a matching input even if gas is free.
+        let needs_asset_input = fee_asset_id != base_asset_id
+            && !self
+                .tx
+                .inputs()
+                .iter()
+                .any(|input| input.asset_id(&base_asset_id) == Some(&fee_asset_id));
         loop {
             let max_gas = self.tx.max_gas(&gas_costs, &fee_params);
             let max_gas_with_reserve = max_gas.saturating_add(self.arguments.reserve_gas);
@@ -946,9 +952,13 @@ where
                 })?
                 .saturating_add(self.tx.tip());
 
-            let need_to_cover = final_fee.saturating_add(self.base_asset_reserved);
+            let need_to_cover = final_fee
+                .max(self.original_max_fee)
+                .checked_add(self.fee_asset_reserved)
+                .ok_or_else(|| anyhow::anyhow!("Fee and reserved balance exceed u64"))?
+                .max(u64::from(needs_asset_input));
 
-            if need_to_cover <= total_base_asset {
+            if need_to_cover <= total_fee_asset {
                 break
             }
 
@@ -956,19 +966,19 @@ where
             if remaining_input_slots == 0 {
                 return Err(CoinsQueryError::MaxCoinsReached {
                     owner: fee_payer_account.owner(),
-                    asset_id: base_asset_id,
-                    collected_amount: total_base_asset.into(),
+                    asset_id: fee_asset_id,
+                    collected_amount: total_fee_asset.into(),
                     max: self.arguments.consensus_parameters.tx_params().max_inputs(),
                 }
                 .into());
             }
 
-            let how_much_to_add = need_to_cover.saturating_sub(total_base_asset);
+            let how_much_to_add = need_to_cover.saturating_sub(total_fee_asset);
             let coins = self
                 .arguments
                 .coins(
                     fee_payer_account.owner(),
-                    base_asset_id,
+                    fee_asset_id,
                     how_much_to_add,
                     remaining_input_slots,
                     true,
@@ -982,12 +992,9 @@ where
             }
 
             for coin in coins.into_iter().take(remaining_input_slots as usize) {
-                total_base_asset = total_base_asset.checked_add(coin.amount()).ok_or(
-                    anyhow::anyhow!(
-                        "The total base asset amount \
-                        became too big when tried to cover fee"
-                    ),
-                )?;
+                total_fee_asset = total_fee_asset
+                    .checked_add(coin.amount())
+                    .ok_or_else(|| anyhow::anyhow!("Fee asset balance overflow"))?;
                 self.add_input_and_witness_and_change(&fee_payer_account, coin)?;
             }
 
@@ -1054,13 +1061,6 @@ fn set_max_fee<Tx>(
     // it in the case if the transaction requires more fee to cover it.
     final_fee = final_fee.max(original_max_fee);
     tx.set_max_fee_limit(final_fee);
-}
-
-fn gas_to_fee(gas: Word, gas_price: Word, factor: Word) -> u128 {
-    let total_price = (gas as u128)
-        .checked_mul(gas_price as u128)
-        .expect("Impossible to overflow because multiplication of two `u64` <= `u128`");
-    total_price.div_ceil(factor as u128)
 }
 
 fn fake_input() -> Input {

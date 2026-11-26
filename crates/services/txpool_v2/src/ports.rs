@@ -59,6 +59,11 @@ pub trait BlockImporter {
 
 /// Trait for getting the latest chain state info.
 pub trait ChainStateInfoProvider: Send + Sync + 'static {
+    /// Whether the active STF understands the FeeAsset transaction policy.
+    fn fee_assets_enabled(&self) -> bool {
+        false
+    }
+
     /// Get latest consensus parameters.
     fn latest_consensus_parameters(
         &self,
@@ -86,6 +91,14 @@ pub trait TxPoolPersistentStorage:
 
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait GasPriceProvider: Send + Sync + 'static {
+    /// Atomic units per base asset atomic unit for a configured alternate asset.
+    fn fee_asset_rate(
+        &self,
+        _asset_id: &fuel_core_types::fuel_types::AssetId,
+    ) -> Option<std::num::NonZeroU64> {
+        None
+    }
+
     /// Calculate gas price for the next block.
     fn next_gas_price(&self) -> GasPrice;
 }

@@ -38,6 +38,10 @@ pub enum Error {
     WasmValidity(WasmValidityError),
     #[display("Mint transaction is not allowed")]
     MintIsDisallowed,
+    #[display("FeeAsset policy requires the fee-assets STF")]
+    FeeAssetsNotActivated,
+    #[display("No gas price for fee asset {_0}")]
+    UnsupportedFeeAsset(fuel_core_types::fuel_types::AssetId),
     #[display("Pool limit is hit, try to increase gas_price")]
     NotInsertedLimitHit,
     #[display("Transaction is removed: {_0}")]
